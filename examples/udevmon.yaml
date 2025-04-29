@@ -1,0 +1,14 @@
+# Example udevmon configuration for intercept-bounce
+
+# This job intercepts events from a specific keyboard device,
+# pipes them through the intercept-bounce filter with a 5ms window,
+# and then sends the filtered events to a new virtual device.
+- JOB: "intercept -g $DEVNODE | intercept-bounce --window 5 | uinput -d $DEVNODE"
+  DEVICE:
+    # Match your specific keyboard device.
+    # You can find the correct LINK using `udevadm info -q path -n /dev/input/eventXX`
+    # or by looking in /dev/input/by-id/
+    LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd"
+    # Optionally, you can also match by events the device supports
+    # EVENTS:
+    #   EV_KEY: [[KEY_CAPSLOCK]] # Example: match devices with CAPSLOCK

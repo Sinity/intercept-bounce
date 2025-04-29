@@ -13,7 +13,7 @@ use std::{
 struct Args {
     /// Window (ms) within which repeat edges are discarded
     #[arg(short, long, default_value = "5")]
-    window: u64,
+    window: u664,
 }
 
 fn micros_now() -> u64 {
@@ -28,7 +28,7 @@ fn main() -> io::Result<()> {
     let window_us = args.window * 1_000; // ms → µs
     let mut last: HashMap<u16, u64> = HashMap::new();
 
-   let mut stdin  = io::stdin().stdin();
+   let mut stdin  = io::stdin().lock();
     let mut stdout = io::stdout().lock();
     let mut buf    = vec![0u8; size_of::<input_event>()];
 
@@ -51,7 +51,6 @@ fn main() -> io::Result<()> {
         }
 
        stdout.write_all(&buf)?;
-        stdout.flush()?; // Ensure event is sent immediately
     }
     Ok(())
 }

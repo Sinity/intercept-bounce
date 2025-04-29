@@ -1,6 +1,6 @@
-# interception-debounce
+# intercept-bounce
 
-A debounce plugin for [Interception Tools](https://gitlab.com/interception/linux/tools).  
+Small, single-purpose filter for [Interception Tools](https://gitlab.com/interception/linux/tools).  
 Filters key repeat noise from faulty or noisy keyboards.
 
 This is an independent user-mode filter, intended for use with `udevmon`.
@@ -18,4 +18,3 @@ Work in progress. Use at your own risk.
 ## License
 
 MIT OR Apache-2.0
-
