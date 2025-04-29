@@ -14,9 +14,9 @@ readme = "README.md"
 features = ["default"]
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-# linux-input-sys = "0.1"          # struct input_event + key codes
-libc = "0.2" # EV_KEY const
+clap            = { version = "4.5", features = ["derive"] }
+input-linux-sys = "0.1"          # struct input_event + key codes
+libc            = "0.2"          # EV_KEY const
 
 [dev-dependencies]
 assert_cmd = "2"

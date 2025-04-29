@@ -1,5 +1,5 @@
 use clap::Parser;
-use linux_input_sys::input_event;
+use input_linux_sys::input_event;
 use std::{
     collections::HashMap,
     io::{self, Read, Write},
