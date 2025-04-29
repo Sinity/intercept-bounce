@@ -13,7 +13,7 @@ use std::{
 struct Args {
     /// Window (ms) within which repeat edges are discarded
     #[arg(short, long, default_value = "5")]
-    window: u664,
+    window: u64,
 }
 
 fn micros_now() -> u64 {
