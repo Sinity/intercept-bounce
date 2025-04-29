@@ -1,22 +1,22 @@
 [package]
-name        = "intercept-bounce"
-version     = "0.1.0"
-edition     = "2021"
-authors     = ["sinity <ezo.dev@gmail.com>"]
+name = "intercept-bounce"
+version = "0.1.0"
+edition = "2021"
+authors = ["sinity <ezo.dev@gmail.com>"]
 description = "Interception-tools filter that removes switch-bounce / chatter from keyboards."
-license     = "MIT OR Apache-2.0"
-repository  = "https://github.com/sinity/intercept-bounce"
-keywords    = ["interception", "keyboard", "debounce", "evdev"]
-categories  = ["command-line-utilities"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sinity/intercept-bounce"
+keywords = ["interception", "keyboard", "debounce", "evdev"]
+categories = ["command-line-utilities"]
 readme = "README.md"
 
 [package.metadata.docs.rs]
 features = ["default"]
 
 [dependencies]
-clap            = { version = "4.5", features = ["derive"] }
-linux-input-sys = "0.1"          # struct input_event + key codes
-libc            = "0.2"          # EV_KEY const
+clap = { version = "4.5", features = ["derive"] }
+# linux-input-sys = "0.1"          # struct input_event + key codes
+libc = "0.2" # EV_KEY const
 
 [dev-dependencies]
 assert_cmd = "2"
