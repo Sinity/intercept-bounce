@@ -2,7 +2,7 @@
   description = "Debounce plugin for Interception Tools";
 
  inputs = {
-    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable"; # Changed from nixos-24.05 to support newer Cargo.lock format
     flake-utils.url  = "github:numtide/flake-utils";
   };
 
