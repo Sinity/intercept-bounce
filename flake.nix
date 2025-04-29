@@ -17,7 +17,7 @@
           cargoLock.lockFile = ./Cargo.lock;
           # You will need to run `nix build .` once, copy the hash from the error,
           # and paste it here.
-          cargoSha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # REPLACE THIS HASH
+          cargoSha256 = "YOUR_HASH_HERE"; # Make sure this matches the hash from the nix build error
 
          meta = {
             description = "Interception Tools debounce filter";
