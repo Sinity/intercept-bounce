@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "intercept-bounce"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "assert_cmd",
  "clap",

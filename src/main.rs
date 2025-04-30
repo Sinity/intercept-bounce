@@ -73,7 +73,7 @@ fn main() -> io::Result<()> {
              },
              Err(poisoned) => {
                  eprintln!("Error: BounceFilter mutex was poisoned on clean exit!");
-                 let _ = poisoned.into_inner().print_stats(&mut io.stderr()); // Attempt recovery
+                 let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
              }
          }
     }
