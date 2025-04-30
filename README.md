@@ -99,14 +99,34 @@ intercept-bounce [OPTIONS]
 
 ## How it Works
 
-`intercept-bounce` maintains a timestamp of the last *passed* event for each unique combination of key code and key value (press=1, release=0, repeat=2).
+### Debouncing Logic
 
-When a new key event arrives:
-1.  It checks if an event with the *same key code* and *same value* (press=1, release=0, repeat=2) has passed within the configured `--debounce-time`.
-2.  If yes (time difference < threshold), the new event is considered a bounce and is **dropped** (not written to stdout).
-3.  If no (time difference >= threshold, or it's the first event for that key/value), the event is **passed** (written to stdout), and its timestamp is recorded as the new "last passed" time for that specific key/value combination.
-4.  Non-key events (like `EV_SYN` or `EV_MSC`) are always passed through unchanged.
-5.  Statistics (including detailed timings for dropped events and near-miss passed events < 100ms) are collected during this process and printed to stderr upon termination (or periodically if requested via `--log-interval`).
+`intercept-bounce` filters events based on a simple time threshold. It works by remembering the timestamp of the last *passed* event for each unique combination of `(key_code, key_value)`. The `key_value` represents the key state: `1` for press, `0` for release, and `2` for repeat.
+
+When a new **key event** arrives:
+
+1.  Its timestamp (in microseconds, derived from the `input_event`'s `timeval`) is compared to the timestamp of the last *passed* event with the **exact same key code AND key value**.
+2.  If the time difference is *less than* the configured `--debounce-time` threshold, the new event is considered a bounce/chatter and is **dropped** (not written to stdout).
+3.  If the time difference is *greater than or equal to* the threshold, or if it's the first event seen for that specific `(key_code, key_value)` pair, the event is **passed** (written to stdout). Its timestamp is then recorded as the new "last passed" time for that pair.
+4.  **Important:** Filtering only applies to events with the *same code and value*. A rapid key press followed immediately by a release will *not* be filtered, as their `key_value` differs (1 vs 0).
+5.  Events where the timestamp appears to go backwards compared to the last recorded event are *not* treated as bounces and are always passed.
+6.  A `--debounce-time` of `0` effectively disables all filtering.
+
+### Non-Key Events
+
+Events that are not key events (e.g., `EV_SYN`, `EV_MSC`, `EV_REL`, `EV_ABS`, `EV_LED`) are **always passed through** unmodified, as they are not relevant to key bounce.
+
+### Statistics and Logging
+
+*   **Collection:** Statistics are always collected internally while the filter runs.
+*   **Output:** Statistics are automatically printed to `stderr` when the process exits, either cleanly (input stream ends) or due to receiving `SIGINT`, `SIGTERM`, or `SIGQUIT`. A separate thread handles signal catching to ensure stats are printed reliably.
+*   **Content:**
+    *   *Overall:* Total key events processed, passed, and dropped, plus the percentage dropped.
+    *   *Dropped Events:* Detailed breakdown per key, showing drop counts for press, release, and repeat states. Includes minimum, average, and maximum time differences (relative to the previous passed event of the same type) that caused an event to be dropped (bounce time).
+    *   *Near-Miss Events:* Statistics for key events that *passed* but occurred within 100ms of the previous event for that key/value pair. This helps identify potential bounce activity just outside the configured threshold. Timings (min/avg/max) are shown relative to the previous event.
+    *   *Formatting:* Timestamps and time differences in the stats output are formatted for readability (e.g., `12.3 ms`, `500 µs`).
+*   **Periodic Logging:** If `--log-interval <SECONDS>` is set to a value greater than 0, the full statistics block will also be printed to stderr periodically, approximately every specified number of seconds (triggered by the next event arriving after the interval has passed).
+*   **Event Logging:** The `--log-all-events` and `--log-bounces` flags provide verbose, per-event logging to stderr, indicating whether each event was `[PASS]`ed or `[DROP]`ped and showing relevant timing information. This logging occurs *after* the filtering decision has been made for the event.
 
 ## Troubleshooting / Notes
 
