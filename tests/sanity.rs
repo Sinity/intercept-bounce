@@ -348,11 +348,14 @@ fn test_complex_sequence() {
     let input_events = vec![e1, e2, e3, e4, e5, e6, e7, e8, e9, e10];
 
     // Define the expected output sequence (events that should NOT be dropped)
+    // Note: e7 (KEY_B, value 2) should PASS because its value is different from e6 (KEY_B, value 1).
+    // The bounce filter only drops events with the *same* key code AND *same* value within the window.
     let expected_events = vec![
         e1, // A Press (Pass)
         e3, // A Release (Pass)
         e5, // SYN event (Pass)
         e6, // B Press (Pass)
+        e7, // B Repeat (Pass) - Different value than e6, so not a bounce
         e8, // A Press (Pass)
         e10, // B Repeat (Pass)
     ];

@@ -45,7 +45,8 @@ fn main() -> io::Result<()> {
 
         // Spawn a thread to handle signals asynchronously
         std::thread::spawn(move || {
-            for sig in signals.forever() {
+            // Handle the first signal received. The loop is unnecessary as we exit anyway.
+            if let Some(sig) = signals.forever().next() {
                 // Attempt to print final stats if not already printed
                 if !printed_clone.swap(true, Ordering::SeqCst) {
                     eprintln!("\nReceived signal {}, printing final stats and exiting.", sig);

@@ -1,6 +1,6 @@
 use crate::event::{event_microseconds, is_key_event}; // Import helpers
 use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_REL, EV_SYN}; // Added other common types for logging
-use phf;
+// Removed redundant 'use phf;'
 use std::collections::HashMap;
 use std::io::{self, Write};
 
@@ -263,8 +263,9 @@ impl BounceFilter {
                     if let Some(diff) = event_us.checked_sub(last_any_us) {
                         if diff < repeat_check_window_us {
                              // Log repeats within the extended window, even if not dropped by bounce filter
-                             eprint!(
-                                "[VERBOSE] Repeat: Key {} ({}), Value: {}, Time since last any: {} µs\n",
+                             // Use eprintln! instead of eprint!(...\n)
+                             eprintln!(
+                                "[VERBOSE] Repeat: Key {} ({}), Value: {}, Time since last any: {} µs",
                                 Self::get_key_name(key_code), key_code, key_value, diff
                             );
                         }
@@ -344,7 +345,8 @@ impl BounceFilter {
 
 
     /// Prints collected statistics to the given writer (e.g., stderr). Only prints if verbose was enabled.
-    pub fn print_stats(&self, writer: &mut impl Write) -> io::Result<()> {
+    // Prefix unused 'writer' with '_' to silence warning.
+    pub fn print_stats(&self, _writer: &mut impl Write) -> io::Result<()> {
         // Print status header regardless of verbose, if bypass or log_events is on
         if self.bypass || self.log_events || self.is_verbose {
             eprintln!("--- intercept-bounce status ---"); // Use eprintln! directly
