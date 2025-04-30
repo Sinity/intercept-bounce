@@ -44,6 +44,7 @@ fn drops_bounce() {
         .assert();
 
     // Capture stdout bytes and use standard assertion
-    let actual_stdout_bytes = assert.get_stdout();
+    // Changed get_stdout() to get_output().unwrap().stdout
+    let actual_stdout_bytes = assert.get_output().unwrap().stdout;
     assert_eq!(actual_stdout_bytes, expected_output_bytes);
 }
