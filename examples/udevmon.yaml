@@ -1,11 +1,13 @@
 # Example udevmon configuration for intercept-bounce
 
-# This job intercepts events from a specific keyboard device,
-# pipes them through the intercept-bounce filter with a 10ms window (the default),
-# and then sends the filtered events to a new virtual device.
-# Using the default: intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE
-# Explicitly setting:
-- JOB: "intercept -g $DEVNODE | intercept-bounce --window 10 | uinput -d $DEVNODE"
+# Job 1: Basic filtering (default 10ms window)
+# - JOB: "intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE"
+#   DEVICE:
+#     LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd"
+
+# Job 2: Filtering with verbose logging and periodic stats dump every 1000 key events
+# Statistics and logs will go to the systemd service journal for this job.
+- JOB: "intercept -g $DEVNODE | intercept-bounce --verbose --log-interval 1000 | uinput -d $DEVNODE"
   DEVICE:
     # Match your specific keyboard device.
     # You can find the correct LINK using `udevadm info -q path -n /dev/input/eventXX`

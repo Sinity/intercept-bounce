@@ -1,6 +1,6 @@
 [package]
 name = "intercept-bounce"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["sinity <ezo.dev@gmail.com>"]
 description = "Interception Tools filter that removes switch-bounce / chatter from keyboards."
@@ -16,6 +16,8 @@ features = ["default"]
 [dependencies]
 clap            = { version = "4.5", features = ["derive"] }
 input-linux-sys = "0.1"          # struct input_event + key codes, EV_KEY
+signal-hook     = "0.3"          # For handling SIGTERM/SIGINT
+phf             = { version = "0.11", features = ["macros"] } # For static key name map
 
 [dev-dependencies]
 assert_cmd = "2.0"

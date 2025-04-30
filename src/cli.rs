@@ -9,6 +9,14 @@ pub struct Args {
     /// faster than this window are discarded. Higher value = more filtering.
     #[arg(short, long, default_value = "10")]
     pub window: u64,
+
+    /// Enable verbose logging to stderr (prints statistics on signal/exit and enables periodic logging).
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    pub verbose: bool,
+
+    /// Dump statistics to stderr every N key events processed (default: 0 = disabled). Requires --verbose.
+    #[arg(long, default_value = "0", value_name = "N")]
+    pub log_interval: u64,
 }
 
 /// Parses command line arguments using clap.
