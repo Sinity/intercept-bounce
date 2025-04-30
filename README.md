@@ -107,6 +107,30 @@ When a new key event arrives:
 4.  Non-key events (like `EV_SYN` or `EV_MSC`) are always passed through unchanged.
 5.  Statistics (including detailed timings for dropped events and near-miss passed events < 100ms) are collected during this process and printed to stderr upon termination (or periodically if requested via `--log-interval`).
 
+## Troubleshooting / Notes
+
+### Mixed Output in Terminal (Logging + Typed Characters)
+
+When running `intercept-bounce` interactively in a pipeline (e.g., `intercept | intercept-bounce | uinput`) and using logging flags (`--log-all-events` or `--log-bounces`), you might see the characters you type mixed in with the log output printed to stderr.
+
+This happens because:
+1.  `intercept` captures the raw key events.
+2.  `intercept-bounce` logs these events to stderr.
+3.  Your terminal (TTY) *also* echoes the characters you type to the screen by default.
+
+These two outputs (stderr logging and terminal echo) are independent and can get interleaved on your display.
+
+**Solution:** Temporarily disable terminal echo while running the command pipeline:
+
+```bash
+stty -echo && sudo sh -c 'intercept -g ... | intercept-bounce [OPTIONS] | uinput -d ...' ; stty echo
+```
+*   `stty -echo`: Disables terminal echo.
+*   `... your command ...`: Run the pipeline.
+*   `stty echo`: **Crucially**, re-enables terminal echo afterwards.
+
+This will prevent your typed characters from appearing amidst the log output.
+
 ## License
 
 Licensed under either of
