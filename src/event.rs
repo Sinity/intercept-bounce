@@ -157,10 +157,12 @@ fn is_bit_set(buf: &[u8], bit: usize) -> bool {
 // These constants are from <linux/input.h>
 const EVIOCGNAME_LEN: usize = 256;
 const EVIOCGNAME_IOCTL: c_ulong = ior!(b'E', 0x06, EVIOCGNAME_LEN);
-const EVIOCGBIT_IOCTL: c_ulong = |ty: u8, len: usize| ior!(b'E', 0x20 + ty, len);
+fn eviocgbit_ioctl(ty: u8, len: usize) -> c_ulong {
+    ior(b'E', 0x20 + ty, len)
+}
 
 // Macro to generate ioctl numbers (like _IOR in C)
-const fn ior!(ty: u8, nr: u8, size: usize) -> c_ulong {
+const fn ior(ty: u8, nr: u8, size: usize) -> c_ulong {
     ((2u64 << 30) | ((size as u64) << 16) | ((ty as u64) << 8) | (nr as u64)) as c_ulong
 }
 
@@ -178,7 +180,7 @@ fn eviocgname(fd: RawFd, buf: &mut [u8; 256]) -> io::Result<String> {
 
 /// Safe wrapper for EVIOCGBIT ioctl
 fn eviocgbit(fd: RawFd, ev_type: u8, buf: &mut [u8]) -> io::Result<()> {
-    let ioctl_num = EVIOCGBIT_IOCTL(ev_type, buf.len());
+    let ioctl_num = eviocgbit_ioctl(ev_type, buf.len());
     let res = unsafe { ioctl(fd, ioctl_num, buf.as_mut_ptr()) };
     if res < 0 {
         Err(io::Error::last_os_error())
