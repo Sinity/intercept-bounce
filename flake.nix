@@ -16,7 +16,7 @@
     in {
       packages.default = pkgs.rustPlatform.buildRustPackage {
         pname = "intercept-bounce";
-        version = "0.1.1"; # Updated version
+        version = "0.1.1";
         src = ./.;
         cargoHash = "sha256-cO7yquZR5cN95am47vX7CYpMdQY1DDxHEsYdwRgWiW4=";
 
