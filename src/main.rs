@@ -84,7 +84,7 @@ fn main() -> io::Result<()> {
         // and state/stats updates. It returns true if the event should be dropped.
         let is_bounce = bounce_filter
             .lock()
-            .expect("BounceFilter mutex should not be poisoned in main loop")
+            .expect("FATAL: BounceFilter mutex poisoned in main event loop.") // More specific message
             .process_event(&ev); // Call the new process_event method
 
         // Write the event to stdout if it was NOT considered a bounce

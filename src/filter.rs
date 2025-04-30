@@ -1,4 +1,5 @@
-use input_linux_sys::{input_event, EV_KEY, EV_SYN, EV_REL, EV_ABS}; // Added other common types for logging
+use crate::event::{event_microseconds, is_key_event}; // Import helpers
+use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_REL, EV_SYN}; // Added other common types for logging
 use phf;
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -79,7 +80,7 @@ static KEY_NAMES: phf::Map<u16, &'static str> = phf::phf_map! {
     68u16 => "KEY_F10",
     69u16 => "KEY_NUMLOCK",
     70u16 => "KEY_SCROLLLOCK",
-    71u116 => "KEY_KP7",
+    71u16 => "KEY_KP7", // Corrected typo 71u116 -> 71u16
     72u16 => "KEY_KP8",
     73u16 => "KEY_KP9",
     74u16 => "KEY_KPMINUS",
@@ -161,15 +162,15 @@ impl BounceFilter {
         KEY_NAMES.get(&code).map_or_else(|| code.to_string(), |name| name.to_string())
     }
 
-    /// Gets the human-readable name for an event type, or the type itself if unknown.
-    fn get_event_type_name(type_: u16) -> String {
+    /// Gets the human-readable name for an event type.
+    fn get_event_type_name(type_: u16) -> &'static str {
         match i32::from(type_) {
-            EV_SYN => "EV_SYN".to_string(),
-            EV_KEY => "EV_KEY".to_string(),
-            EV_REL => "EV_REL".to_string(),
-            EV_ABS => "EV_ABS".to_string(),
+            EV_SYN => "EV_SYN",
+            EV_KEY => "EV_KEY",
+            EV_REL => "EV_REL",
+            EV_ABS => "EV_ABS",
             // Add other types as needed
-            _ => format!("{}", type_),
+            _ => "Unknown", // Return a static string for unknown types
         }
     }
 
@@ -204,13 +205,21 @@ impl BounceFilter {
         let key = (key_code, key_value);
 
         // 4. Check for bounce based on *current* state (before updating state for this event)
+        let mut bounce_diff_us: Option<u64> = None; // Store the difference if it's a bounce
         let is_bounce = match self.last_event_us.get(&key) {
             Some(&last_us) => {
                 // Check if the time difference is within the bounce window.
                 // Use checked_sub to handle potential time jumps backwards gracefully (treat as not a bounce).
-                event_us.checked_sub(last_us).map_or(false, |diff| {
-                    diff < self.window_us
-                })
+                if let Some(diff) = event_us.checked_sub(last_us) {
+                    if diff < self.window_us {
+                        bounce_diff_us = Some(diff); // Store the difference causing the bounce
+                        true // It's a bounce
+                    } else {
+                        false // Not a bounce (outside window)
+                    }
+                } else {
+                    false // Not a bounce (time went backwards)
+                }
             }
             None => {
                 // First event for this key code + value combination, never a bounce.
@@ -235,20 +244,14 @@ impl BounceFilter {
 
             if is_bounce {
                 // It was a bounce, update drop stats
+                // It was a bounce, update drop stats
                 self.key_events_dropped += 1;
                 *self.per_key_dropped.entry(key).or_insert(0) += 1;
-                // Calculate and store bounce timing diff using the *old* last_us
-                if let Some(&last_us) = self.last_event_us.get(&key) { // This gets the *new* last_us if not bounce, *old* if bounce
-                     // We need the diff relative to the *previous* event.
-                     // The `is_bounce` check already calculated this diff.
-                     // Let's recalculate it here for clarity or store it earlier.
-                     // Recalculating is fine as it's only in verbose path.
-                     if let Some(&prev_us) = self.last_event_us.get(&key) { // Get the timestamp *before* this event
-                         if let Some(diff) = event_us.checked_sub(prev_us) {
-                             self.per_key_timing.entry(key).or_default().push(diff);
-                         }
-                     }
+                // Store the timing difference that caused this bounce
+                if let Some(diff) = bounce_diff_us {
+                    self.per_key_timing.entry(key).or_default().push(diff);
                 }
+                // Note: We don't update self.last_event_us.insert(key, event_us) for the bounced event
             }
 
             // Extended Repeat Logging (only if verbose) - This was already handled in the old is_bounce,
@@ -287,19 +290,19 @@ impl BounceFilter {
     /// Helper to log event details to stderr if log_events is true.
     /// Called *before* filtering logic updates state.
     fn log_event_details(&self, event: &input_event, event_us: u64) {
-        let event_type = i32::from(event.type_);
         let code = event.code;
         let value = event.value;
+        let type_name = Self::get_event_type_name(event.type_);
 
         eprint!("[LOG] Timestamp: {} µs, Type: {} ({}), Code: {}, Value: {}",
             event_us,
-            event_type,
-            Self::get_event_type_name(event.type_),
+            event.type_, // Log the raw type number
+            type_name,   // Log the resolved name
             code,
             value
         );
 
-        if event_type == EV_KEY {
+        if is_key_event(event) { // Use the imported helper
             let key = (code, value);
             let key_name = Self::get_key_name(code);
             eprint!(" [{}]", key_name);
@@ -342,37 +345,36 @@ impl BounceFilter {
 
     /// Prints collected statistics to the given writer (e.g., stderr). Only prints if verbose was enabled.
     pub fn print_stats(&self, writer: &mut impl Write) -> io::Result<()> {
-        // Only print if stats were actually collected (verbose mode)
+        // Print status header regardless of verbose, if bypass or log_events is on
+        if self.bypass || self.log_events || self.is_verbose {
+            eprintln!("--- intercept-bounce status ---"); // Use eprintln! directly
+            eprintln!("Bypass mode: {}", if self.bypass { "Active" } else { "Inactive" });
+            eprintln!("Event logging: {}", if self.log_events { "Active" } else { "Inactive" });
+        }
+
+        // Only print detailed stats if verbose was enabled
         if !self.is_verbose {
-            // If verbose is off but log_events or bypass is on, print a minimal header
-            if self.log_events || self.bypass {
-                 writeln!(writer, "--- intercept-bounce status ---")?;
-                 writeln!(writer, "Bypass mode: {}", if self.bypass { "Active" } else { "Inactive" })?;
-                 writeln!(writer, "Event logging: {}", if self.log_events { "Active" } else { "Inactive" })?;
-                 writeln!(writer, "-----------------------------")?;
-            }
+             if self.bypass || self.log_events {
+                 eprintln!("-----------------------------"); // Close the status header
+             }
             return Ok(()); // No detailed stats if not verbose
         }
 
-        // Detailed stats if verbose is on
-        writeln!(writer, "--- intercept-bounce statistics ---")?;
-        writeln!(writer, "Bypass mode: {}", if self.bypass { "Active" } else { "Inactive" })?;
-        writeln!(writer, "Event logging: {}", if self.log_events { "Active" } else { "Inactive" })?;
-
+        // Detailed stats (if verbose is on)
         if !self.bypass { // Only print filtering stats if filtering was active
-            writeln!(writer, "Window: {} µs", self.window_us)?;
-            writeln!(writer, "Key events processed: {}", self.key_events_processed)?;
-            writeln!(writer, "Key events dropped:   {}", self.key_events_dropped)?;
+            eprintln!("Window: {} µs", self.window_us);
+            eprintln!("Key events processed: {}", self.key_events_processed);
+            eprintln!("Key events dropped:   {}", self.key_events_dropped);
             let percentage = if self.key_events_processed > 0 {
-                (self.key_events_dropped as f64 / self.key_events_processed as f64) * 100.0 // Corrected f66 to f64
+                (self.key_events_dropped as f64 / self.key_events_processed as f64) * 100.0 // Corrected f64 typo
             } else {
                 0.0
             };
-            writeln!(writer, "Percentage dropped:   {:.2}%", percentage)?;
+            eprintln!("Percentage dropped:   {:.2}%", percentage);
 
             // Print per-key stats if any keys were dropped
             if !self.per_key_dropped.is_empty() {
-                writeln!(writer, "\nDropped events per key (code, value) [Name]: Count (Timing µs: min/avg/max)")?;
+                eprintln!("\nDropped events per key (code, value) [Name]: Count (Timing µs: min/avg/max)");
                 // Sort by drop count descending for better readability
                 let mut sorted_drops: Vec<_> = self.per_key_dropped.iter().collect();
                 sorted_drops.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count (b.1 vs a.1)
@@ -381,48 +383,31 @@ impl BounceFilter {
                     let key_name = Self::get_key_name(*code);
                     let timing_stats = if let Some(timings) = self.per_key_timing.get(&(*code, *value)) {
                         if timings.is_empty() {
-                            "N/A".to_string()
+                            "N/A".to_string() // Should not happen if count > 0
                         } else {
                             // Calculate min/max/avg safely
-                            let min = timings.iter().min().unwrap_or(&0);
-                            let max = timings.iter().max().unwrap_or(&0);
+                            let min = timings.iter().min().unwrap_or(&0); // Safe unwrap_or
+                            let max = timings.iter().max().unwrap_or(&0); // Safe unwrap_or
                             let sum: u64 = timings.iter().sum();
-                            let avg = sum as f64 / timings.len() as f64;
+                            let avg = sum as f64 / timings.len() as f64; // timings.len() > 0 here
                             format!("{}/{:.1}/{}", min, avg, max)
                         }
                     } else {
                         "N/A".to_string() // Should not happen if count > 0, but handle defensively
                     };
 
-                    writeln!(writer, "  ({}, {}) [{}]: {} ({})", code, value, key_name, count, timing_stats)?;
+                    eprintln!("  ({}, {}) [{}]: {} ({})", code, value, key_name, count, timing_stats);
                 }
             }
         } else {
              // If bypass is active, filtering stats are not relevant
-             writeln!(writer, "Filtering statistics are not available in bypass mode.")?;
+             eprintln!("Filtering statistics are not available in bypass mode.");
         }
 
-
-        writeln!(writer, "-----------------------------------")?;
+        eprintln!("-----------------------------------"); // Use eprintln!
         Ok(())
     }
 }
 
-// Helper functions from event.rs (copied here to avoid circular dependency or needing event.rs)
-// In a real project, these would likely be in a shared module or event.rs would be added.
-
-/// Returns true if the event type is EV_KEY.
-#[inline]
-pub fn is_key_event(event: &input_event) -> bool {
-    i32::from(event.type_) == EV_KEY
-}
-
-/// Converts an input_event timeval to microseconds (u64).
-#[inline]
-pub fn event_microseconds(event: &input_event) -> u64 {
-    // event.time is timeval { tv_sec: i64, tv_usec: i64 }
-    // Convert tv_sec and tv_usec to u64 microseconds
-    // Handle potential negative values from i64 by casting to u64,
-    // assuming valid evdev timestamps are non-negative.
-    (event.time.tv_sec.max(0) as u64) * 1_000_000 + (event.time.tv_usec.max(0) as u64)
-}
+// Removed duplicated helper functions: is_key_event, event_microseconds
+// They are now imported from crate::event
