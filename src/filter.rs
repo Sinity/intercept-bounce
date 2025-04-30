@@ -3,9 +3,7 @@ use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_REL, EV_SY
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-// Include the generated static map for key names
-// Source: /usr/include/linux/input-event-codes.h
-// (Add more keys as needed for better logging)
+// Static map for human-readable key names from <linux/input-event-codes.h>
 static KEY_NAMES: phf::Map<u16, &'static str> = phf::phf_map! {
     0u16 => "KEY_RESERVED",
     1u16 => "KEY_ESC",

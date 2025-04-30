@@ -5,109 +5,78 @@ use std::sync::{
     Arc, Mutex,
 };
 
-// Signal handling imports
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 
-// Declare modules
 mod cli;
 mod event;
 mod filter;
 
-use event::{read_event, write_event}; // event_microseconds and is_key_event are now used within filter::BounceFilter
+use event::{read_event, write_event};
 use filter::BounceFilter;
 
-/// Main entry point for the intercept-bounce filter.
-/// Reads input_event structs from stdin, filters key bounces, and writes results to stdout.
 fn main() -> io::Result<()> {
-    // Parse command line arguments
     let args = cli::parse_args();
 
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
-        args.debounce_time, // Use renamed flag
-        args.log_interval,  // Pass interval in seconds
+        args.debounce_time,
+        args.log_interval,
         args.log_all_events,
         args.log_bounces,
-        // No stats flag needed here anymore
     )));
 
-    // Flag to ensure final stats are printed only once
     let final_stats_printed = Arc::new(AtomicBool::new(false));
 
-    // --- Signal Handling Setup ---
-    // Always set up signal handling to print stats on termination.
-    // Clone Arcs for the signal handler thread
+    // Setup signal handling in a separate thread
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
     let filter_clone = Arc::clone(&bounce_filter);
-        let printed_clone = Arc::clone(&final_stats_printed);
+    let printed_clone = Arc::clone(&final_stats_printed);
 
-        // Spawn a thread to handle signals asynchronously
-        std::thread::spawn(move || {
-            // Handle the first signal received. The loop is unnecessary as we exit anyway.
-            if let Some(sig) = signals.forever().next() {
-                // Attempt to print final stats if not already printed
-                if !printed_clone.swap(true, Ordering::SeqCst) {
-                    eprintln!("\nReceived signal {}, printing final stats and exiting.", sig);
-                    match filter_clone.lock() {
-                        Ok(filter) => {
-                            // Ignore errors writing stats during signal handling
-                            let _ = filter.print_stats(&mut io::stderr());
-                        }
-                        Err(poisoned) => {
-                            // Mutex poisoned - try to recover data if possible, otherwise just log error
-                            eprintln!("Error: BounceFilter mutex was poisoned during signal handling!");
-                            // Attempt recovery and print stats
-                            let _ = poisoned.into_inner().print_stats(&mut io::stderr());
-                        }
+    std::thread::spawn(move || {
+        if let Some(sig) = signals.forever().next() {
+            if !printed_clone.swap(true, Ordering::SeqCst) {
+                eprintln!("\nReceived signal {}, printing final stats and exiting.", sig);
+                match filter_clone.lock() {
+                    Ok(filter) => {
+                        let _ = filter.print_stats(&mut io::stderr()); // Ignore errors writing stats during signal handling
                     }
-                } else {
-                    // Avoid redundant message if stats already being printed by main thread exit
-                    // eprintln!("Final stats already printed or being printed.");
+                    Err(poisoned) => {
+                        eprintln!("Error: BounceFilter mutex was poisoned during signal handling!");
+                        let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
+                    }
                 }
-                // Exit after handling the signal
-                exit(128 + sig); // Standard exit code for signals
             }
-        });
-    // --- End Signal Handling Setup ---
+            exit(128 + sig); // Standard exit code for signals
+        }
+    });
 
-
-    // Get locked stdin and stdout handles for efficiency
     let mut stdin_locked = io::stdin().lock();
     let mut stdout_locked = io::stdout().lock();
 
     // Main event processing loop
     while let Some(ev) = read_event(&mut stdin_locked)? {
-        // Process the event using the filter.
-        // This method handles logging (if enabled), bounce checking (if not bypass),
-        // and state/stats updates. It returns true if the event should be dropped.
         let is_bounce = bounce_filter
             .lock()
-            .expect("FATAL: BounceFilter mutex poisoned in main event loop.") // More specific message
-            .process_event(&ev); // Call the new process_event method
+            .expect("FATAL: BounceFilter mutex poisoned in main event loop.")
+            .process_event(&ev);
 
-        // Write the event to stdout if it was NOT considered a bounce
         if !is_bounce {
             write_event(&mut stdout_locked, &ev)?;
         }
-        // If is_bounce is true, the event is simply dropped (not written to stdout)
-    } // Closes the while loop (EOF)
+    } // EOF reached
 
-    // Print final statistics on clean exit (e.g., EOF).
-    // Ensure stats haven't been printed by signal handler.
+    // Print final statistics on clean exit
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
          match bounce_filter.lock() {
              Ok(filter) => {
-                 // Ignore potential errors writing stats to stderr at clean exit.
-                 // print_stats now handles whether to show detailed timings based on filter.collect_stats
-                 let _ = filter.print_stats(&mut io::stderr());
+                 let _ = filter.print_stats(&mut io::stderr()); // Ignore errors writing stats at exit
              },
              Err(poisoned) => {
-                 // Mutex poisoned - try to recover data if possible, otherwise just log error
                  eprintln!("Error: BounceFilter mutex was poisoned on clean exit!");
-                 let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
+                 let _ = poisoned.into_inner().print_stats(&mut io.stderr()); // Attempt recovery
              }
          }
     }
 
     Ok(())
-} // Closes main()
+}

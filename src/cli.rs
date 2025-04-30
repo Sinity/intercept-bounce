@@ -9,13 +9,11 @@ pub struct Args {
     /// Debounce time threshold (milliseconds). Duplicate key events (same keycode and value)
     /// occurring faster than this threshold are discarded. (Default: 10ms)
     #[arg(short = 't', long, default_value = "10", value_name = "MS")]
-    pub debounce_time: u64, // Renamed from window
-
-    // Removed stats flag - stats are always collected and printed on exit.
+    pub debounce_time: u64,
 
     /// Periodically dump statistics to stderr every S seconds (default: 0 = disabled).
     #[arg(long, default_value = "0", value_name = "SECONDS")]
-    pub log_interval: u64, // Now represents seconds
+    pub log_interval: u64,
 
     /// Log details of *every* incoming event to stderr ([PASS] or [DROP]).
     #[arg(long, action = clap::ArgAction::SetTrue)]
