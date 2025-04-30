@@ -3,7 +3,7 @@ use crate::event::{event_microseconds, is_key_event}; // Import helpers
 use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_REL, EV_SYN};
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::time::Duration; // For formatting durations
+ // For formatting durations
 
 // Include the generated static map for key names
 // Source: /usr/include/linux/input-event-codes.h
