@@ -4,14 +4,14 @@ use std::mem::size_of;
 use std::fs;
 // Remove unused imports: CStr, AsRawFd
 
-// Import necessary items from nix
+use std::os::unix::io::AsRawFd;
+use std::ffi::CStr;
+use std::os::unix::prelude::RawFd;
+use libc::{ioctl, c_char, c_ulong, c_uint};
+
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
 use nix::unistd::close;
-// Import the input event ioctl wrappers and Errno directly
-use nix::sys::event::input as ev_input; // Import the input module
-use nix::errno::Errno;
-// Remove unused NixError alias
 
 /// Reads a single `input_event` from the reader. Returns Ok(None) on EOF.
 pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
@@ -81,39 +81,36 @@ pub fn list_input_devices() -> io::Result<()> {
         // Use nix::fcntl::open to open the device
         let fd = match open(&path, OFlag::O_RDONLY | OFlag::O_NONBLOCK, Mode::empty()) {
             Ok(fd) => fd,
-            // Correct the error matching pattern
-            Err(nix::Error::Sys(errno)) if errno == Errno::EACCES => {
-                eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
-                continue; // Skip to the next device
-            }
             Err(e) => {
-                eprintln!("{:<15} {:<30} Error opening: {}", path_str, "", e);
-                continue; // Skip to the next device
+                // Try to detect permission denied
+                let msg = format!("{}", e);
+                if msg.contains("Permission denied") {
+                    eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
+                    continue;
+                } else {
+                    eprintln!("{:<15} {:<30} Error opening: {}", path_str, "", e);
+                    continue;
+                }
             }
         };
 
-        // Get device name using nix::sys::event::input::eviocgname
-        // Create a buffer for the name
-        let mut name_buf = [0u8; 256]; // Standard buffer size for device names
-        let device_name = match ev_input::eviocgname(fd, &mut name_buf) {
-            Ok(name_cstr) => name_cstr.to_string_lossy().into_owned(), // Convert CStr to String
+        // Get device name using EVIOCGNAME ioctl
+        let mut name_buf = [0u8; 256];
+        let device_name = match eviocgname(fd, &mut name_buf) {
+            Ok(name) => name,
             Err(e) => {
                 eprintln!("Warning: Could not get name for {}: {}", path_str, e);
                 "<Unknown Name>".to_string()
             }
         };
 
-        // Get supported event types bitmask using nix::sys::ioctl::eviocgbit
-        // EV_MAX is from input_linux_sys, which should be compatible
+        // Get supported event types bitmask using EVIOCGBIT ioctl
         let mut capabilities = Vec::new();
-        // Buffer size needed is (EV_MAX / 8) + 1 bytes
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
 
-        // Call the ioctl wrapper, passing the mutable buffer
-        match ev_input::eviocgbit(fd, 0, &mut type_bits_buf) { // 0 indicates getting EV_ type bits
-            Ok(_) => { // eviocgbit returns () on success, buffer is filled
-                // Check specific bits using the filled buffer
+        match eviocgbit(fd, 0, &mut type_bits_buf) {
+            Ok(_) => {
                 if is_bit_set(&type_bits_buf, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
                 if is_bit_set(&type_bits_buf, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
                 if is_bit_set(&type_bits_buf, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
@@ -121,7 +118,6 @@ pub fn list_input_devices() -> io::Result<()> {
                 if is_bit_set(&type_bits_buf, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
                 if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
                 if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
-                // Add other types if needed
             }
             Err(e) => {
                 eprintln!("Warning: Could not get capabilities for {}: {}", path_str, e);
@@ -135,8 +131,7 @@ pub fn list_input_devices() -> io::Result<()> {
             capabilities.join(", ")
         );
 
-        // Close the file descriptor using nix::unistd::close
-        let _ = close(fd); // Ignore close errors for simplicity here
+        let _ = close(fd);
     }
 
     eprintln!("-------------------------------------------------------------------");
@@ -146,7 +141,7 @@ pub fn list_input_devices() -> io::Result<()> {
     Ok(())
 }
 
-// Helper function to check if a bit is set in a byte buffer
+/// Helper function to check if a bit is set in a byte buffer
 fn is_bit_set(buf: &[u8], bit: usize) -> bool {
     let byte_index = bit / 8;
     let bit_index = bit % 8;
@@ -154,5 +149,40 @@ fn is_bit_set(buf: &[u8], bit: usize) -> bool {
         (buf[byte_index] & (1 << bit_index)) != 0
     } else {
         false
+    }
+}
+
+// --- Linux ioctl helpers for EVIOCGNAME and EVIOCGBIT ---
+
+// These constants are from <linux/input.h>
+const EVIOCGNAME_LEN: usize = 256;
+const EVIOCGNAME_IOCTL: c_ulong = ior!(b'E', 0x06, EVIOCGNAME_LEN);
+const EVIOCGBIT_IOCTL: c_ulong = |ty: u8, len: usize| ior!(b'E', 0x20 + ty, len);
+
+// Macro to generate ioctl numbers (like _IOR in C)
+const fn ior!(ty: u8, nr: u8, size: usize) -> c_ulong {
+    ((2u64 << 30) | ((size as u64) << 16) | ((ty as u64) << 8) | (nr as u64)) as c_ulong
+}
+
+/// Safe wrapper for EVIOCGNAME ioctl
+fn eviocgname(fd: RawFd, buf: &mut [u8; 256]) -> io::Result<String> {
+    let res = unsafe { ioctl(fd, EVIOCGNAME_IOCTL, buf.as_mut_ptr()) };
+    if res < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        // Find first null byte and convert to string
+        let nul = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Ok(String::from_utf8_lossy(&buf[..nul]).to_string())
+    }
+}
+
+/// Safe wrapper for EVIOCGBIT ioctl
+fn eviocgbit(fd: RawFd, ev_type: u8, buf: &mut [u8]) -> io::Result<()> {
+    let ioctl_num = EVIOCGBIT_IOCTL(ev_type, buf.len());
+    let res = unsafe { ioctl(fd, ioctl_num, buf.as_mut_ptr()) };
+    if res < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
 }
