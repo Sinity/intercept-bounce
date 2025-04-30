@@ -1,5 +1,6 @@
 use assert_cmd::Command;
-use linux_input_sys::{input_event, timeval};
+use input_linux_sys::{input_event, timeval, EV_KEY}; // Corrected crate name and imported EV_KEY
+use predicates::str::is_empty; // Imported is_empty predicate
 use std::io::Write;
 use std::mem::size_of;
 
@@ -7,7 +8,7 @@ fn fake_ev(ts: u64) -> input_event {
     input_event {
         time:  timeval { tv_sec: (ts / 1_000_000) as i64,
                          tv_usec: (ts % 1_000_000) as i64 },
-        type_: libc::EV_KEY,
+        type_: EV_KEY, // Used imported EV_KEY
         code: 30,          // KEY_A
         value: 1,          // press
     }
@@ -29,9 +30,9 @@ fn drops_bounce() {
         )).unwrap();
     }
 
-   let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--window").arg("5")
         .write_stdin(input)
         .assert()
-        .stdout(predicates::str::is_empty()); // Expect empty stdout if bounce is dropped
+        .stdout(is_empty()); // Used imported is_empty
 }
