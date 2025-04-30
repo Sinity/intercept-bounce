@@ -36,7 +36,7 @@ fn main() -> io::Result<()> {
     // --- Signal Handling Setup (only if verbose) ---
     if args.verbose {
         // Clone Arcs for the signal handler thread
-        let signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
+        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?; // <-- Added mut here
         let filter_clone = Arc::clone(&bounce_filter);
         let printed_clone = Arc::clone(&final_stats_printed);
 
