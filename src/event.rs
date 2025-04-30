@@ -4,10 +4,8 @@ use std::mem::size_of;
 use std::fs;
 // Remove unused imports: CStr, AsRawFd
 
-use std::os::unix::io::AsRawFd;
-use std::ffi::CStr;
 use std::os::unix::prelude::RawFd;
-use libc::{ioctl, c_char, c_ulong, c_uint};
+use libc::{ioctl, c_ulong};
 
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
@@ -154,14 +152,13 @@ fn is_bit_set(buf: &[u8], bit: usize) -> bool {
 
 // --- Linux ioctl helpers for EVIOCGNAME and EVIOCGBIT ---
 
-// These constants are from <linux/input.h>
 const EVIOCGNAME_LEN: usize = 256;
-const EVIOCGNAME_IOCTL: c_ulong = ior!(b'E', 0x06, EVIOCGNAME_LEN);
+const EVIOCGNAME_IOCTL: c_ulong = ior(b'E', 0x06, EVIOCGNAME_LEN);
 fn eviocgbit_ioctl(ty: u8, len: usize) -> c_ulong {
     ior(b'E', 0x20 + ty, len)
 }
 
-// Macro to generate ioctl numbers (like _IOR in C)
+// Function to generate ioctl numbers (like _IOR in C)
 const fn ior(ty: u8, nr: u8, size: usize) -> c_ulong {
     ((2u64 << 30) | ((size as u64) << 16) | ((ty as u64) << 8) | (nr as u64)) as c_ulong
 }
