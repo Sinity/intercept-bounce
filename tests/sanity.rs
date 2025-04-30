@@ -1,6 +1,6 @@
 use assert_cmd::Command;
-use input_linux_sys::{input_event, timeval, EV_KEY}; // Corrected crate name and imported EV_KEY
-use predicates::str::is_empty; // Imported is_empty predicate
+use input_linux_sys::{input_event, timeval, EV_KEY};
+use predicates::bytes::eq; // Import eq predicate for bytes
 use std::io::Write;
 use std::mem::size_of;
 
@@ -8,7 +8,7 @@ fn fake_ev(ts: u64) -> input_event {
     input_event {
         time:  timeval { tv_sec: (ts / 1_000_000) as i64,
                          tv_usec: (ts % 1_000_000) as i64 },
-        type_: EV_KEY as u16, // Used imported EV_KEY and cast to u16
+        type_: EV_KEY as u16,
         code: 30,          // KEY_A
         value: 1,          // press
     }
@@ -19,11 +19,19 @@ fn drops_bounce() {
     let mut input: Vec<u8> = Vec::new();
     let e1 = fake_ev(0);
     let e2 = fake_ev(3_000);    // 3 ms later, should be dropped
+
+    // Write e1 to input and capture its bytes for expected output
     unsafe {
         input.write_all(std::slice::from_raw_parts(
             &e1 as *const _ as *const u8,
             size_of::<input_event>(),
         )).unwrap();
+    }
+    // The expected output is just the first event
+    let expected_output_bytes = input.clone();
+
+    // Write e2 to input
+    unsafe {
         input.write_all(std::slice::from_raw_parts(
             &e2 as *const _ as *const u8,
             size_of::<input_event>(),
@@ -34,5 +42,6 @@ fn drops_bounce() {
     cmd.arg("--window").arg("5")
         .write_stdin(input)
         .assert()
-        .stdout(is_empty()); // Used imported is_empty
+        // Assert that stdout contains exactly the bytes of the first event
+        .stdout(eq(expected_output_bytes));
 }
