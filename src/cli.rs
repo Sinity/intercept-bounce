@@ -17,6 +17,10 @@ pub struct Args {
     /// Dump statistics to stderr every N key events processed (default: 0 = disabled). Requires --verbose.
     #[arg(long, default_value = "0", value_name = "N")]
     pub log_interval: u64,
+
+    /// Bypass all filtering and pass all events through without processing. Useful for debugging.
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub bypass: bool,
 }
 
 /// Parses command line arguments using clap.
