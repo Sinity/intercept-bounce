@@ -17,13 +17,9 @@
       packages.default = pkgs.rustPlatform.buildRustPackage {
         pname = "intercept-bounce";
         version = "0.2.0";
-        src = ./.;
 
-        # Use cargoHash as cargoSha256 might not work in older nixpkgs versions' rustPlatform.
-        # Rely solely on the hash for verifying vendored dependencies.
-        # Remove the hash below and run `nix build .# --rebuild` to get the new hash
-        # after updating dependencies (like adding phf).
-        cargoHash = pkgs.lib.fakeSha256; # Update this after getting the hash mismatch error
+        src = ./.;
+        cargoHash = "sha256-+4K8ICqX0FPYpfUG6dgHu8jw1pVhWV51DuUtZUZeFpA=";
 
         meta = {
           description = "Interception Tools bounce filter with statistics";
