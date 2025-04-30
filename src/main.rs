@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     io::{self, Read, Write},
     mem::size_of,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{/* Duration, */ SystemTime, UNIX_EPOCH}, // Removed unused Duration import
 };
 
 /// Bounce-filter for Interception Tools
@@ -40,7 +40,8 @@ fn main() -> io::Result<()> {
        // SAFETY: evdev always gives us exactly sizeof(input_event) bytes
         let ev: input_event = unsafe { std::ptr::read(buf.as_ptr() as *const _) };
 
-       if ev.type_ == EV_KEY { // Use the imported EV_KEY
+       // Compare ev.type_ (u16) with EV_KEY (i32) by casting ev.type_
+        if i32::from(ev.type_) == EV_KEY {
             let now = micros_now();
             if let Some(&prev) = last.get(&ev.code) {
                 if now - prev < window_us {
