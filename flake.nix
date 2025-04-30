@@ -15,10 +15,8 @@
           version      = "0.1.0";
           src          = ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          # You will need to run `nix build .` once, copy the hash from the error,
-          # and paste it here.
-          # You will need to run `nix build .#` once after `cargo build`, copy the hash
-          # from the nix build error, and paste it here.
+          # You will need to run `nix build .#` once after `cargo build` (or after updating dependencies),
+          # copy the hash from the nix build error message, and paste it here.
           cargoSha256 = "YOUR_HASH_HERE";
 
          meta = {

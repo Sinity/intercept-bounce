@@ -200,3 +200,50 @@ fn filters_key_repeat() {
         "Key repeat bounce was not filtered"
     );
 }
+
+#[test]
+fn window_zero_passes_all() {
+    let e1 = key_ev(0, KEY_A, 1);     // Press A at 0ms
+    let e2 = key_ev(1_000, KEY_A, 1); // Press A again at 1ms (would be bounce with window > 1)
+    let input_events = vec![e1, e2];
+    let expected_events = vec![e1, e2]; // Both should pass when window is 0
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window")
+        .arg("0") // 0ms window
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Events were filtered when window was 0"
+    );
+}
+
+
+#[test]
+fn handles_time_going_backwards() {
+    let e1 = key_ev(5_000, KEY_A, 1); // Press A at 5ms
+    let e2 = key_ev(3_000, KEY_A, 1); // Press A "again" at 3ms (time jumped back)
+    let input_events = vec![e1, e2];
+    let expected_events = vec![e1, e2]; // Both events should pass
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window")
+        .arg("5") // 5ms window
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Event with earlier timestamp was dropped"
+    );
+}

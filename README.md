@@ -7,9 +7,10 @@ This is an independent user-mode filter, intended for use with `udevmon`.
 
 ## Features
 
-- Removes rapid duplicate keypresses (chatter)
-- Configurable threshold
-- Composable in standard interception pipelines
+- Removes rapid duplicate key events (chatter/bounce) based on key code *and* state (press/release/repeat).
+- Configurable time window (milliseconds) for bounce detection.
+- Passes non-key events through unmodified.
+- Composable in standard interception pipelines.
 
 ## Status
 
