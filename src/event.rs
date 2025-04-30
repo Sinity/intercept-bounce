@@ -1,9 +1,16 @@
-use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Remove EVIOCGNAME and EVIOCGBIT from import
+use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN};
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
-use libc::{ioctl, O_RDONLY, O_NONBLOCK};
 use std::ffi::CStr;
+use std::os::unix::io::AsRawFd; // Needed for nix ioctls
+
+// Import necessary items from nix
+use nix::fcntl::{open, OFlag};
+use nix::sys::stat::Mode;
+use nix::unistd::close;
+use nix::sys::event::input::{self as ev_input, InputEvent}; // Use nix's InputEvent alias if needed, or keep input_linux_sys one
+use nix::Error as NixError; // Import Nix's error type
 
 /// Reads a single `input_event` from the reader. Returns Ok(None) on EOF.
 pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
@@ -70,66 +77,48 @@ pub fn list_input_devices() -> io::Result<()> {
 
     for (path, _) in entries {
         let path_str = path.display().to_string();
-        // Open the device file read-only and non-blocking
-        let fd = unsafe { libc::open(path_str.as_ptr() as *const i8, O_RDONLY | O_NONBLOCK) };
-
-        if fd < 0 {
-            let err = io::Error::last_os_error();
-            // Ignore "Permission denied" errors, just print a note
-            if err.kind() == io::ErrorKind::PermissionDenied {
+        // Use nix::fcntl::open to open the device
+        let fd = match open(&path, OFlag::O_RDONLY | OFlag::O_NONBLOCK, Mode::empty()) {
+            Ok(fd) => fd,
+            Err(NixError::Sys(errno)) if errno == nix::errno::Errno::EACCES => {
                 eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
-            } else {
-                eprintln!("{:<15} {:<30} Error: {}", path_str, "", err);
+                continue; // Skip to the next device
             }
-            continue; // Skip to the next device
-        }
-
-        // Get device name
-        let mut name_buf: [u8; 256] = [0; 256];
-        let name_result = unsafe {
-            // Use the constant directly with its full path, cast to c_ulong
-            ioctl(fd, input_linux_sys::EVIOCGNAME as libc::c_ulong, name_buf.as_mut_ptr())
-        };
-        let device_name = if name_result >= 0 {
-            // Ensure null termination before creating CStr
-            if let Some(nul_pos) = name_buf.iter().position(|&c| c == 0) {
-                unsafe { CStr::from_ptr(name_buf.as_ptr() as *const i8).to_string_lossy().into_owned() }
-            } else {
-                 // Handle case where buffer isn't null-terminated (though ioctl should ensure it)
-                 String::from_utf8_lossy(&name_buf).into_owned()
+            Err(e) => {
+                eprintln!("{:<15} {:<30} Error opening: {}", path_str, "", e);
+                continue; // Skip to the next device
             }
-        } else {
-            "<Unknown Name>".to_string()
         };
 
-        // Get supported event types bitmask
-        // Buffer size needed is (EV_MAX / 8) + 1 bytes
-        let type_bits_size = (EV_MAX / 8) + 1;
-        let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
-        let bits_result = unsafe {
-            // Use the constant directly with its full path, cast to c_ulong
-            // Note: This assumes the base EVIOCGBIT ioctl number is sufficient.
-            // A more complex EVIOCGBIT might require constructing the ioctl number
-            // with the event type (0 for EV_SYN/all types) and buffer length.
-            // If this doesn't work, using the `nix` crate's ioctl wrappers might be better.
-            ioctl(fd, input_linux_sys::EVIOCGBIT as libc::c_ulong, type_bits_buf.as_mut_ptr())
+        // Get device name using nix::sys::event::input::ev_get_name
+        let device_name = match ev_input::ev_get_name(fd) {
+            Ok(name) => name,
+            Err(e) => {
+                eprintln!("Warning: Could not get name for {}: {}", path_str, e);
+                "<Unknown Name>".to_string()
+            }
         };
 
+        // Get supported event types bitmask using nix::sys::event::input::ev_get_bit
+        // EV_MAX is from input_linux_sys, which should be compatible
         let mut capabilities = Vec::new();
-        if bits_result >= 0 {
-            // Check specific bits
-            if is_bit_set(&type_bits_buf, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
-            if is_bit_set(&type_bits_buf, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
-            if is_bit_set(&type_bits_buf, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
-            if is_bit_set(&type_bits_buf, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
-            if is_bit_set(&type_bits_buf, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
-            if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
-            if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); } // SYN is always present, but good to show
-            // Add other types if needed
-        } else {
-             capabilities.push("Error getting capabilities");
+        match ev_input::ev_get_bit(fd, 0, EV_MAX as usize) { // 0 indicates getting EV_ type bits
+            Ok(type_bits) => {
+                // Check specific bits using the returned Vec<u8>
+                if is_bit_set(&type_bits, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
+                if is_bit_set(&type_bits, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
+                if is_bit_set(&type_bits, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
+                if is_bit_set(&type_bits, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
+                if is_bit_set(&type_bits, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
+                if is_bit_set(&type_bits, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
+                if is_bit_set(&type_bits, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
+                // Add other types if needed
+            }
+            Err(e) => {
+                eprintln!("Warning: Could not get capabilities for {}: {}", path_str, e);
+                capabilities.push("Error getting capabilities");
+            }
         }
-
 
         eprintln!("{:<15} {:<30} {}",
             path_str,
@@ -137,8 +126,8 @@ pub fn list_input_devices() -> io::Result<()> {
             capabilities.join(", ")
         );
 
-        // Close the file descriptor
-        unsafe { libc::close(fd) };
+        // Close the file descriptor using nix::unistd::close
+        let _ = close(fd); // Ignore close errors for simplicity here
     }
 
     eprintln!("-------------------------------------------------------------------");
