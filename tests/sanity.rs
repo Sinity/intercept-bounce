@@ -1,6 +1,6 @@
 use assert_cmd::Command;
 use input_linux_sys::{input_event, timeval, EV_KEY};
-use predicates::bytes::eq; // Import eq predicate for bytes
+// Removed: use predicates::bytes::eq; // Import eq predicate for bytes
 use std::io::Write;
 use std::mem::size_of;
 
@@ -39,9 +39,11 @@ fn drops_bounce() {
     }
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--window").arg("5")
+    let assert = cmd.arg("--window").arg("5")
         .write_stdin(input)
-        .assert()
-        // Assert that stdout contains exactly the bytes of the first event
-        .stdout(eq(expected_output_bytes));
+        .assert();
+
+    // Capture stdout bytes and use standard assertion
+    let actual_stdout_bytes = assert.get_stdout();
+    assert_eq!(actual_stdout_bytes, expected_output_bytes);
 }
