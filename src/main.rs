@@ -12,12 +12,28 @@ mod cli;
 mod event;
 mod filter;
 
-use event::{read_event, write_event};
+use event::{read_event, write_event, list_input_devices}; // Import the new function
 use filter::BounceFilter;
 
 fn main() -> io::Result<()> {
     let args = cli::parse_args();
 
+    // Check for the list_devices flag first
+    if args.list_devices {
+        // Running in device listing mode
+        eprintln!("Scanning input devices (requires root)...");
+        match list_input_devices() {
+            Ok(_) => {}, // Success, nothing more to do
+            Err(e) => {
+                eprintln!("Error listing devices: {}", e);
+                eprintln!("Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges.");
+                exit(1); // Exit with an error code
+            }
+        }
+        return Ok(()); // Exit after listing devices
+    }
+
+    // Proceed with normal filtering mode
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
         args.debounce_time,
         args.log_interval,

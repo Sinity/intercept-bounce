@@ -196,6 +196,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "input-linux-sys",
+ "libc",
  "phf",
  "predicates",
  "signal-hook",
