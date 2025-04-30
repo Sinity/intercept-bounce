@@ -1,47 +1,58 @@
 # intercept-bounce
 
-[![Crates.io](https://img.shields.io/crates/v/intercept-bounce.svg)](https://crates.io/crates/intercept-bounce)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://github.com/sinity/intercept-bounce/actions/workflows/rust.yml/badge.svg)](https://github.com/sinity/intercept-bounce/actions/workflows/rust.yml)
-
 `intercept-bounce` is an [Interception Tools](https://gitlab.com/interception/linux/tools) filter designed to eliminate keyboard chatter (also known as switch bounce). It reads Linux `input_event` structs from standard input, filters out rapid duplicate key events below a configurable time threshold, and writes the filtered events to standard output.
 
 This is particularly useful for mechanical keyboards which can sometimes register multiple presses or releases for a single physical key action due to noisy switch contacts.
 
-## Features
+## Features Overview
 
-* **Configurable Debounce Threshold:** Set the time threshold (in milliseconds) below which duplicate key events (same key code *and* value) are discarded.
-* **Automatic Statistics:** Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal). Includes overall counts, per-key drop counts, bounce timings (min/avg/max), and near-miss timings (passed events < 100ms).
-* **Event Logging:** Optionally log all incoming events (`--log-all-events`) or only the dropped events (`--log-bounces`) to stderr for debugging, showing `[PASS]` or `[DROP]` status.
-* **Periodic Stats:** Optionally dump statistics periodically based on a time interval (`--log-interval`).
-* **Signal Handling:** Gracefully handles `SIGINT`, `SIGTERM`, and `SIGQUIT` by printing final statistics before exiting.
-* **Integration with Interception Tools:** Designed to be easily plugged into an interception chain using tools like `intercept` and `uinput`.
+* Filters keyboard chatter based on a configurable time threshold.
+* Integrates seamlessly with the Interception Tools ecosystem.
+* Provides detailed statistics on exit about filtered and passed events.
+* Offers optional periodic statistics dumping and per-event logging for debugging.
+* Handles termination signals gracefully to ensure statistics are reported.
 
 ## Installation
 
 ### Prerequisites
 
-* **Rust:** Ensure you have a recent Rust toolchain installed. You can get it from [rustup.rs](https://rustup.rs/).
-* **Interception Tools:** You need the Interception Tools installed and configured on your system. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools) for installation instructions.
+* **Interception Tools:** You need the Interception Tools installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
+* **Build Environment:** You need either a Rust toolchain or Nix with flakes enabled.
 
-### From Crates.io
+### Using Nix (Recommended)
 
-```bash
-cargo install intercept-bounce
-```
+If you have Nix installed with flakes enabled:
 
-### From Source
+1. **Build:**
 
-1. Clone the repository:
+    ```bash
+    # From the project directory
+    nix build
+    # The binary will be in ./result/bin/intercept-bounce
+    ```
+
+2. **Run Directly:**
+
+    ```bash
+    # From the project directory
+    nix run . -- [OPTIONS]
+    # Example: Run with default settings in a pipeline
+    sudo sh -c 'intercept -g ... | nix run . -- | uinput -d ...'
+    ```
+
+### Using Cargo (Rust Toolchain)
+
+1. **Install Rust:** Get it from [rustup.rs](https://rustup.rs/).
+2. **Clone the repository:**
 
     ```bash
     git clone https://github.com/sinity/intercept-bounce.git
     cd intercept-bounce
     ```
 
-2. Build and install:
+3. **Build and install:**
 
-    ```bash
+```bash
     cargo install --path .
     ```
 
@@ -51,25 +62,24 @@ cargo install intercept-bounce
 
 `intercept-bounce` reads binary `input_event` data from `stdin` and writes the filtered binary data to `stdout`. It's designed to be placed in a pipeline between other Interception Tools like `intercept` and `uinput`.
 
-```
-intercept-bounce [OPTIONS]
-```
 
-### Options
-
-* `-t, --debounce-time <MS>`:
-  * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
-  * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
-  * Setting `--debounce-time 0` effectively disables filtering.
-* `--log-interval <SECONDS>`:
-  * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
-* `--log-all-events`:
-  * Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
-* `--log-bounces`:
-  * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
-* `-h, --help`: Print help information.
-* `-V, --version`: Print version information.
-
+> intercept-bounce [OPTIONS]
+> 
+> ### Options
+> 
+> * `-t, --debounce-time <MS>`:
+>   * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
+>   * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
+>   * Setting `--debounce-time 0` effectively disables filtering.
+> * `--log-interval <SECONDS>`:
+>   * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
+> * `--log-all-events`:
+>   * Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
+> * `--log-bounces`:
+>   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
+> * `-h, --help`: Print help information.
+> * `-V, --version`: Print version information.
+ 
 ### Examples
 
 1. **Basic Filtering (15ms window):**
