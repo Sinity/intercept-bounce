@@ -100,7 +100,6 @@ fn main() -> io::Result<()> {
                     write_event(&mut stdout_locked, &ev)?;
                 }
                 // If !pass_through (i.e., it was a bounce), we simply drop the event here
-            }
         // The loop condition `while let Some(ev) = ...` handles the None case (EOF) implicitly.
     } // Closes the while loop
 
