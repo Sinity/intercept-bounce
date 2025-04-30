@@ -1,4 +1,4 @@
-use input_linux_sys::{input_event, EVIOCGBIT, EVIOCGNAME, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Add EVIOCGNAME and EVIOCGBIT back
+use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Remove EVIOCGNAME and EVIOCGBIT from import
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
@@ -87,7 +87,8 @@ pub fn list_input_devices() -> io::Result<()> {
         // Get device name
         let mut name_buf: [u8; 256] = [0; 256];
         let name_result = unsafe {
-            ioctl(fd, EVIOCGNAME(name_buf.len() as i32) as libc::c_ulong, name_buf.as_mut_ptr())
+            // Qualify the call with the crate name
+            ioctl(fd, input_linux_sys::EVIOCGNAME(name_buf.len() as i32) as libc::c_ulong, name_buf.as_mut_ptr())
         };
         let device_name = if name_result >= 0 {
             unsafe { CStr::from_ptr(name_buf.as_ptr() as *const i8).to_string_lossy().into_owned() }
@@ -100,7 +101,8 @@ pub fn list_input_devices() -> io::Result<()> {
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
         let bits_result = unsafe {
-            ioctl(fd, EVIOCGBIT(0, type_bits_size as i32) as libc::c_ulong, type_bits_buf.as_mut_ptr())
+            // Qualify the call with the crate name
+            ioctl(fd, input_linux_sys::EVIOCGBIT(0, type_bits_size as i32) as libc::c_ulong, type_bits_buf.as_mut_ptr())
         };
 
         let mut capabilities = Vec::new();
