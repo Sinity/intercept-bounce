@@ -45,11 +45,11 @@ cargo install intercept-bounce
     cargo install --path .
     ```
 
-    The binary `intercept-bounce` will be installed in your Cargo bin directory (usually `~/.cargo/bin/`).
+    The binary `intercept-bounce` will be installed in your Cargo bin directory (usually `~/.cargo/bin/`). Ensure this directory is in your `PATH`.
 
 ## Usage
 
-`intercept-bounce` reads `input_event` data from `stdin` and writes filtered data to `stdout`. It's typically used in a pipeline with Interception Tools.
+`intercept-bounce` reads binary `input_event` data from `stdin` and writes the filtered binary data to `stdout`. It's designed to be placed in a pipeline between other Interception Tools like `intercept` and `uinput`.
 
 ```
 intercept-bounce [OPTIONS]
@@ -82,7 +82,7 @@ intercept-bounce [OPTIONS]
     *(You'll likely need `sudo` or appropriate permissions for `intercept` and `uinput`)*.
 
 2. **Filtering with Bounce Logging:**
-    Filter with a 20ms threshold and log only the events that get dropped. Detailed statistics will still print on exit.
+    Filter with a 20ms threshold and log only the events that get dropped. Detailed statistics will still print to stderr on exit.
 
     ```bash
     sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ...'
@@ -96,7 +96,7 @@ intercept-bounce [OPTIONS]
     ```
 
 4. **Periodic Stats Dump:**
-    Filter with the default 10ms threshold and print full stats to stderr every 60 seconds.
+    Filter with the default 10ms threshold and print full stats to stderr every 60 seconds (in addition to the final stats on exit).
 
     ```bash
     sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60 | uinput -d ...'
@@ -123,15 +123,17 @@ Events that are not key events (e.g., `EV_SYN`, `EV_MSC`, `EV_REL`, `EV_ABS`, `E
 
 ### Statistics and Logging
 
-* **Collection:** Statistics are always collected internally while the filter runs.
-* **Output:** Statistics are automatically printed to `stderr` when the process exits, either cleanly (input stream ends) or due to receiving `SIGINT`, `SIGTERM`, or `SIGQUIT`. A separate thread handles signal catching to ensure stats are printed reliably.
-* **Content:**
-  * *Overall:* Total key events processed, passed, and dropped, plus the percentage dropped.
-  * *Dropped Events:* Detailed breakdown per key, showing drop counts for press, release, and repeat states. Includes minimum, average, and maximum time differences (relative to the previous passed event of the same type) that caused an event to be dropped (bounce time).
-  * *Near-Miss Events:* Statistics for key events that *passed* but occurred within 100ms of the previous event for that key/value pair. This helps identify potential bounce activity just outside the configured threshold. Timings (min/avg/max) are shown relative to the previous event.
-  * *Formatting:* Timestamps and time differences in the stats output are formatted for readability (e.g., `12.3 ms`, `500 µs`).
-* **Periodic Logging:** If `--log-interval <SECONDS>` is set to a value greater than 0, the full statistics block will also be printed to stderr periodically, approximately every specified number of seconds (triggered by the next event arriving after the interval has passed).
-* **Event Logging:** The `--log-all-events` and `--log-bounces` flags provide verbose, per-event logging to stderr, indicating whether each event was `[PASS]`ed or `[DROP]`ped and showing relevant timing information. This logging occurs *after* the filtering decision has been made for the event.
+Statistics provide insight into the filter's operation and are **always collected and printed to stderr on exit** (either clean EOF or signal termination via `SIGINT`/`SIGTERM`/`SIGQUIT`).
+
+*   **Status Header:** Shows the configured debounce threshold and the status of logging flags.
+*   **Overall Statistics:** Total key events processed, passed, and dropped, along with the percentage dropped.
+*   **Dropped Event Statistics:** A detailed breakdown for each key where events were dropped:
+    *   Grouped by key code (e.g., `KEY_A (30)`).
+    *   Shows drop counts for each state (`Press (1)`, `Release (0)`, `Repeat (2)`).
+    *   Includes **Bounce Time** statistics (Min / Avg / Max) indicating the time difference between the dropped event and the previous *passed* event of the same type. This helps understand the timing of the chatter being filtered.
+*   **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within 100ms of the previous event for that specific key code and value. This can help identify keys that are close to the debounce threshold or exhibit borderline chatter. Timings (Min / Avg / Max) relative to the previous event are shown.
+*   **Periodic Logging (`--log-interval`):** If set > 0, the full statistics block is also printed periodically during runtime.
+*   **Event Logging (`--log-all-events`, `--log-bounces`):** Provides per-event details logged to stderr *after* the filtering decision, useful for fine-grained debugging.
 
 ## Troubleshooting / Notes
 
