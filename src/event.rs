@@ -1,4 +1,4 @@
-use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN, EVIOCGNAME, EVIOCGBIT}; // Add EVIOCGNAME and EVIOCGBIT back
+use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Remove EVIOCGNAME and EVIOCGBIT from import
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
@@ -87,11 +87,17 @@ pub fn list_input_devices() -> io::Result<()> {
         // Get device name
         let mut name_buf: [u8; 256] = [0; 256];
         let name_result = unsafe {
-            // Use the imported EVIOCGNAME directly
-            ioctl(fd, EVIOCGNAME(name_buf.len() as i32) as libc::c_ulong, name_buf.as_mut_ptr())
+            // Use the constant directly with its full path, cast to c_ulong
+            ioctl(fd, input_linux_sys::EVIOCGNAME as libc::c_ulong, name_buf.as_mut_ptr())
         };
         let device_name = if name_result >= 0 {
-            unsafe { CStr::from_ptr(name_buf.as_ptr() as *const i8).to_string_lossy().into_owned() }
+            // Ensure null termination before creating CStr
+            if let Some(nul_pos) = name_buf.iter().position(|&c| c == 0) {
+                unsafe { CStr::from_ptr(name_buf.as_ptr() as *const i8).to_string_lossy().into_owned() }
+            } else {
+                 // Handle case where buffer isn't null-terminated (though ioctl should ensure it)
+                 String::from_utf8_lossy(&name_buf).into_owned()
+            }
         } else {
             "<Unknown Name>".to_string()
         };
@@ -101,8 +107,12 @@ pub fn list_input_devices() -> io::Result<()> {
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
         let bits_result = unsafe {
-            // Use the imported EVIOCGBIT directly
-            ioctl(fd, EVIOCGBIT(0, type_bits_size as i32) as libc::c_ulong, type_bits_buf.as_mut_ptr())
+            // Use the constant directly with its full path, cast to c_ulong
+            // Note: This assumes the base EVIOCGBIT ioctl number is sufficient.
+            // A more complex EVIOCGBIT might require constructing the ioctl number
+            // with the event type (0 for EV_SYN/all types) and buffer length.
+            // If this doesn't work, using the `nix` crate's ioctl wrappers might be better.
+            ioctl(fd, input_linux_sys::EVIOCGBIT as libc::c_ulong, type_bits_buf.as_mut_ptr())
         };
 
         let mut capabilities = Vec::new();
