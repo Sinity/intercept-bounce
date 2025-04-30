@@ -8,7 +8,7 @@ fn fake_ev(ts: u64) -> input_event {
     input_event {
         time:  timeval { tv_sec: (ts / 1_000_000) as i64,
                          tv_usec: (ts % 1_000_000) as i64 },
-        type_: EV_KEY, // Used imported EV_KEY
+        type_: EV_KEY as u16, // Used imported EV_KEY and cast to u16
         code: 30,          // KEY_A
         value: 1,          // press
     }
