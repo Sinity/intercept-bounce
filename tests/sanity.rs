@@ -296,3 +296,34 @@ fn passes_at_window_boundary() {
         "Event exactly at window boundary was filtered"
     );
 }
+
+#[test]
+fn passes_all_with_bypass() {
+    // Create events that would normally be filtered
+    let e1 = key_ev(0, KEY_A, 1);     // Press A at 0ms
+    let e2 = key_ev(3_000, KEY_A, 1); // Press A again at 3ms (bounce)
+    let e3 = non_key_ev(4_000);       // SYN event at 4ms
+    let e4 = key_ev(5_000, KEY_B, 1); // Press B at 5ms
+    let e5 = key_ev(6_000, KEY_B, 1); // Press B again at 6ms (bounce)
+    let input_events = vec![e1, e2, e3, e4, e5];
+    // With --bypass, ALL events should pass
+    let expected_events = input_events.clone();
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window") // Window value shouldn't matter in bypass mode
+        .arg("10")
+        .arg("--bypass") // Enable bypass
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Events were filtered despite --bypass flag"
+    );
+    // Optionally, check stderr for bypass status message if verbose/log_events is also enabled,
+    // but the primary check for bypass is the stdout content.
+}
