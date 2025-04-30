@@ -10,21 +10,23 @@ pub struct Args {
     #[arg(short, long, default_value = "10")]
     pub window: u64,
 
-    /// Enable verbose logging to stderr (prints statistics on signal/exit and enables periodic logging).
+    /// Collect and print statistics (including detailed bounce timings) on exit and periodically.
     #[arg(short, long, action = clap::ArgAction::SetTrue)]
-    pub verbose: bool,
+    pub stats: bool, // Renamed from verbose
 
-    /// Dump statistics to stderr every N key events processed (default: 0 = disabled). Requires --verbose.
+    /// Dump statistics to stderr every N key events processed (default: 0 = disabled). Requires --stats.
     #[arg(long, default_value = "0", value_name = "N")]
     pub log_interval: u64,
 
-    /// Bypass all filtering and pass all events through without processing. Useful for debugging.
-    #[arg(long, action = clap::ArgAction::SetTrue)]
-    pub bypass: bool,
+    // Removed bypass flag (use --window 0 instead)
 
-    /// Log details of every incoming event to stderr as it is processed.
+    /// Log details of *every* incoming event to stderr (prefixed with [PASS] or [DROP]).
     #[arg(long, action = clap::ArgAction::SetTrue)]
-    pub log_events: bool,
+    pub log_all_events: bool, // Renamed from log_events
+
+    /// Log details of *only dropped* (bounced) key events to stderr.
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub log_bounces: bool,
 }
 
 /// Parses command line arguments using clap.

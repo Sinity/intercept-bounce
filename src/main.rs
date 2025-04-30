@@ -26,21 +26,20 @@ fn main() -> io::Result<()> {
     // Initialize the bounce filter state, potentially guarded by a Mutex
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
         args.window,
-        args.verbose,
+        args.stats,         // Pass the renamed flag
         args.log_interval,
-        args.bypass,
-        args.log_events, // Pass the new log_events flag
+        args.log_all_events,// Pass the renamed flag
+        args.log_bounces,   // Pass the new flag
     )));
 
     // Flag to ensure final stats are printed only once
     let final_stats_printed = Arc::new(AtomicBool::new(false));
 
     // --- Signal Handling Setup ---
-    // We set up signal handling if verbose is on (to print stats) OR if bypass/log_events is on (to print status)
-    if args.verbose || args.bypass || args.log_events {
-        // Clone Arcs for the signal handler thread
-        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
-        let filter_clone = Arc::clone(&bounce_filter);
+    // Always set up signal handling to print stats on termination.
+    // Clone Arcs for the signal handler thread
+    let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
+    let filter_clone = Arc::clone(&bounce_filter);
         let printed_clone = Arc::clone(&final_stats_printed);
 
         // Spawn a thread to handle signals asynchronously
@@ -70,7 +69,6 @@ fn main() -> io::Result<()> {
                 exit(128 + sig); // Standard exit code for signals
             }
         });
-    }
     // --- End Signal Handling Setup ---
 
 
@@ -95,13 +93,13 @@ fn main() -> io::Result<()> {
         // If is_bounce is true, the event is simply dropped (not written to stdout)
     } // Closes the while loop (EOF)
 
-    // Print final statistics on clean exit (e.g., EOF) if verbose mode is enabled
-    // OR if bypass/log_events is active (to show status).
+    // Print final statistics on clean exit (e.g., EOF).
     // Ensure stats haven't been printed by signal handler.
-    if (args.verbose || args.bypass || args.log_events) && !final_stats_printed.swap(true, Ordering::SeqCst) {
+    if !final_stats_printed.swap(true, Ordering::SeqCst) {
          match bounce_filter.lock() {
              Ok(filter) => {
                  // Ignore potential errors writing stats to stderr at clean exit.
+                 // print_stats now handles whether to show detailed timings based on filter.collect_stats
                  let _ = filter.print_stats(&mut io::stderr());
              },
              Err(poisoned) => {
