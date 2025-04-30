@@ -10,10 +10,11 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 ## Features
 
-*   **Configurable Debounce Threshold:** Set the time threshold (in milliseconds) below which duplicate key events (same key code and value) are discarded.
-*   **Statistics:** Automatically view detailed statistics on exit (processed, passed, dropped counts; per-key drop counts; bounce timings; near-miss timings).
-*   **Event Logging:** Optionally log all incoming events or only the dropped (bounced) events for debugging.
-*   **Periodic Stats:** Optionally dump statistics periodically based on a time interval.
+*   **Configurable Debounce Threshold:** Set the time threshold (in milliseconds) below which duplicate key events (same key code *and* value) are discarded.
+*   **Automatic Statistics:** Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal). Includes overall counts, per-key drop counts, bounce timings (min/avg/max), and near-miss timings (passed events < 100ms).
+*   **Event Logging:** Optionally log all incoming events (`--log-all-events`) or only the dropped events (`--log-bounces`) to stderr for debugging, showing `[PASS]` or `[DROP]` status.
+*   **Periodic Stats:** Optionally dump statistics periodically based on a time interval (`--log-interval`).
+*   **Signal Handling:** Gracefully handles `SIGINT`, `SIGTERM`, and `SIGQUIT` by printing final statistics before exiting.
 *   **Integration with Interception Tools:** Designed to be easily plugged into an interception chain using tools like `intercept` and `uinput`.
 
 ## Installation
