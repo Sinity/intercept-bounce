@@ -1,5 +1,5 @@
 use clap::Parser;
-use input_linux_sys::input_event;
+use input_linux_sys::{input_event, EV_KEY}; // Import EV_KEY from input_linux_sys
 use std::{
     collections::HashMap,
     io::{self, Read, Write},
@@ -40,7 +40,7 @@ fn main() -> io::Result<()> {
        // SAFETY: evdev always gives us exactly sizeof(input_event) bytes
         let ev: input_event = unsafe { std::ptr::read(buf.as_ptr() as *const _) };
 
-       if ev.type_ == libc::EV_KEY {
+       if ev.type_ == EV_KEY { // Use the imported EV_KEY
             let now = micros_now();
             if let Some(&prev) = last.get(&ev.code) {
                 if now - prev < window_us {
