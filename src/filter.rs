@@ -1,7 +1,7 @@
 use input_linux_sys::input_event;
 use std::collections::HashMap;
 
-/// Holds the state for bounce filtering.
+/// Holds the state for bounce filtering, tracking the last event time for each key code.
 pub struct BounceFilter {
     window_us: u64,
     last_event_us: HashMap<u16, u64>, // Map key code to last event timestamp (µs)

@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write};
+use std::io::{self};
 
 // Declare modules
 mod cli;
@@ -8,6 +8,8 @@ mod filter;
 use event::{event_microseconds, is_key_event, read_event, write_event};
 use filter::BounceFilter;
 
+/// Main entry point for the intercept-bounce filter.
+/// Reads input_events from stdin, filters key bounces, and writes results to stdout.
 fn main() -> io::Result<()> {
     // Parse command line arguments
     let args = cli::parse_args();

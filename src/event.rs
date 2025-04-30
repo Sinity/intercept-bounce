@@ -1,8 +1,8 @@
-use input_linux_sys::{input_event, timeval, EV_KEY};
+use input_linux_sys::{input_event, EV_KEY}; // timeval is part of input_event
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 
-/// Reads a single input_event from the reader.
+/// Reads a single `input_event` from the reader.
 /// Returns Ok(None) on EOF.
 pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
     let mut buf = vec![0u8; size_of::<input_event>()];

@@ -17,12 +17,14 @@
           cargoLock.lockFile = ./Cargo.lock;
           # You will need to run `nix build .` once, copy the hash from the error,
           # and paste it here.
-          cargoSha256 = "YOUR_HASH_HERE"; # Make sure this matches the hash from the nix build error
+          # You will need to run `nix build .#` once after `cargo build`, copy the hash
+          # from the nix build error, and paste it here.
+          cargoSha256 = "YOUR_HASH_HERE";
 
          meta = {
             description = "Interception Tools debounce filter";
-            license     = pkgs.lib.licenses.mit;
-            maintainers = [ "sinity" ]; # Replace with your GitHub username
+            license     = pkgs.lib.licenses.mit; # Or Apache-2.0
+            maintainers = with pkgs.lib.maintainers; [ sinity ]; # Using your GitHub username from Cargo.toml authors
           };
         };
 

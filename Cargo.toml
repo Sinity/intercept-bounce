@@ -15,8 +15,7 @@ features = ["default"]
 
 [dependencies]
 clap            = { version = "4.5", features = ["derive"] }
-input-linux-sys = "0.1"          # struct input_event + key codes
-libc            = "0.2"          # EV_KEY const - Note: EV_KEY is actually in input-linux-sys, but libc is still needed for other things like c_int
+input-linux-sys = "0.1"          # struct input_event + key codes, EV_KEY
 
 [dev-dependencies]
 assert_cmd = "2.0"
