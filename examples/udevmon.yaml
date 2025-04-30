@@ -1,18 +1,24 @@
 # Example udevmon configuration for intercept-bounce
+#
+# Remember to replace the LINK pattern with one matching your specific keyboard.
+# Find links in /dev/input/by-id/ or use `udevadm info` on your /dev/input/eventX device.
 
-# Job 1: Basic filtering (default 10ms window)
-# - JOB: "intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE"
-#   DEVICE:
-#     LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd"
-
-# Job 2: Filtering with verbose logging and periodic stats dump every 1000 key events
-# Statistics and logs will go to the systemd service journal for this job.
-- JOB: "intercept -g $DEVNODE | intercept-bounce --verbose --log-interval 1000 | uinput -d $DEVNODE"
+# --- Example 1: Basic Filtering ---
+# Apply default 10ms debouncing to a specific keyboard.
+- JOB: "intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE"
   DEVICE:
-    # Match your specific keyboard device.
-    # You can find the correct LINK using `udevadm info -q path -n /dev/input/eventXX`
-    # or by looking in /dev/input/by-id/
-    LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd"
-    # Optionally, you can also match by events the device supports
-    # EVENTS:
-    #   EV_KEY: [[KEY_CAPSLOCK]] # Example: match devices with CAPSLOCK
+    LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd" # Replace this!
+
+# --- Example 2: Filtering with Periodic Stats ---
+# Apply 15ms debouncing and log full statistics every 5 minutes (300 seconds).
+# Statistics and any other stderr output will go to the systemd service journal for this job.
+- JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15 --log-interval 300 | uinput -d $DEVNODE"
+  DEVICE:
+    LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd" # Replace/adjust this!
+
+# --- Example 3: Logging Only Bounced Events ---
+# Apply 20ms debouncing and log only the details of events that were actually dropped.
+# Useful for diagnosing chatter without logging every single event.
+- JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20 --log-bounces | uinput -d $DEVNODE"
+  DEVICE:
+    LINK: "/dev/input/by-id/usb-Another_Keyboard_*-event-kbd" # Replace this!

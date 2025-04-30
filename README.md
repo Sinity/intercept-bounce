@@ -60,26 +60,27 @@ If you have Nix installed with flakes enabled:
 
 ## Usage
 
-`intercept-bounce` reads binary `input_event` data from `stdin` and writes the filtered binary data to `stdout`. It's designed to be placed in a pipeline between other Interception Tools like `intercept` and `uinput`.
+`intercept-bounce` reads binary `input_event` data from `stdin` and writes the filtered binary data to `stdout`. It's designed to be placed in a pipeline between other Interception Tools like `intercept` (providing input) and `uinput` (consuming output).
 
+```
+intercept-bounce [OPTIONS]
+```
 
-> intercept-bounce [OPTIONS]
-> 
-> ### Options
-> 
-> * `-t, --debounce-time <MS>`:
->   * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
->   * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
->   * Setting `--debounce-time 0` effectively disables filtering.
-> * `--log-interval <SECONDS>`:
->   * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
-> * `--log-all-events`:
->   * Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
-> * `--log-bounces`:
->   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
-> * `-h, --help`: Print help information.
-> * `-V, --version`: Print version information.
- 
+### Options
+
+*   `-t, --debounce-time <MS>`:
+    *   Sets the time threshold for bounce filtering in milliseconds (default: `10`).
+    *   Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
+    *   Setting `--debounce-time 0` effectively disables filtering.
+*   `--log-interval <SECONDS>`:
+    *   Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
+*   `--log-all-events`:
+    *   Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
+*   `--log-bounces`:
+    *   Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
+*   `-h, --help`: Print help information.
+*   `-V, --version`: Print version information.
+
 ### Examples
 
 1. **Basic Filtering (15ms window):**
