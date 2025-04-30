@@ -28,8 +28,7 @@ impl BounceFilter {
             Some(&last_us) => {
                 // Check if the time difference is within the window.
                 // Use checked_sub to handle potential time jumps backwards gracefully (treat as not a bounce).
-                if event_us.checked_sub(last_us).map_or(false, |diff| diff < self.window_us) {
-                    // Event is within the bounce window
+                if event_us.checked_sub(last_us).is_some_and(|diff| diff < self.window_us) {
                     // Event is within the bounce window -> IS a bounce
                     true
                 } else {
