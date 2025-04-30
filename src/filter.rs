@@ -328,8 +328,8 @@ impl BounceFilter {
             let key_name = Self::get_key_name(code);
             eprint!(" [{}]", key_name);
 
-            // Time since last event of same key+value state (before this event potentially updated it)
-            if let Some(&last_us) = self.last_event_us.get(&key) {
+            // Show timing information relevant to the event's status
+            if let Some(&_last_us) = self.last_event_us.get(&key) { // Use _last_us to silence warning
                  // For dropped events, last_us wasn't updated, so this diff is the bounce diff
                  // For passed events, last_us *was* updated, so recalculate diff relative to *previous* state if needed for logging?
                  // Let's just show the bounce diff if it was a bounce, otherwise show time since last *passed* event of this type.
