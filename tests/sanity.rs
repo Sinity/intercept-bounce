@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-// Removed: use assert_cmd::output::OutputOkExt; // Import the trait that provides .unwrap() on the output Result
 use input_linux_sys::{input_event, timeval, EV_KEY};
 use std::io::Write;
 use std::mem::size_of;
