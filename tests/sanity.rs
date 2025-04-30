@@ -247,3 +247,53 @@ fn handles_time_going_backwards() {
         "Event with earlier timestamp was dropped"
     );
 }
+
+#[test]
+fn filters_just_below_window_boundary() {
+    const WINDOW_MS: u64 = 10;
+    let window_us = WINDOW_MS * 1_000;
+    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
+    let e2 = key_ev(window_us - 1, KEY_A, 1); // Press A again just inside window (9.999ms)
+    let input_events = vec![e1, e2];
+    let expected_events = vec![e1]; // e2 should be filtered
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window")
+        .arg(WINDOW_MS.to_string())
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Event just inside window boundary was not filtered"
+    );
+}
+
+#[test]
+fn passes_at_window_boundary() {
+    const WINDOW_MS: u64 = 10;
+    let window_us = WINDOW_MS * 1_000;
+    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
+    let e2 = key_ev(window_us, KEY_A, 1); // Press A again exactly at window boundary (10.000ms)
+    let input_events = vec![e1, e2];
+    let expected_events = vec![e1, e2]; // e2 should pass
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window")
+        .arg(WINDOW_MS.to_string())
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Event exactly at window boundary was filtered"
+    );
+}

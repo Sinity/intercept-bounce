@@ -22,12 +22,9 @@ fn main() -> io::Result<()> {
     let mut stdout_locked = io::stdout().lock();
 
     // Main event processing loop
-    loop {
-        // Read the next event from stdin
-        match read_event(&mut stdin_locked)? {
-            Some(ev) => {
-                // Assume the event should be passed through unless filtered
-                let mut pass_through = true;
+    while let Some(ev) = read_event(&mut stdin_locked)? {
+        // Assume the event should be passed through unless filtered
+        let mut pass_through = true;
 
                 // Only apply bounce filtering to key events
                 if is_key_event(&ev) {
@@ -46,12 +43,8 @@ fn main() -> io::Result<()> {
                 }
                 // If !pass_through (i.e., it was a bounce), we simply drop the event here
             }
-            None => {
-                // End of input stream
-                break;
-            }
+            // The loop condition `while let Some(ev) = ...` handles the None case (EOF) implicitly.
         }
-    }
 
     Ok(())
 }

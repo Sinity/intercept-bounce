@@ -12,9 +12,8 @@ impl BounceFilter {
     /// `window_ms`: The time window in milliseconds. Events within this window are filtered.
     pub fn new(window_ms: u64) -> Self {
         BounceFilter {
-            window_us: window_ms * 1_000, // Convert ms to µs
-            // Use a reasonable initial capacity
-            last_event_us: HashMap::with_capacity(64),
+            window_us: window_ms * 1_000,
+            last_event_us: HashMap::with_capacity(64), // Use a reasonable initial capacity
         }
     }
 
