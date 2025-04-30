@@ -1,4 +1,4 @@
-use std::io::{self, Write}; // Need Write for stderr
+use std::io; // Removed Write, keep io for stdin/stderr
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -49,12 +49,12 @@ fn main() -> io::Result<()> {
                     match filter_clone.lock() {
                         Ok(filter) => {
                             // Ignore errors writing stats during signal handling
-                            let _ = filter.print_stats(&mut io.stderr());
+                            let _ = filter.print_stats(&mut io::stderr());
                         }
                         Err(poisoned) => {
                             // Mutex poisoned - try to recover data if possible, otherwise just log error
                             eprintln!("Error: BounceFilter mutex was poisoned during signal handling!");
-                            let _ = poisoned.into_inner().print_stats(&mut io.stderr()); // Attempt recovery
+                            let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
                         }
                     }
                 } else {
@@ -70,7 +70,7 @@ fn main() -> io::Result<()> {
 
 
     // Get locked stdin and stdout handles for efficiency
-    let mut stdin_locked = io.stdin().lock();
+    let mut stdin_locked = io::stdin().lock();
     let mut stdout_locked = io::stdout().lock();
 
     // Main event processing loop
@@ -108,12 +108,12 @@ fn main() -> io::Result<()> {
          match bounce_filter.lock() {
              Ok(filter) => {
                  // Ignore potential errors writing stats to stderr at clean exit.
-                 let _ = filter.print_stats(&mut io.stderr());
+                 let _ = filter.print_stats(&mut io::stderr());
              },
              Err(poisoned) => {
                  // Mutex poisoned - try to recover data if possible, otherwise just log error
                  eprintln!("Error: BounceFilter mutex was poisoned on clean exit!");
-                 let _ = poisoned.into_inner().print_stats(&mut io.stderr()); // Attempt recovery
+                 let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
              }
          }
     }
