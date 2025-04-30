@@ -1,9 +1,9 @@
 use assert_cmd::Command;
-use assert_cmd::output::OutputOkExt; // Import the trait that provides .unwrap() on the output Result
+// Removed: use assert_cmd::output::OutputOkExt; // Import the trait that provides .unwrap() on the output Result
 use input_linux_sys::{input_event, timeval, EV_KEY};
-// Removed: use predicates::bytes::eq; // Import eq predicate for bytes
 use std::io::Write;
 use std::mem::size_of;
+use std::process::Output; // Import Output struct
 
 fn fake_ev(ts: u64) -> input_event {
     input_event {
@@ -40,12 +40,13 @@ fn drops_bounce() {
     }
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    let assert = cmd.arg("--window").arg("5")
-        .write_stdin(input)
-        .assert();
+    cmd.arg("--window").arg("5")
+        .write_stdin(input); // Don't call .assert() yet
 
-    // Capture stdout bytes and use standard assertion
-    // get_output() returns a Result, OutputOkExt provides .unwrap()
-    let actual_stdout_bytes = assert.get_output().unwrap().stdout;
+    // Execute the command and get the owned Output struct
+    let output: Output = cmd.output().unwrap();
+
+    // Access stdout bytes directly from the owned Output struct
+    let actual_stdout_bytes = output.stdout;
     assert_eq!(actual_stdout_bytes, expected_output_bytes);
 }
