@@ -4,82 +4,41 @@
 
 This is particularly useful for mechanical keyboards which can sometimes register multiple presses or releases for a single physical key action due to noisy switch contacts.
 
-## Features Overview
+## Features
 
-* Filters keyboard chatter based on a configurable time threshold.
-* Integrates seamlessly with the Interception Tools ecosystem.
-* Provides detailed statistics on exit about filtered and passed events.
-* Offers optional periodic statistics dumping and per-event logging for debugging.
-* Handles termination signals gracefully to ensure statistics are reported.
+* Filters keyboard chatter based on a configurable time threshold (`--debounce-time`).
+* Integrates seamlessly with the Interception Tools ecosystem (reads from stdin, writes to stdout).
+* Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal).
+* Statistics include overall counts, per-key drop counts, bounce timings (min/avg/max), and near-miss timings.
+* Optional periodic statistics dumping based on a time interval (`--log-interval`).
+* Optional per-event logging for debugging (`--log-all-events`, `--log-bounces`).
+* Handles termination signals (`SIGINT`, `SIGTERM`, `SIGQUIT`) gracefully to ensure final statistics are reported.
 
-## Installation
+## Prerequisites
 
-### Prerequisites
-
-* **Interception Tools:** You need the Interception Tools installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
-* **Build Environment:** You need either a Rust toolchain or Nix with flakes enabled.
-
-### Using Nix (Recommended)
-
-If you have Nix installed with flakes enabled:
-
-1. **Build:**
-
-    ```bash
-    # From the project directory
-    nix build
-    # The binary will be in ./result/bin/intercept-bounce
-    ```
-
-2. **Run Directly:**
-
-    ```bash
-    # From the project directory
-    nix run . -- [OPTIONS]
-    # Example: Run with default settings in a pipeline
-    sudo sh -c 'intercept -g ... | nix run . -- | uinput -d ...'
-    ```
-
-### Using Cargo (Rust Toolchain)
-
-1. **Install Rust:** Get it from [rustup.rs](https://rustup.rs/).
-2. **Clone the repository:**
-
-    ```bash
-    git clone https://github.com/sinity/intercept-bounce.git
-    cd intercept-bounce
-    ```
-
-3. **Build and install:**
-
-```bash
-    cargo install --path .
-    ```
-
-    The binary `intercept-bounce` will be installed in your Cargo bin directory (usually `~/.cargo/bin/`). Ensure this directory is in your `PATH`.
+* **Interception Tools:** Must be installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
+* **Build Environment:** Requires either a Rust toolchain or Nix with flakes enabled.
 
 ## Usage
 
 `intercept-bounce` reads binary `input_event` data from `stdin` and writes the filtered binary data to `stdout`. It's designed to be placed in a pipeline between other Interception Tools like `intercept` (providing input) and `uinput` (consuming output).
 
-```
-intercept-bounce [OPTIONS]
-```
+## Options
 
-### Options
-
-*   `-t, --debounce-time <MS>`:
-    *   Sets the time threshold for bounce filtering in milliseconds (default: `10`).
-    *   Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
-    *   Setting `--debounce-time 0` effectively disables filtering.
-*   `--log-interval <SECONDS>`:
-    *   Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
-*   `--log-all-events`:
-    *   Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
-*   `--log-bounces`:
-    *   Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
-*   `-h, --help`: Print help information.
-*   `-V, --version`: Print version information.
+> intercept-bounce [OPTIONS]
+>
+> * `-t, --debounce-time <MS>`:
+>   * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
+>   * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
+>   * Setting `--debounce-time 0` effectively disables filtering.
+> * `--log-interval <SECONDS>`:
+>   * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
+> * `--log-all-events`:
+>   * Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
+> * `--log-bounces`:
+>   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
+> * `-h, --help`: Print help information.
+> * `-V, --version`: Print version information.
 
 ### Examples
 
@@ -136,15 +95,15 @@ Events that are not key events (e.g., `EV_SYN`, `EV_MSC`, `EV_REL`, `EV_ABS`, `E
 
 Statistics provide insight into the filter's operation and are **always collected and printed to stderr on exit** (either clean EOF or signal termination via `SIGINT`/`SIGTERM`/`SIGQUIT`).
 
-*   **Status Header:** Shows the configured debounce threshold and the status of logging flags.
-*   **Overall Statistics:** Total key events processed, passed, and dropped, along with the percentage dropped.
-*   **Dropped Event Statistics:** A detailed breakdown for each key where events were dropped:
-    *   Grouped by key code (e.g., `KEY_A (30)`).
-    *   Shows drop counts for each state (`Press (1)`, `Release (0)`, `Repeat (2)`).
-    *   Includes **Bounce Time** statistics (Min / Avg / Max) indicating the time difference between the dropped event and the previous *passed* event of the same type. This helps understand the timing of the chatter being filtered.
-*   **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within 100ms of the previous event for that specific key code and value. This can help identify keys that are close to the debounce threshold or exhibit borderline chatter. Timings (Min / Avg / Max) relative to the previous event are shown.
-*   **Periodic Logging (`--log-interval`):** If set > 0, the full statistics block is also printed periodically during runtime.
-*   **Event Logging (`--log-all-events`, `--log-bounces`):** Provides per-event details logged to stderr *after* the filtering decision, useful for fine-grained debugging.
+* **Status Header:** Shows the configured debounce threshold and the status of logging flags.
+* **Overall Statistics:** Total key events processed, passed, and dropped, along with the percentage dropped.
+* **Dropped Event Statistics:** A detailed breakdown for each key where events were dropped:
+  * Grouped by key code (e.g., `KEY_A (30)`).
+  * Shows drop counts for each state (`Press (1)`, `Release (0)`, `Repeat (2)`).
+  * Includes **Bounce Time** statistics (Min / Avg / Max) indicating the time difference between the dropped event and the previous *passed* event of the same type. This helps understand the timing of the chatter being filtered.
+* **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within 100ms of the previous event for that specific key code and value. This can help identify keys that are close to the debounce threshold or exhibit borderline chatter. Timings (Min / Avg / Max) relative to the previous event are shown.
+* **Periodic Logging (`--log-interval`):** If set > 0, the full statistics block is also printed periodically during runtime.
+* **Event Logging (`--log-all-events`, `--log-bounces`):** Provides per-event details logged to stderr *after* the filtering decision, useful for fine-grained debugging.
 
 ## Troubleshooting / Notes
 
