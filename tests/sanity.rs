@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use assert_cmd::output::OutputOkExt; // Import the trait that provides .unwrap() on the output Result
 use input_linux_sys::{input_event, timeval, EV_KEY};
 // Removed: use predicates::bytes::eq; // Import eq predicate for bytes
 use std::io::Write;
@@ -44,7 +45,7 @@ fn drops_bounce() {
         .assert();
 
     // Capture stdout bytes and use standard assertion
-    // Changed get_stdout() to get_output().unwrap().stdout
+    // get_output() returns a Result, OutputOkExt provides .unwrap()
     let actual_stdout_bytes = assert.get_output().unwrap().stdout;
     assert_eq!(actual_stdout_bytes, expected_output_bytes);
 }
