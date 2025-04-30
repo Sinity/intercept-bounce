@@ -2,15 +2,16 @@ use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_RE
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
-use std::ffi::CStr;
-use std::os::unix::io::AsRawFd; // Needed for nix ioctls
+// Remove unused imports: CStr, AsRawFd
 
 // Import necessary items from nix
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
 use nix::unistd::close;
-use nix::sys::event::input::{self as ev_input, InputEvent}; // Use nix's InputEvent alias if needed, or keep input_linux_sys one
-use nix::Error as NixError; // Import Nix's error type
+// Import the ioctl wrappers and Errno directly
+use nix::sys::ioctl;
+use nix::errno::Errno;
+use nix::Error as NixError; // Keep Nix's error type alias
 
 /// Reads a single `input_event` from the reader. Returns Ok(None) on EOF.
 pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
@@ -80,7 +81,8 @@ pub fn list_input_devices() -> io::Result<()> {
         // Use nix::fcntl::open to open the device
         let fd = match open(&path, OFlag::O_RDONLY | OFlag::O_NONBLOCK, Mode::empty()) {
             Ok(fd) => fd,
-            Err(NixError::Sys(errno)) if errno == nix::errno::Errno::EACCES => {
+            // Use nix::Error::Sys directly in the pattern
+            Err(nix::Error::Sys(errno)) if errno == Errno::EACCES => {
                 eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
                 continue; // Skip to the next device
             }
@@ -90,28 +92,35 @@ pub fn list_input_devices() -> io::Result<()> {
             }
         };
 
-        // Get device name using nix::sys::event::input::ev_get_name
-        let device_name = match ev_input::ev_get_name(fd) {
-            Ok(name) => name,
+        // Get device name using nix::sys::ioctl::eviocgname
+        // Create a buffer for the name
+        let mut name_buf = [0u8; 256]; // Standard buffer size for device names
+        let device_name = match ioctl::eviocgname(fd, &mut name_buf) {
+            Ok(name_cstr) => name_cstr.to_string_lossy().into_owned(), // Convert CStr to String
             Err(e) => {
                 eprintln!("Warning: Could not get name for {}: {}", path_str, e);
                 "<Unknown Name>".to_string()
             }
         };
 
-        // Get supported event types bitmask using nix::sys::event::input::ev_get_bit
+        // Get supported event types bitmask using nix::sys::ioctl::eviocgbit
         // EV_MAX is from input_linux_sys, which should be compatible
         let mut capabilities = Vec::new();
-        match ev_input::ev_get_bit(fd, 0, EV_MAX as usize) { // 0 indicates getting EV_ type bits
-            Ok(type_bits) => {
-                // Check specific bits using the returned Vec<u8>
-                if is_bit_set(&type_bits, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
-                if is_bit_set(&type_bits, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
-                if is_bit_set(&type_bits, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
-                if is_bit_set(&type_bits, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
-                if is_bit_set(&type_bits, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
-                if is_bit_set(&type_bits, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
-                if is_bit_set(&type_bits, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
+        // Buffer size needed is (EV_MAX / 8) + 1 bytes
+        let type_bits_size = (EV_MAX / 8) + 1;
+        let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
+
+        // Call the ioctl wrapper, passing the mutable buffer
+        match ioctl::eviocgbit(fd, 0, &mut type_bits_buf) { // 0 indicates getting EV_ type bits
+            Ok(_) => { // eviocgbit returns () on success, buffer is filled
+                // Check specific bits using the filled buffer
+                if is_bit_set(&type_bits_buf, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
+                if is_bit_set(&type_bits_buf, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
+                if is_bit_set(&type_bits_buf, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
+                if is_bit_set(&type_bits_buf, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
+                if is_bit_set(&type_bits_buf, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
+                if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
+                if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
                 // Add other types if needed
             }
             Err(e) => {
