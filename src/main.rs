@@ -1,4 +1,4 @@
-use std::io; // Removed Write, keep io for stdin/stderr
+use std::io;
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -14,11 +14,11 @@ mod cli;
 mod event;
 mod filter;
 
-use event::{event_microseconds, is_key_event, read_event, write_event};
+use event::{read_event, write_event}; // event_microseconds and is_key_event are now used within filter::BounceFilter
 use filter::BounceFilter;
 
 /// Main entry point for the intercept-bounce filter.
-/// Reads input_events from stdin, filters key bounces, and writes results to stdout.
+/// Reads input_event structs from stdin, filters key bounces, and writes results to stdout.
 fn main() -> io::Result<()> {
     // Parse command line arguments
     let args = cli::parse_args();
@@ -28,17 +28,18 @@ fn main() -> io::Result<()> {
         args.window,
         args.verbose,
         args.log_interval,
-        args.bypass, // Pass the new bypass flag to the filter
+        args.bypass,
+        args.log_events, // Pass the new log_events flag
     )));
 
     // Flag to ensure final stats are printed only once
     let final_stats_printed = Arc::new(AtomicBool::new(false));
 
-    // --- Signal Handling Setup (only if verbose or bypass is active, so stats can be printed) ---
-    // We set up signal handling if verbose is on (to print stats) OR if bypass is on (to print bypass status)
-    if args.verbose || args.bypass {
+    // --- Signal Handling Setup ---
+    // We set up signal handling if verbose is on (to print stats) OR if bypass/log_events is on (to print status)
+    if args.verbose || args.bypass || args.log_events {
         // Clone Arcs for the signal handler thread
-        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?; // <-- Added mut here
+        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
         let filter_clone = Arc::clone(&bounce_filter);
         let printed_clone = Arc::clone(&final_stats_printed);
 
@@ -78,38 +79,25 @@ fn main() -> io::Result<()> {
 
     // Main event processing loop
     while let Some(ev) = read_event(&mut stdin_locked)? {
-        // Assume the event should be passed through unless filtered
-        let mut pass_through = true;
+        // Process the event using the filter.
+        // This method handles logging (if enabled), bounce checking (if not bypass),
+        // and state/stats updates. It returns true if the event should be dropped.
+        let is_bounce = bounce_filter
+            .lock()
+            .expect("BounceFilter mutex should not be poisoned in main loop")
+            .process_event(&ev); // Call the new process_event method
 
-        // Only apply bounce filtering logic to key events, and only if not in bypass mode
-        if is_key_event(&ev) {
-            // Lock the filter to check for bounce.
-            // The is_bounce method now internally handles bypass, verbose checks, stats, and periodic logging.
-            let is_bounce = bounce_filter
-                .lock()
-                .expect("BounceFilter mutex should not be poisoned in main loop")
-                .is_bounce(&ev, event_microseconds(&ev)); // Pass event_us directly
-
-            if is_bounce {
-                // It's a bounce (and not in bypass mode), mark it to be dropped.
-                // Statistics were updated inside is_bounce if verbose.
-                pass_through = false;
-            }
-            // If it wasn't a bounce (or if in bypass mode), pass_through remains true.
-            // The filter state (last_event_us, etc.) was updated inside is_bounce if not in bypass.
-        }
-
-        // Write the event to stdout if it wasn't filtered (or if it's not a key event)
-        if pass_through {
+        // Write the event to stdout if it was NOT considered a bounce
+        if !is_bounce {
             write_event(&mut stdout_locked, &ev)?;
         }
-        // If !pass_through (i.e., it was a bounce and not in bypass), we simply drop the event here
+        // If is_bounce is true, the event is simply dropped (not written to stdout)
     } // Closes the while loop (EOF)
 
     // Print final statistics on clean exit (e.g., EOF) if verbose mode is enabled
-    // AND stats haven't been printed by signal handler.
-    // Also print if bypass is active, so the bypass status is shown on exit.
-    if (args.verbose || args.bypass) && !final_stats_printed.swap(true, Ordering::SeqCst) {
+    // OR if bypass/log_events is active (to show status).
+    // Ensure stats haven't been printed by signal handler.
+    if (args.verbose || args.bypass || args.log_events) && !final_stats_printed.swap(true, Ordering::SeqCst) {
          match bounce_filter.lock() {
              Ok(filter) => {
                  // Ignore potential errors writing stats to stderr at clean exit.

@@ -21,6 +21,10 @@ pub struct Args {
     /// Bypass all filtering and pass all events through without processing. Useful for debugging.
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub bypass: bool,
+
+    /// Log details of every incoming event to stderr as it is processed.
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub log_events: bool,
 }
 
 /// Parses command line arguments using clap.

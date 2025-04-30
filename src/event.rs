@@ -36,7 +36,9 @@ pub fn write_event(writer: &mut impl Write, event: &input_event) -> io::Result<(
 pub fn event_microseconds(event: &input_event) -> u64 {
     // event.time is timeval { tv_sec: i64, tv_usec: i64 }
     // Convert tv_sec and tv_usec to u64 microseconds
-    (event.time.tv_sec as u64) * 1_000_000 + (event.time.tv_usec as u64)
+    // Handle potential negative values from i64 by casting to u64,
+    // assuming valid evdev timestamps are non-negative.
+    (event.time.tv_sec.max(0) as u64) * 1_000_000 + (event.time.tv_usec.max(0) as u64)
 }
 
 /// Checks if the event is a key event.
