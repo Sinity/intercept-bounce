@@ -1,4 +1,4 @@
-use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Remove EVIOCGNAME and EVIOCGBIT from here
+use input_linux_sys::{input_event, EVIOCGBIT, EVIOCGNAME, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN}; // Add EVIOCGNAME and EVIOCGBIT back
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
