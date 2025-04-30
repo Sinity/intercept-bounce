@@ -8,7 +8,7 @@ This is an independent user-mode filter, intended for use with `udevmon`.
 ## Features
 
 - Removes rapid duplicate key events (chatter/bounce) based on key code *and* state (press/release/repeat).
-- Configurable time window (milliseconds) for bounce detection (default: 10ms).
+- Configurable time window (milliseconds) for bounce detection (default: 10ms). Events occurring faster than this window are filtered. A higher value filters more aggressively.
 - Passes non-key events (like `EV_SYN`) through unmodified.
 - Composable in standard Interception Tools pipelines.
 

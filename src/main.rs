@@ -43,7 +43,7 @@ fn main() -> io::Result<()> {
                 }
                 // If !pass_through (i.e., it was a bounce), we simply drop the event here
             }
-            // The loop condition `while let Some(ev) = ...` handles the None case (EOF) implicitly.
+        // The loop condition `while let Some(ev) = ...` handles the None case (EOF) implicitly.
         }
 
     Ok(())

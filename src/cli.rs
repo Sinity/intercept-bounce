@@ -5,7 +5,8 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Time window (milliseconds) within which duplicate key events (same keycode and value) are discarded.
+    /// Time window (milliseconds). Duplicate key events (same keycode and value) occurring
+    /// faster than this window are discarded. Higher value = more filtering.
     #[arg(short, long, default_value = "10")]
     pub window: u64,
 }

@@ -16,8 +16,10 @@
           src          = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           # This hash verifies the vendored dependencies based on Cargo.lock.
-          # Update this hash using the output of `nix build .#` if Cargo.lock changes.
-          cargoSha256 = "YOUR_HASH_HERE"; # TODO: Replace with actual hash after `nix build`
+          # On the first build, or after Cargo.lock changes, Nix will fail with
+          # a hash mismatch error. Copy the expected hash from the error message
+          # and paste it here.
+          cargoSha256 = pkgs.lib.fakeSha256; # Replace with actual hash after first build/update
 
          meta = {
             description = "Interception Tools bounce filter";
