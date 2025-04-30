@@ -191,12 +191,11 @@ dependencies = [
 
 [[package]]
 name = "intercept-bounce"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "assert_cmd",
  "clap",
  "input-linux-sys",
- "libc",
  "predicates",
 ]
 
