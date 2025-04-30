@@ -327,3 +327,49 @@ fn passes_all_with_bypass() {
     // Optionally, check stderr for bypass status message if verbose/log_events is also enabled,
     // but the primary check for bypass is the stdout content.
 }
+
+#[test]
+fn test_complex_sequence() {
+    const WINDOW_MS: u64 = 10; // 10ms window
+    let window_us = WINDOW_MS * 1_000;
+
+    // Define a complex sequence of events
+    let e1 = key_ev(0, KEY_A, 1);         // A Press (Pass)
+    let e2 = key_ev(window_us / 2, KEY_A, 1); // A Press (Bounce) - within window of e1
+    let e3 = key_ev(window_us + 1, KEY_A, 0); // A Release (Pass) - outside window of e1
+    let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0); // A Release (Bounce) - within window of e3
+    let e5 = non_key_ev(window_us * 2);   // SYN event (Pass)
+    let e6 = key_ev(window_us * 2 + 1, KEY_B, 1); // B Press (Pass)
+    let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // B Repeat (Bounce) - within window of e6
+    let e8 = key_ev(window_us * 3, KEY_A, 1); // A Press (Pass) - outside window of e3/e4
+    let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1); // A Press (Bounce) - within window of e8
+    let e10 = key_ev(window_us * 4, KEY_B, 2); // B Repeat (Pass) - outside window of e6/e7
+
+    let input_events = vec![e1, e2, e3, e4, e5, e6, e7, e8, e9, e10];
+
+    // Define the expected output sequence (events that should NOT be dropped)
+    let expected_events = vec![
+        e1, // A Press (Pass)
+        e3, // A Release (Pass)
+        e5, // SYN event (Pass)
+        e6, // B Press (Pass)
+        e8, // A Press (Pass)
+        e10, // B Repeat (Pass)
+    ];
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--window")
+        .arg(WINDOW_MS.to_string())
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().unwrap();
+    let actual_stdout_bytes = output.stdout;
+
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Complex event sequence was not filtered correctly"
+    );
+}
