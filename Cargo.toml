@@ -1,9 +1,9 @@
 [package]
 name = "intercept-bounce"
-version = "0.2.0"
+version = "0.4.0" # Renamed --window, time-based interval, removed --stats
 edition = "2021"
 authors = ["sinity <ezo.dev@gmail.com>"]
-description = "Interception Tools filter that removes switch-bounce / chatter from keyboards."
+description = "An Interception Tools filter to eliminate keyboard chatter (switch bounce)."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sinity/intercept-bounce"
 keywords = ["interception", "keyboard", "debounce", "evdev"]

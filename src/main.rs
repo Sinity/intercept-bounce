@@ -23,13 +23,12 @@ fn main() -> io::Result<()> {
     // Parse command line arguments
     let args = cli::parse_args();
 
-    // Initialize the bounce filter state, potentially guarded by a Mutex
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
-        args.window,
-        args.stats,         // Pass the renamed flag
-        args.log_interval,
-        args.log_all_events,// Pass the renamed flag
-        args.log_bounces,   // Pass the new flag
+        args.debounce_time, // Use renamed flag
+        args.log_interval,  // Pass interval in seconds
+        args.log_all_events,
+        args.log_bounces,
+        // No stats flag needed here anymore
     )));
 
     // Flag to ensure final stats are printed only once

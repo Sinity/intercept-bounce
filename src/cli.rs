@@ -1,35 +1,31 @@
 use clap::Parser;
 
-/// Filter tool for Interception Tools to discard rapid duplicate key events (bounces).
-/// Reads input_event structs from stdin and writes filtered events to stdout.
+/// An Interception Tools filter to eliminate keyboard chatter (switch bounce).
+/// Reads Linux input events from stdin, filters rapid duplicate key events,
+/// and writes the filtered events to stdout. Statistics are printed to stderr on exit.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Time window (milliseconds). Duplicate key events (same keycode and value) occurring
-    /// faster than this window are discarded. Higher value = more filtering.
-    #[arg(short, long, default_value = "10")]
-    pub window: u64,
+    /// Debounce time threshold (milliseconds). Duplicate key events (same keycode and value)
+    /// occurring faster than this threshold are discarded. (Default: 10ms)
+    #[arg(short = 't', long, default_value = "10", value_name = "MS")]
+    pub debounce_time: u64, // Renamed from window
 
-    /// Collect and print statistics (including detailed bounce timings) on exit and periodically.
-    #[arg(short, long, action = clap::ArgAction::SetTrue)]
-    pub stats: bool, // Renamed from verbose
+    // Removed stats flag - stats are always collected and printed on exit.
 
-    /// Dump statistics to stderr every N key events processed (default: 0 = disabled). Requires --stats.
-    #[arg(long, default_value = "0", value_name = "N")]
-    pub log_interval: u64,
+    /// Periodically dump statistics to stderr every S seconds (default: 0 = disabled).
+    #[arg(long, default_value = "0", value_name = "SECONDS")]
+    pub log_interval: u64, // Now represents seconds
 
-    // Removed bypass flag (use --window 0 instead)
-
-    /// Log details of *every* incoming event to stderr (prefixed with [PASS] or [DROP]).
+    /// Log details of *every* incoming event to stderr ([PASS] or [DROP]).
     #[arg(long, action = clap::ArgAction::SetTrue)]
-    pub log_all_events: bool, // Renamed from log_events
+    pub log_all_events: bool,
 
     /// Log details of *only dropped* (bounced) key events to stderr.
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub log_bounces: bool,
 }
 
-/// Parses command line arguments using clap.
 pub fn parse_args() -> Args {
     Args::parse()
 }

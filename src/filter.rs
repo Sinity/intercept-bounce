@@ -1,9 +1,7 @@
-use crate::event::{event_microseconds, is_key_event}; // Import helpers
-// Add EV_MSC and EV_LED for better type logging
+use crate::event::{event_microseconds, is_key_event};
 use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_REL, EV_SYN};
 use std::collections::HashMap;
 use std::io::{self, Write};
- // For formatting durations
 
 // Include the generated static map for key names
 // Source: /usr/include/linux/input-event-codes.h
@@ -310,8 +308,6 @@ impl BounceFilter {
         is_bounce
     }
 
-    /// Helper to log event details to stderr if log_all_events is true.
-    /// Called *after* filtering logic.
     fn log_event_details(&self, event: &input_event, event_us: u64, is_bounce: bool, bounce_diff_us: Option<u64>) {
         let status = if is_bounce { "[DROP]" } else { "[PASS]" };
         let code = event.code;
@@ -343,28 +339,20 @@ impl BounceFilter {
                      }
                  } else {
                      // This event passed. Show time since the *previous* passed event for this key/value.
-                     // The current self.last_event_us *already* holds the timestamp of the *previous* passed one
-                     // because we update it *after* the bounce check only for passed events.
-                     // Wait, no, self.last_event_us holds the timestamp of the *current* event if it passed.
-                     // We need the timestamp *before* this event. This is tricky without storing more state.
-                     // Let's simplify: just show the bounce diff if dropped.
-                     // If passed, maybe show time since last *any* event for this key?
+                     // Show time since last *any* event for this key code
                      if let Some(&last_any_us) = self.last_any_event_us.get(&code) {
-                         // Get the timestamp *before* this event updated last_any_event_us
                          if let Some(diff) = event_us.checked_sub(last_any_us) {
-                              eprint!(", Time since last any ({}): {}", code, Self::format_us(diff));
+                              eprint!(", Time since last any: {}", Self::format_us(diff));
                          }
                      }
                  }
-
             } else {
                  eprint!(", First event for ({}, {})", code, value);
             }
         }
-        eprintln!(); // Newline after each event log
+        eprintln!();
     }
 
-    /// Helper to log details of *only bounced* events if log_bounces is true.
     fn log_bounce_details(&self, event: &input_event, event_us: u64, bounce_diff_us: Option<u64>) {
         let code = event.code;
         let value = event.value;
@@ -383,17 +371,14 @@ impl BounceFilter {
 
 
     /// Prints collected statistics to stderr.
-    /// Basic stats are always printed. Detailed timing stats require `collect_stats` (from --stats flag).
     pub fn print_stats(&self, _writer: &mut impl Write) -> io::Result<()> {
-        // --- Status Header ---
         eprintln!("--- intercept-bounce status ---");
-        eprintln!("Filtering Window: {}", Self::format_us(self.window_us));
+        eprintln!("Debounce Threshold: {}", Self::format_us(self.debounce_time_us)); // Renamed field
         eprintln!("Log All Events (--log-all-events): {}", if self.log_all_events { "Active" } else { "Inactive" });
         eprintln!("Log Bounces (--log-bounces): {}", if self.log_bounces { "Active" } else { "Inactive" });
-        eprintln!("Collect Detailed Stats (--stats): {}", if self.collect_stats { "Active" } else { "Inactive" });
-        eprintln!("Periodic Log Interval (--log-interval): {}", if self.log_interval > 0 && self.collect_stats { format!("{} events", self.log_interval) } else { "Disabled".to_string() });
+        // Removed 'Collect Detailed Stats' line
+        eprintln!("Periodic Log Interval (--log-interval): {}", if self.log_interval_us > 0 { format!("Every {} seconds", self.log_interval_us / 1_000_000) } else { "Disabled".to_string() });
 
-        // --- Overall Stats ---
         eprintln!("\n--- Overall Statistics ---");
         eprintln!("Key Events Processed: {}", self.key_events_processed);
         eprintln!("Key Events Passed:    {}", self.key_events_passed);
@@ -405,18 +390,12 @@ impl BounceFilter {
         };
         eprintln!("Percentage Dropped:   {:.2}%", percentage);
 
-        // --- Per-Key Stats ---
         if !self.per_key_stats.is_empty() {
             eprintln!("\n--- Dropped Event Statistics Per Key ---");
-            if self.collect_stats {
-                eprintln!("Format: Key [Name] (Code):");
-                eprintln!("  State (Value): Drop Count (Bounce Time: Min / Avg / Max)");
-            } else {
-                eprintln!("Format: Key [Name] (Code):");
-                 eprintln!("  State (Value): Drop Count (Enable --stats for timing details)");
-            }
+            // Always print detailed format now
+            eprintln!("Format: Key [Name] (Code):");
+            eprintln!("  State (Value): Drop Count (Bounce Time: Min / Avg / Max)");
 
-            // Sort keys by code for consistent output
             let mut sorted_keys: Vec<_> = self.per_key_stats.keys().collect();
             sorted_keys.sort();
 
