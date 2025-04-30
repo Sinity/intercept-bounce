@@ -134,46 +134,41 @@ struct KeyStats {
 }
 // --- End Statistics Structs ---
 
-/// Holds the state for bounce filtering, tracking the last event time for each key code and value (press/release/repeat state).
+/// Holds the state for bounce filtering.
 pub struct BounceFilter {
-    window_us: u64,
-    collect_stats: bool, // Renamed from is_verbose. Controls detailed timing collection/display.
-    log_interval: u64,
-    log_all_events: bool, // Renamed from log_events
-    log_bounces: bool,   // New flag to log only bounces
-    last_event_us: HashMap<(u16, i32), u64>, // Map (key code, value) -> last event timestamp (µs) for bounce check
-    last_any_event_us: HashMap<u16, u64>,    // Map key code -> last event timestamp (µs) for repeat logging
+    debounce_time_us: u64, // Renamed from window_us
+    log_interval_us: u64,  // Now in microseconds (0 = disabled)
+    log_all_events: bool,
+    log_bounces: bool,
+    last_event_us: HashMap<(u16, i32), u64>, // Map (key code, value) -> last passed event timestamp (µs)
+    last_any_event_us: HashMap<u16, u64>,    // Map key code -> last processed event timestamp (µs)
 
     // --- Statistics ---
-    // These are always collected, but detail level in print_stats depends on collect_stats
     key_events_processed: u64,
-    key_events_passed: u64, // Track passed events
+    key_events_passed: u64,
     key_events_dropped: u64,
-    // New stats structure: Map Key Code -> KeyStats (containing press/release/repeat)
-    per_key_stats: HashMap<u16, KeyStats>,
+    per_key_stats: HashMap<u16, KeyStats>, // Stores drop counts and bounce timings
+    per_key_passed_near_miss_timing: HashMap<(u16, i32), Vec<u64>>, // Timings for passed events < 100ms
+    last_stats_dump_time_us: Option<u64>, // For time-based periodic logging
 }
 
 
 impl BounceFilter {
     /// Creates a new BounceFilter.
-    /// `window_ms`: The time window in milliseconds. Events within this window are filtered.
-    /// `collect_stats`: Enables collection/display of detailed per-key timing stats.
-    /// `log_interval`: If > 0 and `collect_stats`, dumps stats every N key events.
-    /// `log_all_events`: If true, logs details of every event to stderr.
-    /// `log_bounces`: If true, logs details of only dropped key events to stderr.
-    pub fn new(window_ms: u64, collect_stats: bool, log_interval: u64, log_all_events: bool, log_bounces: bool) -> Self {
+    pub fn new(debounce_time_ms: u64, log_interval_s: u64, log_all_events: bool, log_bounces: bool) -> Self {
         BounceFilter {
-            window_us: window_ms * 1_000,
-            collect_stats,
-            log_interval,
+            debounce_time_us: debounce_time_ms * 1_000,
+            log_interval_us: log_interval_s * 1_000_000, // Convert seconds to microseconds
             log_all_events,
             log_bounces,
             last_event_us: HashMap::with_capacity(64),
-            last_any_event_us: HashMap::with_capacity(64), // Track last event for any value
+            last_any_event_us: HashMap::with_capacity(64),
             key_events_processed: 0,
             key_events_passed: 0,
             key_events_dropped: 0,
-            per_key_stats: HashMap::with_capacity(64), // New stats map
+            per_key_stats: HashMap::with_capacity(64),
+            per_key_passed_near_miss_timing: HashMap::with_capacity(64), // Init near-miss map
+            last_stats_dump_time_us: None, // Initialize periodic dump time
         }
     }
 
@@ -230,35 +225,37 @@ impl BounceFilter {
         let key_value = event.value;
         let key = (key_code, key_value);
 
-        // 2. Check for bounce based on *current* state (before updating state for this event)
-        let mut bounce_diff_us: Option<u64> = None; // Store the difference if it's a bounce
-        let is_bounce = if self.window_us == 0 {
-            false // Window 0 means no bouncing ever
+        // 2. Check for bounce based on *current* state
+        let mut bounce_diff_us: Option<u64> = None;
+        let is_bounce = if self.debounce_time_us == 0 {
+            false // Debounce time 0 means no filtering
         } else {
             match self.last_event_us.get(&key) {
                 Some(&last_us) => {
-                    // Check if the time difference is within the bounce window.
-                    // Use checked_sub to handle potential time jumps backwards gracefully (treat as not a bounce).
                     if let Some(diff) = event_us.checked_sub(last_us) {
-                        if diff < self.window_us {
-                            bounce_diff_us = Some(diff); // Store the difference causing the bounce
+                        if diff < self.debounce_time_us {
+                            bounce_diff_us = Some(diff);
                             true // It's a bounce
                         } else {
-                            false // Not a bounce (outside window)
+                            // Event is outside debounce time, but check for near-miss
+                            if diff < 100_000 { // Less than 100ms
+                                // Store as near-miss timing
+                                self.per_key_passed_near_miss_timing.entry(key).or_default().push(diff);
+                            }
+                            false // Not a bounce
                         }
                     } else {
                         false // Not a bounce (time went backwards)
                     }
                 }
                 None => {
-                    // First event for this key code + value combination, never a bounce.
-                    false
+                    false // First event for this key/value pair
                 }
             }
         };
 
         // 3. Update state and statistics *after* checking bounce status
-        let last_any_us_before_update = self.last_any_event_us.insert(key_code, event_us);
+        let _ = self.last_any_event_us.insert(key_code, event_us); // Update last *any* time
 
         if is_bounce {
             // --- Event was a bounce ---
@@ -267,17 +264,13 @@ impl BounceFilter {
             let value_stats = match key_value {
                 1 => &mut key_stats.press,
                 0 => &mut key_stats.release,
-                _ => &mut key_stats.repeat, // Treat 2 and others as repeat
+                _ => &mut key_stats.repeat,
             };
             value_stats.count += 1;
-            if self.collect_stats { // Only store detailed timings if --stats is enabled
-                if let Some(diff) = bounce_diff_us {
-                    value_stats.timings_us.push(diff);
-                }
+            // Always store detailed timings now
+            if let Some(diff) = bounce_diff_us {
+                value_stats.timings_us.push(diff);
             }
-            // Do NOT update self.last_event_us for the bounced event
-
-            // Log if requested
             if self.log_all_events {
                 self.log_event_details(event, event_us, true, bounce_diff_us);
             } else if self.log_bounces {
@@ -295,34 +288,25 @@ impl BounceFilter {
                 self.log_event_details(event, event_us, false, None);
             }
 
-            // Extended Repeat Logging (only if --stats is enabled, to avoid overhead)
-            // Log repeats that *passed* but were close to the last event of *any* type for that key
-            if self.collect_stats && key_value == 2 { // Check if it's a repeat event
-                if let Some(last_any_us) = last_any_us_before_update {
-                    // Use a slightly larger window for repeat logging to see typical repeat rates
-                    let repeat_check_window_us = self.window_us.max(100_000); // max(window, 100ms)
-                    if let Some(diff) = event_us.checked_sub(last_any_us) {
-                        if diff < repeat_check_window_us {
-                             eprintln!(
-                                "[STATS] Repeat Passed: Key {} ({}), Value: {}, Time since last any: {}",
-                                Self::get_key_name(key_code), key_code, key_value, Self::format_us(diff)
-                            );
-                        }
-                    }
-                }
+            // Note: Repeat logging based on last_any_event_us is removed for simplicity,
+            // near-miss stats provide similar timing insights for passed events.
+        }
+
+        // 4. Dump stats periodically based on time interval
+        if self.log_interval_us > 0 {
+            let dump_needed = match self.last_stats_dump_time_us {
+                Some(last_dump_us) => event_us.saturating_sub(last_dump_us) >= self.log_interval_us,
+                None => true, // Dump stats the first time if interval is set
+            };
+            if dump_needed {
+                 eprintln!("\n--- Periodic Stats Dump (Time: {} µs) ---", event_us);
+                 let _ = self.print_stats(&mut io::stderr()); // Ignore errors
+                 eprintln!("-------------------------------------------\n");
+                 self.last_stats_dump_time_us = Some(event_us); // Update last dump time
             }
         }
 
-        // 4. Dump stats periodically if interval is set and stats collection is enabled
-        if self.collect_stats && self.log_interval > 0 && self.key_events_processed % self.log_interval == 0 {
-             eprintln!("\n--- Periodic Stats Dump (Event {}) ---", self.key_events_processed);
-             // Ignore errors writing periodic stats
-             let _ = self.print_stats(&mut io::stderr());
-             eprintln!("---------------------------------------\n");
-        }
-        // --- End Statistics Update ---
-
-        // 5. Return bounce status (true if dropped, false if passed)
+        // 5. Return bounce status
         is_bounce
     }
 
@@ -448,10 +432,11 @@ impl BounceFilter {
                         let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
                             if value_stats.count > 0 {
                                 eprint!("  {:<7} ({}): {}", value_name, value_code, value_stats.count);
-                                if self.collect_stats && !value_stats.timings_us.is_empty() {
+                                // Always try to print timings now
+                                if !value_stats.timings_us.is_empty() {
                                     let timings = &value_stats.timings_us;
-                                    let min = timings.iter().min().unwrap_or(&0);
-                                    let max = timings.iter().max().unwrap_or(&0);
+                                    let min = timings.iter().min().unwrap_or(&0); // Should not happen if count > 0
+                                    let max = timings.iter().max().unwrap_or(&0); // Should not happen if count > 0
                                     let sum: u64 = timings.iter().sum();
                                     let avg = sum as f64 / timings.len() as f64;
                                     eprintln!(" (Bounce Time: {} / {} / {})",
@@ -460,7 +445,7 @@ impl BounceFilter {
                                         Self::format_us(*max)
                                     );
                                 } else {
-                                    eprintln!(); // Just newline if no timing stats
+                                    eprintln!(" (No timing data collected)");
                                 }
                             }
                         };
@@ -475,7 +460,35 @@ impl BounceFilter {
             eprintln!("\n--- No key events dropped ---");
         }
 
-        eprintln!("-----------------------------------");
+        // --- Near Miss Stats ---
+        if !self.per_key_passed_near_miss_timing.is_empty() {
+             eprintln!("\n--- Passed Event Near-Miss Statistics (Passed within 100ms) ---");
+             eprintln!("Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)");
+
+             let mut sorted_near_misses: Vec<_> = self.per_key_passed_near_miss_timing.iter().collect();
+             sorted_near_misses.sort_by_key(|(k, _)| *k); // Sort by (code, value)
+
+             for ((code, value), timings) in sorted_near_misses {
+                 if !timings.is_empty() {
+                     let key_name = Self::get_key_name(*code);
+                     let min = timings.iter().min().unwrap_or(&0);
+                     let max = timings.iter().max().unwrap_or(&0);
+                     let sum: u64 = timings.iter().sum();
+                     let avg = sum as f64 / timings.len() as f64;
+                     eprintln!("  Key [{}] ({}, {}): {} (Timings: {} / {} / {})",
+                         key_name, code, value, timings.len(),
+                         Self::format_us(*min),
+                         Self::format_us(avg as u64),
+                         Self::format_us(*max)
+                     );
+                 }
+             }
+        } else {
+             eprintln!("\n--- No near-miss events recorded (< 100ms) ---");
+        }
+
+
+        eprintln!("----------------------------------------------------------");
         Ok(())
     }
 }
