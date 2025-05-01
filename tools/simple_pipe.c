@@ -30,6 +30,11 @@ int main() {
             return 1;
         }
 
+        // Log the received event to stderr
+        fprintf(stderr, "Read event: time=%ld.%06ld, type=%d, code=%d, value=%d\n",
+                (long)ev.time.tv_sec, (long)ev.time.tv_usec,
+                ev.type, ev.code, ev.value);
+
         // Write the exact same event to stdout (fd 1)
         bytes_written = write(STDOUT_FILENO, &ev, event_size);
 
