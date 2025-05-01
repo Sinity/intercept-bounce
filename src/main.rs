@@ -33,7 +33,6 @@ fn set_high_priority() {
     // Niceness is primarily a Unix concept.
     #[cfg(target_os = "linux")]
     {
-        use libc::{setpriority, PRIO_PROCESS};
         // Use libc to call the setpriority system call.
         // SAFETY: Calling libc::setpriority is unsafe. We provide valid constants.
         let res = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, -20) };
@@ -48,10 +47,6 @@ fn set_high_priority() {
                 // Successfully set priority. Print an info message.
                 eprintln!("{}", "[INFO] Process priority set to -20 (highest).".dimmed());
             }
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        // No-op on non-Linux platforms.
     }
 }
 
