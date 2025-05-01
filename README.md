@@ -37,6 +37,8 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 >   * Log details of *every* incoming event to stderr, prefixed with `[PASS]` or `[DROP]`. Includes non-key events.
 > * `--log-bounces`:
 >   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
+> * `--stats-json`:
+>   * Output statistics (on exit and periodic dumps) in JSON format to stderr instead of the default human-readable format.
 > * `-h, --help`: Print help information.
 > * `-V, --version`: Print version information.
 
