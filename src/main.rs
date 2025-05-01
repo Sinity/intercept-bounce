@@ -285,7 +285,6 @@ fn main() -> io::Result<()> {
 
     // Print final statistics if they haven't been printed by the signal handler already.
     // The signal handler now only sets the flag, it doesn't print stats itself.
-    // So this check is mostly for robustness against unexpected scenarios.
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
         // Get runtime from the BounceFilter
         let runtime_us = {
@@ -334,12 +333,10 @@ fn main() -> io::Result<()> {
              );
         }
     } else {
-        // This case should ideally not be reached with the current signal handling logic,
-        // as the signal handler only sets the flag and drops the sender, it doesn't print stats.
-        // Keep it as a defensive measure.
-        eprintln!("[MAIN] Final statistics flag was already set (unexpected)."); // DEBUG
+        // This path is expected when shutdown is initiated by a signal.
+        // The signal handler already set the flag. No need to print anything here.
+        // eprintln!("[MAIN] Final statistics flag was already set (expected on signal)."); // REMOVED
     }
  
     Ok(())
 }
-
