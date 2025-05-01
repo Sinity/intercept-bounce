@@ -129,7 +129,6 @@ fn main() -> io::Result<()> {
     let logger_args = args.clone(); // Clone args for the logger thread
     let logger_running_clone_for_logger = Arc::clone(&logger_running); // Clone for logger thread
     let logger_handle: JoinHandle<StatsCollector> = thread::spawn(move || {
-        eprintln!("{}", "[LOGGER] Logger thread started.".dimmed());
         let mut logger = Logger::new(
             log_receiver,
             logger_running_clone_for_logger, // Pass the atomic flag
@@ -139,7 +138,6 @@ fn main() -> io::Result<()> {
             logger_args.stats_json,
             logger_args.debounce_time * 1000, // Pass debounce time in µs
         );
-        eprintln!("{}", "[LOGGER] Logger instance created. Starting run loop.".dimmed());
         let final_stats = logger.run(); // Returns final StatsCollector when done
         eprintln!("{}", "[LOGGER] Logger run loop finished. Returning final stats.".dimmed());
         final_stats
@@ -183,7 +181,7 @@ fn main() -> io::Result<()> {
     let stdin_fd = io::stdin().as_raw_fd();
     let stdout_fd = io::stdout().as_raw_fd();
     let debounce_time_us = args.debounce_time * 1000; // Convert ms to µs once
-    eprintln!("{}", format!("[MAIN] Using stdin_fd: {}, stdout_fd: {}, debounce_time_us: {}", stdin_fd, stdout_fd, debounce_time_us).dimmed());
+    // eprintln!("{}", format!("[MAIN] Using stdin_fd: {}, stdout_fd: {}, debounce_time_us: {}", stdin_fd, stdout_fd, debounce_time_us).dimmed()); // Reduced logging
 
 
     // State for managing logger communication backpressure
@@ -198,25 +196,25 @@ fn main() -> io::Result<()> {
 
     // How often to check the running flag when read is interrupted.
     let check_interval = Duration::from_millis(100);
-    eprintln!("{}", format!("[MAIN] Read check_interval: {:?}", check_interval).dimmed());
+    // eprintln!("{}", format!("[MAIN] Read check_interval: {:?}", check_interval).dimmed()); // Reduced logging
 
 
     while main_running.load(Ordering::SeqCst) {
-        eprintln!("{}", "[MAIN] Loop iteration: Checking main_running flag (true).".dimmed());
-        eprintln!("{}", "[MAIN] Attempting to read event from stdin...".dimmed());
+        // eprintln!("{}", "[MAIN] Loop iteration: Checking main_running flag (true).".dimmed()); // Reduced logging
+        // eprintln!("{}", "[MAIN] Attempting to read event from stdin...".dimmed()); // Reduced logging
         match read_event_raw(stdin_fd) {
             Ok(Some(ev)) => {
                 let event_us = event_microseconds(&ev);
-                eprintln!("{}", format!("[MAIN] Read event: type={}, code={}, value={}, ts_us={}", ev.type_, ev.code, ev.value, event_us).dimmed());
+                // eprintln!("{}", format!("[MAIN] Read event: type={}, code={}, value={}, ts_us={}", ev.type_, ev.code, ev.value, event_us).dimmed()); // Reduced logging
 
-                eprintln!("{}", "[MAIN] Locking BounceFilter mutex...".dimmed());
+                // eprintln!("{}", "[MAIN] Locking BounceFilter mutex...".dimmed()); // Reduced logging
                 let (is_bounce, diff_us, last_passed_us) = {
                     // Lock filter only for the check_event call
                     match bounce_filter.lock() {
                         Ok(mut filter) => {
-                            eprintln!("{}", "[MAIN] BounceFilter mutex locked successfully.".dimmed());
+                            // eprintln!("{}", "[MAIN] BounceFilter mutex locked successfully.".dimmed()); // Reduced logging
                             let result = filter.check_event(&ev, debounce_time_us);
-                            eprintln!("{}", format!("[MAIN] BounceFilter check_event returned: {:?}", result).dimmed()); // Corrected format! and dimmed()
+                            // eprintln!("{}", format!("[MAIN] BounceFilter check_event returned: {:?}", result).dimmed()); // Reduced logging
                             result
                         },
                         Err(poisoned) => {
@@ -224,12 +222,12 @@ fn main() -> io::Result<()> {
                             // Attempt to continue with the poisoned guard, might be inconsistent
                             let mut filter = poisoned.into_inner();
                             let result = filter.check_event(&ev, debounce_time_us);
-                            eprintln!("{}", format!("[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed()); // Corrected format! and dimmed()
+                            // eprintln!("{}", format!("[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed()); // Reduced logging
                             result
                         }
                     }
                 }; // Mutex unlocked here
-                eprintln!("{}", "[MAIN] BounceFilter mutex unlocked.".dimmed());
+                // eprintln!("{}", "[MAIN] BounceFilter mutex unlocked.".dimmed()); // Reduced logging
 
 
                 // Prepare message for logger thread
@@ -241,18 +239,18 @@ fn main() -> io::Result<()> {
                     last_passed_us,
                 };
                 // Cannot print EventInfo directly due to input_event not implementing Debug
-                // eprintln!("{}", format!("[MAIN] Prepared EventInfo for logger: {:?}", event_info).dimmed());
-                eprintln!("{}", format!(
-                    "[MAIN] Prepared EventInfo for logger: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
-                    event_info.event.type_, event_info.event.code, event_info.event.value, event_info.event_us, event_info.is_bounce, event_info.diff_us, event_info.last_passed_us
-                ).dimmed());
+                // eprintln!("{}", format!("[MAIN] Prepared EventInfo for logger: {:?}", event_info).dimmed()); // Reduced logging
+                // eprintln!("{}", format!( // Reduced logging
+                //     "[MAIN] Prepared EventInfo for logger: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
+                //     event_info.event.type_, event_info.event.code, event_info.event.value, event_info.event_us, event_info.is_bounce, event_info.diff_us, event_info.last_passed_us
+                // ).dimmed());
 
 
                 // Send event info to logger thread (non-blocking)
-                eprintln!("{}", "[MAIN] Attempting to send EventInfo to logger channel...".dimmed());
+                // eprintln!("{}", "[MAIN] Attempting to send EventInfo to logger channel...".dimmed()); // Reduced logging
                 match main_state.log_sender.try_send(LogMessage::Event(event_info)) {
                     Ok(_) => {
-                        eprintln!("{}", "[MAIN] Successfully sent EventInfo to logger.".dimmed());
+                        // eprintln!("{}", "[MAIN] Successfully sent EventInfo to logger.".dimmed()); // Reduced logging
                         // If we were dropping, print a recovery message once
                         if main_state.currently_dropping {
                             eprintln!("{}", "[INFO] Logger channel caught up, resuming logging.".dimmed());
@@ -267,7 +265,7 @@ fn main() -> io::Result<()> {
                             main_state.warned_about_dropping = true; // Warn only once per session
                             main_state.currently_dropping = true;
                         }
-                        eprintln!("{}", format!("[MAIN] Logger channel full. Dropped log message. Total dropped: {}", main_state.total_dropped_log_messages).dimmed());
+                        // eprintln!("{}", format!("[MAIN] Logger channel full. Dropped log message. Total dropped: {}", main_state.total_dropped_log_messages).dimmed()); // Reduced logging
                     }
                     Err(TrySendError::Disconnected(_)) => {
                         // Logger thread likely panicked or exited early
@@ -281,7 +279,7 @@ fn main() -> io::Result<()> {
 
                 // Write event to stdout if it wasn't a bounce
                 if !is_bounce {
-                    eprintln!("{}", "[MAIN] Event passed filter. Attempting to write to stdout...".dimmed());
+                    // eprintln!("{}", "[MAIN] Event passed filter. Attempting to write to stdout...".dimmed()); // Reduced logging
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         // Handle broken pipe gracefully (downstream closed)
                         if e.kind() == ErrorKind::BrokenPipe {
@@ -302,10 +300,10 @@ fn main() -> io::Result<()> {
                             break; // Exit loop gracefully to allow shutdown
                         }
                     } else {
-                         eprintln!("{}", "[MAIN] Successfully wrote event to stdout.".dimmed());
+                         // eprintln!("{}", "[MAIN] Successfully wrote event to stdout.".dimmed()); // Reduced logging
                     }
                 } else {
-                    eprintln!("{}", "[MAIN] Event dropped by filter. Not writing to stdout.".dimmed());
+                    // eprintln!("{}", "[MAIN] Event dropped by filter. Not writing to stdout.".dimmed()); // Reduced logging
                 }
             }
             Ok(None) => {
@@ -319,18 +317,18 @@ fn main() -> io::Result<()> {
             Err(e) => {
                 // Handle read errors
                 if e.kind() == ErrorKind::Interrupted {
-                    eprintln!("{}", "[MAIN] Read interrupted by signal (EINTR).".dimmed());
+                    // eprintln!("{}", "[MAIN] Read interrupted by signal (EINTR).".dimmed()); // Reduced logging
                     // Interrupted by signal, check running flag
                     // Add a small sleep to avoid tight loop on EINTR if signal handler is slow
                     // or if multiple signals are pending.
-                    eprintln!("{}", format!("[MAIN] Sleeping for {:?} before re-checking running flag.", check_interval).dimmed());
+                    // eprintln!("{}", format!("[MAIN] Sleeping for {:?} before re-checking running flag.", check_interval).dimmed()); // Reduced logging
                     thread::sleep(check_interval);
-                    eprintln!("{}", "[MAIN] Checking main_running flag after EINTR sleep...".dimmed());
+                    // eprintln!("{}", "[MAIN] Checking main_running flag after EINTR sleep...".dimmed()); // Reduced logging
                     if !main_running.load(Ordering::SeqCst) {
                         eprintln!("{}", "[MAIN] main_running is false after EINTR. Breaking loop.".dimmed());
                         break; // Exit loop
                     }
-                    eprintln!("{}", "[MAIN] main_running is still true after EINTR. Continuing read loop.".dimmed());
+                    // eprintln!("{}", "[MAIN] main_running is still true after EINTR. Continuing read loop.".dimmed()); // Reduced logging
                     continue; // Otherwise, retry read
                 }
                 eprintln!(
@@ -385,7 +383,7 @@ fn main() -> io::Result<()> {
                 Ok(filter) => {
                     eprintln!("{}", "[MAIN] BounceFilter mutex locked for runtime calculation.".dimmed());
                     let rt = filter.get_runtime_us();
-                    eprintln!("{}", format!("[MAIN] BounceFilter runtime_us: {:?}", rt).dimmed());
+                    // eprintln!("{}", format!("[MAIN] BounceFilter runtime_us: {:?}", rt).dimmed()); // Reduced logging
                     rt
                 },
                 Err(_) => {

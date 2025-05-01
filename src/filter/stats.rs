@@ -134,12 +134,12 @@ impl StatsCollector {
                 if let Some(diff) = info.event_us.checked_sub(last_us) {
                     // Use a fixed threshold (e.g., 100ms) for near misses.
                     const NEAR_MISS_THRESHOLD_US: u64 = 100_000;
-                    // Check if the difference is within the near-miss window (debounce_time <= diff < threshold)
+                    // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
                     // We need debounce_time_us here. Pass it into record_event_info?
-                    // For now, assume near-miss is just < threshold. The logger can refine this.
+                    // For now, assume near-miss is just <= threshold. The logger can refine this.
                     // TODO: Refine near-miss logic if exact debounce time is needed here.
-                    // Let's assume near-miss is simply < 100ms for passed events for now.
-                    if diff < NEAR_MISS_THRESHOLD_US {
+                    // Let's assume near-miss is simply <= 100ms for passed events for now.
+                    if diff <= NEAR_MISS_THRESHOLD_US { // FIX: Changed < to <=
                         self.record_near_miss((info.event.code, info.event.value), diff);
                     }
                 }

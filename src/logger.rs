@@ -5,15 +5,15 @@
 use crate::event; // Use event module functions
 use crate::filter::keynames::get_key_name;
 use crate::filter::keynames::get_event_type_name; // Import get_event_type_name from keynames
-use crate::filter::stats::{StatsCollector, Meta}; // Import StatsCollector and Meta
+use crate::filter::stats::StatsCollector; // Import StatsCollector
 use colored::*;
 use crossbeam_channel::Receiver;
 use input_linux_sys::input_event;
-use std::io::{self, Write};
+use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use chrono::Local; // Use chrono for wallclock time
+// Removed unused imports: use std::io::Write; use chrono::Local; use crate::filter::stats::Meta;
 
 /// Represents a message sent from the main thread to the logger thread.
 // #[derive(Debug)] // input_event does not implement Debug
@@ -106,7 +106,10 @@ impl Logger {
     /// is set to false and the channel is empty or disconnected.
     ///
     /// Returns the final cumulative statistics upon exit.
-    pub fn run(&mut self) -> StatsCollector { // Removed info print
+    pub fn run(&mut self) -> StatsCollector {
+        eprintln!("{}", "[LOGGER] Logger thread started.".dimmed());
+        eprintln!("{}", "[LOGGER] Logger instance created. Starting run loop.".dimmed());
+
         // How often to check the timer/channel when idle.
         let check_interval = Duration::from_millis(100);
 
@@ -115,75 +118,69 @@ impl Logger {
             // This allows the logger to exit quickly even if the channel still has messages
             // or if the main thread exited without dropping the sender cleanly (e.g., panic).
             if !self.logger_running.load(Ordering::SeqCst) {
-                eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, attempting to drain channel.".dimmed());
+                eprintln!("{}", "[LOGGER] Received shutdown signal via AtomicBool, attempting to drain channel.".dimmed());
                 // Signal received, try to drain the channel before exiting.
                 // This ensures we process any messages sent just before the signal.
                 while let Ok(msg) = self.receiver.try_recv() {
-                    eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after shutdown signal.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after shutdown signal.".dimmed()); // Reduced logging
                     self.process_message(msg);
                 }
-                eprintln!("{}", "[DEBUG] Logger thread finished draining channel. Exiting run loop.".dimmed());
+                eprintln!("{}", "[LOGGER] Finished draining channel. Exiting run loop.".dimmed());
                 break; // Exit the loop
             }
 
             // --- Check for periodic dump ---
             if self.log_interval != Duration::MAX && self.last_dump_time.elapsed() >= self.log_interval {
-                eprintln!("{}", "[DEBUG] Logger thread triggering periodic stats dump.".dimmed());
+                eprintln!("{}", "[LOGGER] Triggering periodic stats dump.".dimmed());
                 self.dump_periodic_stats();
                 self.last_dump_time = Instant::now(); // Reset timer
-                eprintln!("{}", "[DEBUG] Logger thread periodic stats dump complete. Timer reset.".dimmed());
+                eprintln!("{}", "[LOGGER] Periodic stats dump complete. Timer reset.".dimmed());
             }
 
             // --- Receive and process messages ---
             // Use `try_recv` with a timeout to allow checking the running flag and timer.
-            eprintln!("{}", format!("[DEBUG] Logger thread attempting to receive message with timeout: {:?}", check_interval).dimmed());
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
-                    eprintln!("{}", "[DEBUG] Logger thread received message from channel.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread received message from channel.".dimmed()); // Reduced logging
                     self.process_message(msg);
-                    eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed()); // Reduced logging
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                     // No message received within the timeout. Loop continues,
                     // checking the running flag and timer again.
-                    eprintln!("{}", "[DEBUG] Logger thread receive timed out. Re-checking flags.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread receive timed out. Re-checking flags.".dimmed()); // Reduced logging
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
                     // Sender was dropped, meaning the main thread has exited.
-                    eprintln!("{}", "[DEBUG] Logger thread detected channel disconnected. Attempting to drain channel.".dimmed());
+                    eprintln!("{}", "[LOGGER] Detected channel disconnected. Attempting to drain channel.".dimmed());
                     // Drain any remaining messages before exiting.
                     while let Ok(msg) = self.receiver.try_recv() {
-                         eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after disconnect.".dimmed());
+                         // eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after disconnect.".dimmed()); // Reduced logging
                          self.process_message(msg);
                     }
-                    eprintln!("{}", "[DEBUG] Logger thread finished draining channel. Exiting run loop.".dimmed());
+                    eprintln!("{}", "[LOGGER] Finished draining channel. Exiting run loop.".dimmed());
                     break; // Exit the loop
                 }
             }
         }
 
-        eprintln!("{}", "[DEBUG] Logger thread run loop exited. Preparing final stats.".dimmed());
+        eprintln!("{}", "[LOGGER] Run loop exited. Preparing final stats.".dimmed());
         // The loop has exited. Print final cumulative stats.
         // The main thread will wait for this thread to join and then print the stats.
         // We return the cumulative stats collector.
         // Use std::mem::take to move the cumulative_stats out, leaving a default in self.
-        eprintln!("{}", "[DEBUG] Logger thread taking cumulative_stats for return.".dimmed());
+        eprintln!("{}", "[LOGGER] Taking cumulative_stats for return.".dimmed());
         std::mem::take(&mut self.cumulative_stats)
     }
 
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
     fn process_message(&mut self, msg: LogMessage) {
-        eprintln!("{}", "[DEBUG] Logger thread processing message.".dimmed());
         match msg {
             LogMessage::Event(data) => {
                 // Cannot print EventInfo directly due to input_event not implementing Debug
-                // eprintln!("{}", format!("[DEBUG] Logger thread processing EventInfo: {:?}", data).dimmed());
-                eprintln!("{}", format!(
-                    "[DEBUG] Logger thread processing EventInfo: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
-                    data.event.type_, data.event.code, data.event.value, data.event_us, data.is_bounce, data.diff_us, data.last_passed_us
-                ).dimmed());
+                // eprintln!("{}", format!("[DEBUG] Logger thread processing EventInfo: {:?}", data).dimmed()); // Reduced logging
 
                 // Record stats for both cumulative and interval collectors.
                 self.cumulative_stats.record_event_info(&data);
@@ -192,27 +189,25 @@ impl Logger {
                 // Set the first event timestamp if not already set.
                 if self.first_event_us.is_none() {
                     self.first_event_us = Some(data.event_us);
-                    eprintln!("{}", format!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us).dimmed());
+                    // eprintln!("{}", format!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us).dimmed()); // Reduced logging
                 }
 
                 // Perform logging based on flags.
                 if self.log_all_events {
-                    eprintln!("{}", "[DEBUG] Logger thread logging all events.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread logging all events.".dimmed()); // Reduced logging
                     self.log_event_detailed(&data);
                 } else if self.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
                     // Only log bounces if log_all_events is false, log_bounces is true,
                     // it's a bounce, and it's a key event.
-                    eprintln!("{}", "[DEBUG] Logger thread logging bounce event.".dimmed());
+                    // eprintln!("{}", "[DEBUG] Logger thread logging bounce event.".dimmed()); // Reduced logging
                     self.log_simple_bounce_detailed(&data);
                 }
             }
         }
-        eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed());
     }
 
     /// Dumps the current interval statistics to stderr.
-    fn dump_periodic_stats(&mut self) { // Changed to &mut self
-        eprintln!("{}", "[DEBUG] Logger thread dumping periodic stats.".dimmed());
+    fn dump_periodic_stats(&mut self) {
         // Print header with wallclock time.
         eprintln!(
             "\n{} {} {}",
@@ -225,18 +220,10 @@ impl Logger {
             ") ---".magenta().bold()
         );
 
-        // Create a temporary Meta struct for the dump.
-        // let meta = Meta { // Removed unused variable
-        //     debounce_time_us: self.debounce_us,
-        //     log_all_events: self.log_all_events,
-        //     log_bounces: self.log_bounces,
-        //     log_interval_us: self.log_interval.as_micros() as u64, // Convert Duration to u64 µs
-        // };
-
         // Note: Runtime is not included in periodic dumps as it's a cumulative value.
         // Pass None for runtime_us.
         if self.stats_json {
-            eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in JSON format.".dimmed());
+            // eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in JSON format.".dimmed()); // Reduced logging
             // Use a temporary StatsCollector for the interval stats.
             // We need to clone it because print_stats_json takes &self.
             // A more efficient approach might be to pass the interval_stats directly
@@ -251,9 +238,9 @@ impl Logger {
                 None, // No runtime for periodic dump
                 &mut io::stderr().lock(), // Lock stderr for writing
             );
-            eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in JSON format.".dimmed());
+            // eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in JSON format.".dimmed()); // Reduced logging
         } else {
-            eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in human-readable format.".dimmed());
+            // eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in human-readable format.".dimmed()); // Reduced logging
             // Use a temporary StatsCollector for the interval stats.
             let interval_stats_clone = self.interval_stats.clone();
             interval_stats_clone.print_stats_to_stderr(
@@ -262,13 +249,13 @@ impl Logger {
                 self.log_bounces,
                 self.log_interval.as_micros() as u64,
             );
-            eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in human-readable format.".dimmed());
+            // eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in human-readable format.".dimmed()); // Reduced logging
         }
 
         // Reset interval stats after dumping.
-        eprintln!("{}", "[DEBUG] Logger thread resetting interval stats.".dimmed());
+        // eprintln!("{}", "[DEBUG] Logger thread resetting interval stats.".dimmed()); // Reduced logging
         self.interval_stats = StatsCollector::with_capacity();
-        eprintln!("{}", "[DEBUG] Logger thread interval stats reset.".dimmed());
+        // eprintln!("{}", "[DEBUG] Logger thread interval stats reset.".dimmed()); // Reduced logging
     }
 
     /// Adapts logic from the old BounceFilter::log_event.
