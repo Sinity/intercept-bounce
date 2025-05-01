@@ -409,8 +409,9 @@ impl StatsCollector {
                 // Decode key code and value from the index.
                 let key_code = (idx / 3) as u16;
                 let key_value = (idx % 3) as i32;
-                // Use (code, value) tuple as the map key.
-                near_miss_map.insert((key_code, key_value), timings);
+                // Use "[code,value]" as the map key (string).
+                let key_str = format!("[{},{}]", key_code, key_value);
+                near_miss_map.insert(key_str, timings);
             }
         }
 
@@ -425,7 +426,7 @@ impl StatsCollector {
             key_events_dropped: u64,
             // References to the HashMaps containing only non-default data.
             per_key_stats: &'a HashMap<u16, &'a KeyStats>,
-            per_key_passed_near_miss_timing: &'a HashMap<(u16, i32), &'a Vec<u64>>,
+            per_key_passed_near_miss_timing: &'a HashMap<String, &'a Vec<u64>>, // Change key type to String
         }
 
         // Top-level structure for the final JSON output.
@@ -443,7 +444,7 @@ impl StatsCollector {
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
             per_key_stats: &per_key_stats_map,
-            per_key_passed_near_miss_timing: &near_miss_map,
+            per_key_passed_near_miss_timing: &near_miss_map, // Now HashMap<String, &Vec<u64>>
         };
 
         // Create the metadata structure.
