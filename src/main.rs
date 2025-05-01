@@ -69,6 +69,22 @@ fn main() -> io::Result<()> {
                     exit(4);
                 }
             }
+            // Flush stdout immediately after writing each event in bypass mode
+            // to prevent buffering delays.
+            if let Err(e) = stdout_locked.flush() {
+                 if e.kind() == io::ErrorKind::BrokenPipe {
+                    eprintln!("{}", "Bypass: Output pipe broken on flush, exiting.".yellow());
+                    break; // Exit loop cleanly
+                } else {
+                    eprintln!(
+                        "{} {}",
+                        "Bypass: Error flushing stdout:".on_bright_black().red().bold(),
+                        e
+                    );
+                    // Treat flush errors seriously in bypass mode
+                    exit(5);
+                }
+            }
         }
         // In bypass mode, we just exit cleanly after the loop finishes (e.g., EOF or broken pipe)
         return Ok(());
