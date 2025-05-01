@@ -23,10 +23,12 @@ pub struct Meta {
 #[derive(Debug, Serialize, Clone, Default)]
 pub struct KeyValueStats {
     pub count: u64,
+    // Stores the microsecond difference between a dropped event and the previous passed event.
     pub timings_us: Vec<u64>,
 }
 
 impl KeyValueStats {
+    /// Adds a timing value to the vector, resizing if necessary.
     #[inline] // Add inline hint
     pub fn push_timing(&mut self, value: u64) {
         // Use reserve(1) to let the allocator handle growth efficiently
@@ -35,17 +37,9 @@ impl KeyValueStats {
         if self.timings_us.len() == self.timings_us.capacity() {
              self.timings_us.reserve(1);
         }
-        // Original doubling logic - kept for reference, reserve(1) is likely better
-        // if self.timings_us.len() == self.timings_us.capacity() {
-            // Double the capacity if full
-            // let new_cap = self.timings_us.capacity().max(1024) * 2;
-            // self.timings_us.reserve(new_cap - self.timings_us.capacity());
-        // }
         self.timings_us.push(value);
     }
 }
-
-// Default is derived now
 
 /// Aggregated statistics for a specific key code, containing stats for each value state.
 #[derive(Debug, Serialize, Clone, Default)]
@@ -59,9 +53,6 @@ pub struct KeyStats {
 /// Accumulates counts, drop timings, and near-miss timings for all processed events.
 #[derive(Debug, Clone)]
 pub struct StatsCollector {
-    pub key_events_processed: u64,
-    pub key_events_passed: u64,
-    pub key_events_dropped: u64,
     /// Total count of key events processed (passed or dropped).
     pub key_events_processed: u64,
     /// Total count of key events that passed the filter.
@@ -175,14 +166,10 @@ impl StatsCollector {
     }
 
     /// Prints human-readable statistics summary to stderr.
+    // Note: runtime_us is no longer calculated or printed here.
+    // It's calculated from BounceFilter state and printed in main.rs.
     pub fn print_stats_to_stderr(
-        &self,
-        debounce_time_us: u64,
-        log_all_events: bool,
-        log_bounces: bool,
-        // Note: runtime_us is no longer calculated or printed here.
-        // It's calculated from BounceFilter state and printed in main.rs.
-        &self,
+        &self, // Corrected: Only one &self
         debounce_time_us: u64,
         log_all_events: bool,
         log_bounces: bool,
@@ -209,9 +196,7 @@ impl StatsCollector {
             } else if log_bounces {
                 "Active".on_red().white().bold() // Keep red if active
             } else {
-                "Inactive".on_bright_black().dimmed()
-            } else {
-                "Inactive".on_bright_black().dimmed()
+                "Inactive".on_bright_black().dimmed() // Corrected: Added else block
             }
         );
         eprintln!(
@@ -402,7 +387,6 @@ impl StatsCollector {
         // Collect non-default per-key drop statistics.
         let mut per_key_stats_map = HashMap::new();
         for (key_code, stats) in self.per_key_stats.iter().enumerate() {
-            // Only include keys that had any drops.
             // Only include keys that had any drops
             if stats.press.count > 0 || stats.release.count > 0 || stats.repeat.count > 0 {
                 // Use key_code as u16 for the map key.

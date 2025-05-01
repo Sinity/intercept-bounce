@@ -14,7 +14,7 @@ use std::io::{self, Write}; // For stderr access and Write trait
 use std::time::{Duration, Instant};
 
 /// Messages sent from the Main processing thread to the Logger thread.
-#[derive(Debug)]
+// Removed Debug derive as input_event doesn't implement it
 pub enum LogMessage {
     /// Contains detailed information about a single processed event.
     Event(EventInfo),
@@ -22,7 +22,7 @@ pub enum LogMessage {
 }
 
 /// Detailed information about a processed event, sent to the logger thread.
-#[derive(Debug)]
+// Removed Debug derive as input_event doesn't implement it
 pub struct EventInfo {
     /// The raw input event.
     pub event: input_event,
