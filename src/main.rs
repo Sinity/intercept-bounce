@@ -39,10 +39,47 @@ fn set_high_priority() {
 fn main() -> io::Result<()> {
     let args = cli::parse_args();
 
-    // Set high priority for the process (if possible)
+    // --- Bypass Mode ---
+    if args.bypass {
+        eprintln!("{}", "Bypass mode enabled: Acting as a simple passthrough.".yellow().bold());
+        let mut stdin_locked = io::stdin().lock();
+        let mut stdout_locked = io::stdout().lock();
+        while let Some(ev) = match read_event(&mut stdin_locked) {
+            Ok(ev) => ev,
+            Err(e) => {
+                eprintln!(
+                    "{} {}",
+                    "Bypass: Error reading input event:".on_bright_black().red().bold(),
+                    e
+                );
+                exit(3);
+            }
+        } {
+            if let Err(e) = write_event(&mut stdout_locked, &ev) {
+                // Handle broken pipe gracefully in bypass mode
+                if e.kind() == io::ErrorKind::BrokenPipe {
+                    eprintln!("{}", "Bypass: Output pipe broken, exiting.".yellow());
+                    break; // Exit loop cleanly
+                } else {
+                    eprintln!(
+                        "{} {}",
+                        "Bypass: Error writing output event:".on_bright_black().red().bold(),
+                        e
+                    );
+                    exit(4);
+                }
+            }
+        }
+        // In bypass mode, we just exit cleanly after the loop finishes (e.g., EOF or broken pipe)
+        return Ok(());
+    }
+
+    // --- Normal Filtering Mode ---
+
+    // Set high priority for the process (if possible) - only needed for filtering mode
     set_high_priority();
 
-    // Check for the list_devices flag first
+    // Check for the list_devices flag first (already handled if bypass=false)
     if args.list_devices {
         eprintln!(
             "{}",
@@ -70,8 +107,9 @@ fn main() -> io::Result<()> {
         }
         return Ok(());
     }
+    // list_devices check is now implicitly part of the non-bypass path
 
-    // Proceed with normal filtering mode
+    // Proceed with normal filtering mode (bypass is false)
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
         args.debounce_time,
         args.log_interval,
