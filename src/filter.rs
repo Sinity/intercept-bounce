@@ -2,12 +2,12 @@ mod keynames;
 mod stats;
 
 use crate::event::{event_microseconds, is_key_event};
-use input_linux_sys::{input_event, EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_REL, EV_SYN};
+use input_linux_sys::{input_event, EV_SYN};
 use std::collections::HashMap;
 use std::io::{self, Write};
 
 use keynames::{get_key_name, get_event_type_name};
-use stats::{KeyStats, KeyValueStats, StatsCollector};
+use stats::StatsCollector;
 
 /// Holds the state for bounce filtering.
 pub struct BounceFilter {
@@ -15,12 +15,12 @@ pub struct BounceFilter {
     log_interval_us: u64,  // Now in microseconds (0 = disabled)
     log_all_events: bool,
     log_bounces: bool,
-    last_event_us: HashMap<(u16, i32), u64>, // Map (key code, value) -> last passed event timestamp (µs)
-    last_any_event_us: HashMap<u16, u64>,    // Map key code -> last processed event timestamp (µs)
-    first_event_us: Option<u64>, // Timestamp of the very first event processed
-    last_event_was_syn: bool, // Track if the previous event was EV_SYN for logging groups
+    last_event_us: HashMap<(u16, i32), u64>,
+    last_any_event_us: HashMap<u16, u64>,
+    first_event_us: Option<u64>,
+    last_event_was_syn: bool,
     stats: StatsCollector,
-    last_stats_dump_time_us: Option<u64>, // For time-based periodic logging
+    last_stats_dump_time_us: Option<u64>,
 }
 
 impl BounceFilter {
@@ -30,8 +30,8 @@ impl BounceFilter {
             log_interval_us: log_interval_s * 1_000_000,
             log_all_events,
             log_bounces,
-            last_event_us: HashMap::with_capacity(64),
-            last_any_event_us: HashMap::with_capacity(64),
+            last_event_us: HashMap::with_capacity(1024),
+            last_any_event_us: HashMap::with_capacity(1024),
             first_event_us: None,
             last_event_was_syn: true,
             stats: StatsCollector::new(),

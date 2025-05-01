@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use crate::filter::{BounceFilter};
-use crate::filter::keynames::{get_key_name};
+use crate::filter::keynames::get_key_name;
 
 #[derive(Default, Debug)]
 pub struct KeyValueStats {
@@ -29,8 +28,8 @@ impl StatsCollector {
             key_events_processed: 0,
             key_events_passed: 0,
             key_events_dropped: 0,
-            per_key_stats: HashMap::with_capacity(64),
-            per_key_passed_near_miss_timing: HashMap::with_capacity(64),
+            per_key_stats: HashMap::with_capacity(1024),
+            per_key_passed_near_miss_timing: HashMap::with_capacity(1024),
         }
     }
 
@@ -65,7 +64,8 @@ impl StatsCollector {
         log_interval_us: u64,
     ) {
         eprintln!("--- intercept-bounce status ---");
-        eprintln!("Debounce Threshold: {}", BounceFilter::format_us(debounce_time_us));
+        eprintln!("Debounce Threshold: {}",
+            format_us(debounce_time_us));
         eprintln!("Log All Events (--log-all-events): {}", if log_all_events { "Active" } else { "Inactive" });
         eprintln!("Log Bounces (--log-bounces): {}", if log_bounces { "Active" } else { "Inactive" });
         eprintln!("Periodic Log Interval (--log-interval): {}", if log_interval_us > 0 { format!("Every {} seconds", log_interval_us / 1_000_000) } else { "Disabled".to_string() });
@@ -107,9 +107,9 @@ impl StatsCollector {
                                     let sum: u64 = timings.iter().sum();
                                     let avg = sum as f64 / timings.len() as f64;
                                     eprintln!(" (Bounce Time: {} / {} / {})",
-                                        BounceFilter::format_us(*min),
-                                        BounceFilter::format_us(avg as u64),
-                                        BounceFilter::format_us(*max)
+                                        format_us(*min),
+                                        format_us(avg as u64),
+                                        format_us(*max)
                                     );
                                 } else {
                                     eprintln!(" (No timing data collected)");
@@ -143,9 +143,9 @@ impl StatsCollector {
                     let avg = sum as f64 / timings.len() as f64;
                     eprintln!("  Key [{}] ({}, {}): {} (Timings: {} / {} / {})",
                         key_name, code, value, timings.len(),
-                        BounceFilter::format_us(*min),
-                        BounceFilter::format_us(avg as u64),
-                        BounceFilter::format_us(*max)
+                        format_us(*min),
+                        format_us(avg as u64),
+                        format_us(*max)
                     );
                 }
             }
@@ -154,5 +154,13 @@ impl StatsCollector {
         }
 
         eprintln!("----------------------------------------------------------");
+    }
+}
+
+fn format_us(us: u64) -> String {
+    if us >= 1000 {
+        format!("{:.1} ms", us as f64 / 1000.0)
+    } else {
+        format!("{} µs", us)
     }
 }

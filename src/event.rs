@@ -16,8 +16,15 @@ pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
     let mut buf = vec![0u8; size_of::<input_event>()];
     match reader.read_exact(&mut buf) {
         Ok(()) => {
-            // SAFETY: Assumes the input source provides valid input_event data.
-            let event: input_event = unsafe { std::ptr::read(buf.as_ptr() as *const _) };
+            // SAFETY: We check length and alignment, and input_event is #[repr(C)].
+            if buf.len() != size_of::<input_event>() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "input_event size mismatch"));
+            }
+            let ptr = buf.as_ptr();
+            if ptr.align_offset(std::mem::align_of::<input_event>()) != 0 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "input_event alignment error"));
+            }
+            let event: input_event = unsafe { std::ptr::read_unaligned(ptr as *const _) };
             Ok(Some(event))
         }
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
@@ -40,12 +47,16 @@ pub fn write_event(writer: &mut impl Write, event: &input_event) -> io::Result<(
 /// Calculates the event timestamp in microseconds from its timeval.
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
-    (event.time.tv_sec.max(0) as u64) * 1_000_000 + (event.time.tv_usec.max(0) as u64)
+    // Defensive: avoid negative values, but also clamp to avoid overflow
+    let sec = event.time.tv_sec.max(0).min(86_400_000) as u64; // ~1000 days
+    let usec = event.time.tv_usec.max(0).min(999_999) as u64;
+    sec * 1_000_000 + usec
 }
 
 /// Checks if the event type is EV_KEY.
 #[inline]
 pub fn is_key_event(event: &input_event) -> bool {
+    // Defensive: Only match exactly EV_KEY, not other types
     i32::from(event.type_) == EV_KEY
 }
 
@@ -140,6 +151,7 @@ pub fn list_input_devices() -> io::Result<()> {
 }
 
 /// Helper function to check if a bit is set in a byte buffer
+// Returns true if the bit is set in the buffer, false otherwise.
 fn is_bit_set(buf: &[u8], bit: usize) -> bool {
     let byte_index = bit / 8;
     let bit_index = bit % 8;
