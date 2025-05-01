@@ -11,6 +11,8 @@ use colored::*;
 use crossbeam_channel::Receiver;
 use input_linux_sys::{input_event, EV_SYN}; // Need EV_SYN
 use std::io::{self, Write}; // For stderr access and Write trait
+use std::sync::atomic::{AtomicBool, Ordering}; // Added for logger_running flag
+use std::sync::Arc; // Added for Arc<AtomicBool>
 use std::time::{Duration, Instant};
 
 /// Messages sent from the Main processing thread to the Logger thread.
@@ -42,6 +44,8 @@ pub struct EventInfo {
 pub struct Logger {
     // Channel receiver for messages from the main thread.
     receiver: Receiver<LogMessage>,
+    // Shared flag to signal logger thread termination.
+    logger_running: Arc<AtomicBool>,
     // Configuration flags passed from main.
     log_all_events: bool,
     log_bounces: bool,
@@ -67,6 +71,7 @@ impl Logger {
     /// Creates a new Logger instance.
     pub fn new(
         receiver: Receiver<LogMessage>,
+        logger_running: Arc<AtomicBool>, // Receive the shared flag
         log_all: bool,
         log_bounces: bool,
         interval_s: u64,
@@ -75,6 +80,7 @@ impl Logger {
     ) -> Self {
         Logger {
             receiver,
+            logger_running,
             log_all_events: log_all,
             log_bounces,
             // Use Duration::MAX to effectively disable periodic logging if interval is 0.
@@ -96,14 +102,21 @@ impl Logger {
     /// Runs the logger thread's main loop.
     ///
     /// Listens for messages, updates stats, performs logging, handles periodic dumps.
-    /// Exits when the input channel is disconnected.
+    /// Exits when the input channel is disconnected or the `logger_running` flag is set to false.
     /// Returns the final cumulative statistics upon exit.
-    pub fn run(&mut self) -> StatsCollector {
-        eprintln!("{}", "[INFO] Logging thread started.".dimmed());
+    pub fn run(&mut self) -> StatsCollector { // Removed info print
         // How often to check the timer/channel when idle.
         let check_interval = Duration::from_millis(100);
 
         loop {
+            // --- Check explicit shutdown signal first ---
+            // This allows the logger to exit quickly even if the channel still has messages
+            // or if the main thread exited without dropping the sender cleanly (e.g., panic).
+            if !self.logger_running.load(Ordering::SeqCst) {
+                eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, exiting.".dimmed());
+                break;
+            }
+
             // --- Check for Periodic Stats ---
             // Only dump if interval is enabled and elapsed time is sufficient.
             if self.log_interval != Duration::MAX
@@ -116,7 +129,8 @@ impl Logger {
             }
 
             // --- Receive Log Messages ---
-            // Use recv_timeout to periodically check the timer even if no messages arrive.
+            // Use recv_timeout to periodically check the timer and the running flag
+            // even if no messages arrive.
             match self.receiver.recv_timeout(check_interval) {
                 Ok(LogMessage::Event(data)) => {
                     // Track the first event timestamp seen by the logger.
@@ -147,17 +161,17 @@ impl Logger {
                     self.last_log_was_syn = is_syn; // Update SYN flag
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    // No message received, loop again to check timer/channel.
+                    // No message received within the timeout. Loop again to check timer/flag.
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    // Main thread dropped the sender or panicked.
-                    eprintln!("{}", "[INFO] Logging channel disconnected, logger finishing.".dimmed());
+                    // Main thread dropped the sender. This is a valid shutdown signal,
+                    // but the AtomicBool check is the primary mechanism now.
+                    eprintln!("{}", "[DEBUG] Logger channel disconnected.".dimmed());
                     break; // Exit the loop gracefully.
                 }
             }
         }
-        eprintln!("{}", "[INFO] Logging thread finished.".dimmed());
         // Return the final cumulative stats when the thread exits.
         // Use take to move ownership out of self, replacing with default.
         std::mem::take(&mut self.cumulative_stats)

@@ -3,17 +3,18 @@
 // signal handling, and final shutdown/stats reporting.
 
 use colored::*;
-use crossbeam_channel::{bounded, Sender, TrySendError, Receiver}; // Added Receiver
+use crossbeam_channel::{bounded, Sender, TrySendError, Receiver};
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
-use std::io::{self, ErrorKind}; // Removed Write
-use std::os::unix::io::AsRawFd; // Removed RawFd
+use std::io::{self, ErrorKind};
+use std::os::unix::io::AsRawFd;
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use std::thread::{self, JoinHandle}; // Added JoinHandle
+use std::thread::{self, JoinHandle};
+use std::time::Duration; // Added Duration for check_interval
 
 // Application modules
 mod cli;
@@ -99,18 +100,22 @@ fn main() -> io::Result<()> {
     // Shared state setup
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));
     let final_stats_printed = Arc::new(AtomicBool::new(false));
-    let running = Arc::new(AtomicBool::new(true)); // Flag to signal termination
+    let main_running = Arc::new(AtomicBool::new(true)); // Flag for main loop
+    let logger_running = Arc::new(AtomicBool::new(true)); // Flag for logger loop
 
     // --- Channel for Main -> Logger communication ---
     // Use a bounded channel to prevent unbounded memory growth if the logger falls behind.
     // A capacity of 1024 should be sufficient for most bursts.
+    // Note: Channel capacity might need tuning based on expected event rates.
     let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1024);
 
     // --- Logger Thread ---
     let logger_args = args.clone(); // Clone args for the logger thread
+    let logger_running_clone_for_logger = Arc::clone(&logger_running); // Clone for logger thread
     let logger_handle: JoinHandle<StatsCollector> = thread::spawn(move || {
         let mut logger = Logger::new(
             log_receiver,
+            logger_running_clone_for_logger, // Pass the atomic flag
             logger_args.log_all_events,
             logger_args.log_bounces,
             logger_args.log_interval,
@@ -122,7 +127,8 @@ fn main() -> io::Result<()> {
 
     // --- Signal Handling Thread ---
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
-    let running_clone = Arc::clone(&running);
+    let main_running_clone = Arc::clone(&main_running);
+    let logger_running_clone_for_signal = Arc::clone(&logger_running); // Clone logger flag for signal handler
     let final_stats_printed_clone = Arc::clone(&final_stats_printed);
     let log_sender_clone = log_sender.clone(); // Clone sender for signal handler
 
@@ -134,7 +140,8 @@ fn main() -> io::Result<()> {
                 sig
             );
             // Signal the main loop and logger thread to stop.
-            running_clone.store(false, Ordering::SeqCst);
+            main_running_clone.store(false, Ordering::SeqCst);
+            logger_running_clone_for_signal.store(false, Ordering::SeqCst); // Signal logger thread directly
             // Dropping the sender signals the logger thread to shut down.
             drop(log_sender_clone);
             // Set flag to prevent double printing if main loop also exits cleanly.
@@ -157,7 +164,10 @@ fn main() -> io::Result<()> {
         total_dropped_log_messages: 0,
     };
 
-    while running.load(Ordering::SeqCst) {
+    // How often to check the running flag when read is interrupted.
+    let check_interval = Duration::from_millis(100);
+
+    while main_running.load(Ordering::SeqCst) {
         match read_event_raw(stdin_fd) {
             Ok(Some(ev)) => {
                 let event_us = event_microseconds(&ev);
@@ -204,7 +214,7 @@ fn main() -> io::Result<()> {
                     Err(TrySendError::Disconnected(_)) => {
                         // Logger thread likely panicked or exited early
                         eprintln!("{}", "[ERROR] Logger channel disconnected unexpectedly.".red());
-                        running.store(false, Ordering::SeqCst); // Stop main loop
+                        main_running.store(false, Ordering::SeqCst); // Stop main loop
                         break; // Exit loop immediately
                     }
                 }
@@ -214,8 +224,8 @@ fn main() -> io::Result<()> {
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         // Handle broken pipe gracefully (downstream closed)
                         if e.kind() == ErrorKind::BrokenPipe {
-                            eprintln!("{}", "[INFO] Output pipe broken, exiting.".dimmed());
-                            running.store(false, Ordering::SeqCst); // Signal exit
+                            // eprintln!("{}", "[INFO] Output pipe broken, exiting.".dimmed()); // Removed info print
+                            main_running.store(false, Ordering::SeqCst); // Signal exit
                             break; // Exit loop
                         } else {
                             eprintln!(
@@ -223,7 +233,7 @@ fn main() -> io::Result<()> {
                                 "Error writing output event:".on_bright_black().red().bold(),
                                 e
                             );
-                            running.store(false, Ordering::SeqCst); // Signal exit
+                            main_running.store(false, Ordering::SeqCst); // Signal exit
                             break; // Exit loop gracefully to allow shutdown
                         }
                     }
@@ -231,15 +241,17 @@ fn main() -> io::Result<()> {
             }
             Ok(None) => {
                 // Clean EOF on stdin
-                running.store(false, Ordering::SeqCst); // Signal exit
+                main_running.store(false, Ordering::SeqCst); // Signal exit
                 break; // Exit loop
             }
             Err(e) => {
                 // Handle read errors
                 if e.kind() == ErrorKind::Interrupted {
                     // Interrupted by signal, check running flag
-                    if !running.load(Ordering::SeqCst) {
-                        eprintln!("{}", "[INFO] Read interrupted by signal, exiting.".dimmed());
+                    // Add a small sleep to avoid tight loop on EINTR if signal handler is slow
+                    // or if multiple signals are pending.
+                    thread::sleep(check_interval);
+                    if !main_running.load(Ordering::SeqCst) {
                         break; // Exit loop
                     }
                     continue; // Otherwise, retry read
@@ -249,21 +261,19 @@ fn main() -> io::Result<()> {
                     "Error reading input event:".on_bright_black().red().bold(),
                     e
                 );
-                running.store(false, Ordering::SeqCst); // Signal exit
+                main_running.store(false, Ordering::SeqCst); // Signal exit
                 break; // Exit loop gracefully to allow shutdown
             }
         }
     }
 
     // --- Shutdown ---
-    eprintln!("{}", "[INFO] Main loop finished, shutting down logger...".dimmed());
-    // Drop the sender to signal the logger thread to exit.
+    // Drop the sender to signal the logger thread to exit (redundant with atomic flag, but good practice).
     drop(main_state.log_sender);
 
     // Wait for the logger thread to finish and collect the final stats.
     let final_stats = match logger_handle.join() {
         Ok(stats) => {
-            eprintln!("{}", "[INFO] Logger thread joined successfully.".dimmed());
             stats
         }
         Err(e) => {
@@ -274,8 +284,9 @@ fn main() -> io::Result<()> {
     };
 
     // Print final statistics if they haven't been printed by the signal handler already.
+    // The signal handler now only sets the flag, it doesn't print stats itself.
+    // So this check is mostly for robustness against unexpected scenarios.
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
-        eprintln!("{}", "[INFO] Printing final statistics...".dimmed());
         // Get runtime from the BounceFilter
         let runtime_us = {
             match bounce_filter.lock() {
@@ -323,7 +334,10 @@ fn main() -> io::Result<()> {
              );
         }
     } else {
-        eprintln!("{}", "[INFO] Final statistics already printed by signal handler.".dimmed());
+        // This case should ideally not be reached with the current signal handling logic,
+        // as the signal handler only sets the flag and drops the sender, it doesn't print stats.
+        // Keep it as a defensive measure.
+        eprintln!("{}", "[DEBUG] Final statistics flag was already set.".dimmed());
     }
 
     Ok(())
