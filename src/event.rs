@@ -9,9 +9,10 @@ use std::os::unix::io::{AsRawFd, RawFd}; // Added RawFd
 
 /// Reads exactly one `input_event` directly from a raw file descriptor using `libc::read`.
 ///
-/// Handles partial reads and EINTR signals by retrying.
+/// Handles partial reads by retrying internally.
 /// Returns `Ok(None)` if EOF is reached cleanly *before* starting to read an event.
-/// Returns `Err` on I/O errors or if EOF is hit *during* the read of an event.
+/// Returns `Err(ErrorKind::Interrupted)` if the read is interrupted by a signal.
+/// Returns `Err` on other I/O errors or if EOF is hit *during* the read of an event.
 pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
     let mut buf = vec![0u8; size_of::<input_event>()];
     let mut bytes_read = 0;
@@ -36,11 +37,11 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
             -1 => {
                 // Error occurred during read.
                 let err = io::Error::last_os_error();
-                // If the error is EINTR (Interrupted system call), just retry the read.
-                if err.kind() != ErrorKind::Interrupted {
-                    return Err(err);
-                }
-                // If interrupted, the loop continues, retrying the read.
+                // If interrupted, return the error immediately. The caller (main loop)
+                // is responsible for checking the running flag and deciding whether to
+                // continue or break.
+                // For other errors, also return immediately.
+                return Err(err);
             }
             0 => {
                 // EOF (End Of File) reached.
