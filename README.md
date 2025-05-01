@@ -94,6 +94,8 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
     *Find device links in `/dev/input/by-id/` or use `udevadm info` on your `/dev/input/eventX` device.*
 
+    > More examples and up-to-date usage can be found in the README or at [https://github.com/sinity/intercept-bounce](https://github.com/sinity/intercept-bounce).
+
 ## How it Works
 
 ### Debouncing Logic

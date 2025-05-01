@@ -108,8 +108,8 @@ static KEY_NAMES: phf::Map<u16, &'static str> = phf::phf_map! {
     127u16 => "KEY_COMPOSE",
 };
 
-pub fn get_key_name(code: u16) -> String {
-    KEY_NAMES.get(&code).map_or_else(|| code.to_string(), |name| name.to_string())
+pub fn get_key_name(code: u16) -> &'static str {
+    KEY_NAMES.get(&code).copied().unwrap_or("UNKNOWN")
 }
 
 pub fn get_event_type_name(type_: u16) -> &'static str {

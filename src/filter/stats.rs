@@ -92,7 +92,8 @@ impl StatsCollector {
     }
 
     /// Print human-readable stats to stderr.
-    pub fn print_stats(
+    /// Print human-readable stats to stderr.
+    pub fn print_stats_to_stderr(
         &self,
         debounce_time_us: u64,
         log_all_events: bool,
@@ -288,7 +289,7 @@ impl StatsCollector {
     }
 }
 
-fn format_us(us: u64) -> String {
+pub fn format_us(us: u64) -> String {
     if us >= 1000 {
         format!("{:.1} ms", us as f64 / 1000.0)
     } else {

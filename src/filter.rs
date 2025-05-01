@@ -41,13 +41,7 @@ impl BounceFilter {
         }
     }
 
-    fn format_us(us: u64) -> String {
-        if us >= 1000 {
-            format!("{:.1} ms", us as f64 / 1000.0)
-        } else {
-            format!("{} µs", us)
-        }
-    }
+    // Use the shared format_us from stats.rs for consistency
 
     fn format_timestamp_relative(relative_us: u64) -> String {
         let s = if relative_us < 1_000 {
@@ -225,7 +219,7 @@ impl BounceFilter {
     }
 
     pub fn print_stats(&self, _writer: &mut impl Write) -> io::Result<()> {
-        self.stats.print_stats(
+        self.stats.print_stats_to_stderr(
             self.debounce_time_us,
             self.log_all_events,
             self.log_bounces,

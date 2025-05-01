@@ -4,7 +4,34 @@ use clap::Parser;
 /// Reads Linux input events from stdin, filters rapid duplicate key events,
 /// and writes the filtered events to stdout. Statistics are printed to stderr on exit.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = "An Interception Tools filter to eliminate keyboard chatter (switch bounce).\n\
+Reads Linux input events from stdin, filters rapid duplicate key events, and writes the filtered events to stdout.\n\
+Statistics are printed to stderr on exit.\n\
+\n\
+EXAMPLES:\n\
+  # Basic filtering (15ms window):\n\
+  sudo sh -c 'intercept -g /dev/input/by-id/your-keyboard-event-device | intercept-bounce --debounce-time 15 | uinput -d /dev/input/by-id/your-keyboard-event-device'\n\
+\n\
+  # Filtering with bounce logging:\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ...'\n\
+\n\
+  # Debugging - log all events (no filtering):\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 0 --log-all-events | uinput -d ...'\n\
+\n\
+  # Periodic stats dump:\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60 | uinput -d ...'\n\
+\n\
+  # udevmon integration (YAML):\n\
+  - JOB: \"intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE\"\n\
+    DEVICE:\n\
+      LINK: \"/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd\"\n\
+\n\
+See README for more details and advanced usage."
+)]
 pub struct Args {
     /// Debounce time threshold (milliseconds). Duplicate key events (same keycode and value)
     /// occurring faster than this threshold are discarded. (Default: 10ms)
