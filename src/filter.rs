@@ -3,7 +3,7 @@ pub mod stats;
 
 use crate::event::{event_microseconds, is_key_event};
 use input_linux_sys::{input_event, EV_SYN};
-use std::collections::HashMap;
+// Removed unused HashMap import
 use std::io::{self, Write};
 use colored::*;
 use chrono;
@@ -183,7 +183,8 @@ impl BounceFilter {
                 );
                 eprintln!("{}", "-------------------------------------------\n".magenta().bold());
                 self.last_stats_dump_time_us = Some(now_us);
-                self.interval_stats = StatsCollector::with_capacity(4096);
+                // Reset interval stats - with_capacity takes no arguments
+                self.interval_stats = StatsCollector::with_capacity();
             }
         }
 

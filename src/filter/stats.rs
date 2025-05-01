@@ -51,7 +51,9 @@ pub struct KeyStats {
 }
 
 /// Top-level statistics collector for all events.
-#[derive(Debug, Serialize)]
+// Removed Serialize derive - we will implement custom serialization logic
+// in print_stats_json to handle large arrays efficiently.
+#[derive(Debug)]
 pub struct StatsCollector {
     pub key_events_processed: u64,
     pub key_events_passed: u64,
@@ -311,33 +313,58 @@ impl StatsCollector {
     }
 
     /// Print JSON stats to the given writer (e.g. stderr).
-    pub fn print_stats_json(&self, debounce_time_us: u64, log_all_events: bool, log_bounces: bool, log_interval_us: u64, mut writer: impl std::io::Write) {
-        // Meta struct moved outside this function
+    /// Includes runtime calculation passed from BounceFilter.
+    pub fn print_stats_json(
+        &self,
+        debounce_time_us: u64,
+        log_all_events: bool,
+        log_bounces: bool,
+        log_interval_us: u64,
+        runtime_us: Option<u64>, // Added runtime parameter
+        mut writer: impl std::io::Write,
+    ) {
+        // Collect only non-empty stats into HashMaps for serialization
+        let mut per_key_stats_map = HashMap::new();
+        for (key_code, stats) in self.per_key_stats.iter().enumerate() {
+            // Only include keys that had any drops
+            if stats.press.count > 0 || stats.release.count > 0 || stats.repeat.count > 0 {
+                per_key_stats_map.insert(key_code as u16, stats);
+            }
+        }
 
-        // Removed first_event_us and last_event_us from JSON output as well
+        let mut near_miss_map = HashMap::new();
+        for (idx, timings) in self.per_key_passed_near_miss_timing.iter().enumerate() {
+            if !timings.is_empty() {
+                let key_code = (idx / 3) as u16;
+                let key_value = (idx % 3) as i32;
+                near_miss_map.insert((key_code, key_value), timings);
+            }
+        }
+
+        // Define structs for serialization using the collected HashMaps
         #[derive(Serialize)]
         struct FilteredStats<'a> {
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            per_key_stats: &'a HashMap<u16, KeyStats>,
-            per_key_passed_near_miss_timing: &'a HashMap<(u16, i32), Vec<u64>>,
+            // Use the collected HashMaps here
+            per_key_stats: &'a HashMap<u16, &'a KeyStats>,
+            per_key_passed_near_miss_timing: &'a HashMap<(u16, i32), &'a Vec<u64>>,
         }
 
         #[derive(Serialize)]
         struct Output<'a> {
             meta: Meta,
+            runtime_us: Option<u64>, // Include runtime directly
             stats: FilteredStats<'a>,
-            // Add runtime here if needed, passed from BounceFilter
-            // runtime_us: Option<u64>,
         }
 
-        let filtered_stats = FilteredStats {
+        let filtered_stats_data = FilteredStats {
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
-            per_key_stats: &self.per_key_stats,
-            per_key_passed_near_miss_timing: &self.per_key_passed_near_miss_timing,
+            per_key_stats: &per_key_stats_map,
+            per_key_passed_near_miss_timing: &near_miss_map,
         };
 
         let meta = Meta {
@@ -346,11 +373,17 @@ impl StatsCollector {
             log_bounces,
             log_interval_us,
         };
-        // The caller (main.rs) now constructs the final JSON output including runtime
-        let output = Output { meta, stats: filtered_stats };
+
+        let output = Output {
+            meta,
+            runtime_us, // Use the passed runtime
+            stats: filtered_stats_data,
+        };
+
+        // Write the JSON output
         let _ = serde_json::to_writer_pretty(&mut writer, &output);
-        // Remove the writeln! here, let the caller handle final newline if needed
-        // let _ = writeln!(writer);
+        // Add a newline for better formatting in the terminal
+        let _ = writeln!(writer);
     }
 }
 

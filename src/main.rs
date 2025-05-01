@@ -99,26 +99,21 @@ fn main() -> io::Result<()> {
                 );
                 match filter_clone.lock() {
                     Ok(filter) => {
+                        // Calculate runtime
+                        let runtime = filter.overall_last_event_us.and_then(|last| {
+                            filter.overall_first_event_us.map(|first| last.saturating_sub(first))
+                        });
+
                         if stats_json {
-                            // Manually construct JSON including runtime for signal exit
-                            #[derive(serde::Serialize)]
-                            struct SignalJsonOutput<'a> {
-                                runtime_us: Option<u64>,
-                                meta: filter::stats::Meta, // Re-use Meta struct definition idea
-                                stats: &'a filter::stats::StatsCollector,
-                            }
-                            let runtime = filter.overall_last_event_us.and_then(|last| {
-                                filter.overall_first_event_us.map(|first| last.saturating_sub(first))
-                            });
-                            let meta = filter::stats::Meta { // Assuming Meta is made public or recreated here
-                                debounce_time_us: filter.debounce_time_us,
-                                log_all_events: filter.log_all_events,
-                                log_bounces: filter.log_bounces,
-                                log_interval_us: filter.log_interval_us,
-                            };
-                            let output = SignalJsonOutput { runtime_us: runtime, meta, stats: &filter.stats };
-                            let _ = serde_json::to_writer_pretty(io::stderr(), &output);
-                            let _ = writeln!(io::stderr());
+                            // Call the unified JSON printing function from stats.rs
+                            filter.stats.print_stats_json(
+                                filter.debounce_time_us,
+                                filter.log_all_events,
+                                filter.log_bounces,
+                                filter.log_interval_us,
+                                runtime, // Pass runtime
+                                io::stderr(),
+                            );
                         } else {
                             // Normal stderr output on signal
                             let _ = filter.print_stats(&mut io::stderr());
@@ -128,26 +123,20 @@ fn main() -> io::Result<()> {
                         eprintln!("{}", "Error: BounceFilter mutex was poisoned during signal handling!".on_bright_black().red().bold());
                         // Attempt to print stats anyway, might be incomplete
                         let filter = poisoned.into_inner();
+                        // Calculate runtime
+                        let runtime = filter.overall_last_event_us.and_then(|last| {
+                            filter.overall_first_event_us.map(|first| last.saturating_sub(first))
+                        });
                          if stats_json {
-                            // Best effort JSON on poison
-                             #[derive(serde::Serialize)]
-                             struct SignalJsonOutput<'a> {
-                                 runtime_us: Option<u64>,
-                                 meta: filter::stats::Meta,
-                                 stats: &'a filter::stats::StatsCollector,
-                             }
-                             let runtime = filter.overall_last_event_us.and_then(|last| {
-                                 filter.overall_first_event_us.map(|first| last.saturating_sub(first))
-                             });
-                             let meta = filter::stats::Meta {
-                                 debounce_time_us: filter.debounce_time_us,
-                                 log_all_events: filter.log_all_events,
-                                 log_bounces: filter.log_bounces,
-                                 log_interval_us: filter.log_interval_us,
-                             };
-                             let output = SignalJsonOutput { runtime_us: runtime, meta, stats: &filter.stats };
-                             let _ = serde_json::to_writer_pretty(io::stderr(), &output);
-                             let _ = writeln!(io::stderr());
+                            // Best effort JSON on poison - call the unified function
+                             filter.stats.print_stats_json(
+                                 filter.debounce_time_us,
+                                 filter.log_all_events,
+                                 filter.log_bounces,
+                                 filter.log_interval_us,
+                                 runtime, // Pass runtime
+                                 io::stderr(),
+                             );
                          } else {
                              let _ = filter.print_stats(&mut io::stderr());
                          }
@@ -198,26 +187,21 @@ fn main() -> io::Result<()> {
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
         match bounce_filter.lock() {
             Ok(filter) => {
+                // Calculate runtime
+                let runtime = filter.overall_last_event_us.and_then(|last| {
+                    filter.overall_first_event_us.map(|first| last.saturating_sub(first))
+                });
+
                 if stats_json {
-                    // Manually construct JSON including runtime for clean exit
-                    #[derive(serde::Serialize)]
-                    struct CleanJsonOutput<'a> {
-                        runtime_us: Option<u64>,
-                        meta: filter::stats::Meta,
-                        stats: &'a filter::stats::StatsCollector,
-                    }
-                    let runtime = filter.overall_last_event_us.and_then(|last| {
-                        filter.overall_first_event_us.map(|first| last.saturating_sub(first))
-                    });
-                    let meta = filter::stats::Meta {
-                        debounce_time_us: filter.debounce_time_us,
-                        log_all_events: filter.log_all_events,
-                        log_bounces: filter.log_bounces,
-                        log_interval_us: filter.log_interval_us,
-                    };
-                    let output = CleanJsonOutput { runtime_us: runtime, meta, stats: &filter.stats };
-                    let _ = serde_json::to_writer_pretty(io::stderr(), &output);
-                    let _ = writeln!(io::stderr());
+                    // Call the unified JSON printing function from stats.rs
+                    filter.stats.print_stats_json(
+                        filter.debounce_time_us,
+                        filter.log_all_events,
+                        filter.log_bounces,
+                        filter.log_interval_us,
+                        runtime, // Pass runtime
+                        io::stderr(),
+                    );
                 } else {
                     // Normal stderr output on clean exit
                     let _ = filter.print_stats(&mut io::stderr());
@@ -227,26 +211,20 @@ fn main() -> io::Result<()> {
                 eprintln!("{}", "Error: BounceFilter mutex was poisoned on clean exit!".on_bright_black().red().bold());
                 // Attempt to print stats anyway
                 let filter = poisoned.into_inner();
+                // Calculate runtime
+                let runtime = filter.overall_last_event_us.and_then(|last| {
+                    filter.overall_first_event_us.map(|first| last.saturating_sub(first))
+                });
                  if stats_json {
-                     // Best effort JSON on poison
-                     #[derive(serde::Serialize)]
-                     struct CleanJsonOutput<'a> {
-                         runtime_us: Option<u64>,
-                         meta: filter::stats::Meta,
-                         stats: &'a filter::stats::StatsCollector,
-                     }
-                     let runtime = filter.overall_last_event_us.and_then(|last| {
-                         filter.overall_first_event_us.map(|first| last.saturating_sub(first))
-                     });
-                     let meta = filter::stats::Meta {
-                         debounce_time_us: filter.debounce_time_us,
-                         log_all_events: filter.log_all_events,
-                         log_bounces: filter.log_bounces,
-                         log_interval_us: filter.log_interval_us,
-                     };
-                     let output = CleanJsonOutput { runtime_us: runtime, meta: meta, stats: &filter.stats };
-                     let _ = serde_json::to_writer_pretty(io::stderr(), &output);
-                     let _ = writeln!(io::stderr());
+                     // Best effort JSON on poison - call the unified function
+                     filter.stats.print_stats_json(
+                         filter.debounce_time_us,
+                         filter.log_all_events,
+                         filter.log_bounces,
+                         filter.log_interval_us,
+                         runtime, // Pass runtime
+                         io::stderr(),
+                     );
                  } else {
                     let _ = filter.print_stats(&mut io::stderr());
                  }
