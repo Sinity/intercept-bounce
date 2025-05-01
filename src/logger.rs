@@ -122,10 +122,12 @@ impl Logger {
             if self.log_interval != Duration::MAX
                 && self.last_periodic_dump.elapsed() >= self.log_interval
             {
+                // Attempt to dump stats even if shutting down, to see if this blocks.
                 self.dump_periodic_stats();
                 // Reset interval stats and timer *after* dumping.
                 self.interval_stats = StatsCollector::with_capacity(); // Reset by creating new
                 self.last_periodic_dump = Instant::now();
+                // Note: If dump_periodic_stats blocks, we won't reach here during shutdown.
             }
 
             // --- Receive Log Messages ---
@@ -144,6 +146,7 @@ impl Logger {
                     self.interval_stats.record_event_info(&data);
 
                     // --- Log Event (if needed) ---
+                    // Attempt to log event even if shutting down, to see if this blocks.
                     let is_syn = data.event.type_ == EV_SYN as u16;
                     if self.log_all_events {
                         // Print header if needed before logging the event packet.
@@ -159,6 +162,7 @@ impl Logger {
                         self.log_simple_bounce_detailed(&data);
                     }
                     self.last_log_was_syn = is_syn; // Update SYN flag
+                    // Note: If logging blocks, we won't reach the next loop iteration during shutdown.
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                     // No message received within the timeout. Loop again to check timer/flag.
