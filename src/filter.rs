@@ -1,5 +1,5 @@
 mod keynames;
-mod stats;
+pub mod stats;
 
 use crate::event::{event_microseconds, is_key_event};
 use input_linux_sys::{input_event, EV_SYN};
