@@ -16,9 +16,12 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration; // Added Duration for check_interval
 
-mod cli;
-mod event;
-mod filter;
+// Removed: mod cli; - Now part of the library crate
+
+// Use modules from the library crate
+use intercept_bounce::cli;
+use intercept_bounce::event;
+use intercept_bounce::filter;
 mod logger;
 mod config;
 
@@ -68,7 +71,7 @@ struct MainState {
 fn main() -> io::Result<()> {
     eprintln!("{}", "[MAIN] Application started.".dimmed());
 
-    // Parse command-line arguments using clap.
+    // Parse command-line arguments using clap via the library module.
     let args = cli::parse_args();
     let verbose = args.verbose; // Get verbose flag early
     if verbose { eprintln!("{}", format!("[MAIN] Arguments parsed: {:?}", args).dimmed()); }
