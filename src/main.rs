@@ -14,7 +14,6 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle}; // Added JoinHandle
-use std::time::Duration;
 
 // Application modules
 mod cli;
