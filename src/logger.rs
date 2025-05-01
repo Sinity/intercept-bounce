@@ -1,30 +1,29 @@
-//! Logger thread implementation.
-//!
-//! Handles receiving event processing details from the main thread,
-//! accumulating statistics, performing event logging to stderr,
-//! and managing periodic stats dumps.
+// This module defines the Logger thread, which handles logging events
+// and accumulating/reporting statistics based on messages received
+// from the main processing thread.
 
-use crate::event; // Need event::is_key_event
-use crate::filter::keynames::{get_event_type_name, get_key_name};
-use crate::filter::stats::{self, StatsCollector}; // Use stats module
+use crate::event::{self, get_event_type_name}; // Use event module functions
+use crate::filter::keynames::get_key_name;
+use crate::filter::stats::{StatsCollector, Meta}; // Import StatsCollector and Meta
 use colored::*;
 use crossbeam_channel::Receiver;
-use input_linux_sys::{input_event, EV_SYN}; // Need EV_SYN
-use std::io::{self, Write}; // For stderr access and Write trait
-use std::sync::atomic::{AtomicBool, Ordering}; // Added for logger_running flag
-use std::sync::Arc; // Added for Arc<AtomicBool>
+use input_linux_sys::input_event;
+use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use chrono::Local; // Use chrono for wallclock time
 
-/// Messages sent from the Main processing thread to the Logger thread.
-// Removed Debug derive as input_event doesn't implement it
+/// Represents a message sent from the main thread to the logger thread.
+#[derive(Debug)] // Add Debug derive
 pub enum LogMessage {
     /// Contains detailed information about a single processed event.
     Event(EventInfo),
-    // Shutdown, // Could add explicit shutdown signal if needed
+    // Shutdown, // Could add explicit shutdown signal if needed, but channel drop works
 }
 
-/// Detailed information about a processed event, sent to the logger thread.
-// Removed Debug derive as input_event doesn't implement it
+/// Detailed information about a single processed event, sent to the logger.
+#[derive(Debug)] // Add Debug derive
 pub struct EventInfo {
     /// The raw input event.
     pub event: input_event,
@@ -35,8 +34,8 @@ pub struct EventInfo {
     /// Time difference (µs) between this event and the previous passed event
     /// of the same type, *only if* `is_bounce` is true.
     pub diff_us: Option<u64>,
-    /// Timestamp (µs) of the *previous* event of the same key code and value
-    /// that passed the filter, or `None` if this was the first. Used for near-miss calculation.
+    /// Timestamp (µs) of the previous event of the same type that *passed* the filter.
+    /// This is needed for near-miss calculations in the logger.
     pub last_passed_us: Option<u64>,
 }
 
@@ -51,20 +50,18 @@ pub struct Logger {
     log_bounces: bool,
     log_interval: Duration,
     stats_json: bool,
-    debounce_time_us: u64, // Needed for printing stats context
+    debounce_us: u64, // Store debounce time in µs for near-miss check
 
-    // Logger owns and manages all statistics collectors.
+    // Statistics collectors.
+    // `cumulative_stats` holds totals for the entire run.
     cumulative_stats: StatsCollector,
+    // `interval_stats` holds totals since the last periodic dump.
     interval_stats: StatsCollector,
 
-    // State for periodic dumping.
-    last_periodic_dump: Instant,
-    // Timestamp of the first event seen by the logger (for relative logging).
-    // Note: This might differ slightly from BounceFilter's overall_first_event_us
-    // if the first message is dropped, but okay for relative log timestamps.
-    logger_first_event_us: Option<u64>,
-    // Flag to track if the last logged line was for a SYN event (for grouping).
-    last_log_was_syn: bool,
+    // State for periodic logging.
+    last_dump_time: Instant,
+    // Timestamp of the first event seen by *this logger thread*. Used for relative timestamps.
+    first_event_us: Option<u64>,
 }
 
 impl Logger {
@@ -76,33 +73,37 @@ impl Logger {
         log_bounces: bool,
         interval_s: u64,
         json: bool,
-        debounce_us: u64,
+        debounce_us: u64, // Receive debounce time in µs
     ) -> Self {
+        let log_interval = if interval_s > 0 {
+            Duration::from_secs(interval_s)
+        } else {
+            Duration::MAX // Effectively disabled
+        };
+
         Logger {
             receiver,
             logger_running,
             log_all_events: log_all,
-            log_bounces,
-            // Use Duration::MAX to effectively disable periodic logging if interval is 0.
-            log_interval: if interval_s > 0 {
-                Duration::from_secs(interval_s)
-            } else {
-                Duration::MAX
-            },
+            log_bounces: log_bounces && !log_all, // log_bounces is ignored if log_all is true
+            log_interval,
             stats_json: json,
-            debounce_time_us: debounce_us,
+            debounce_us, // Store debounce time
+
             cumulative_stats: StatsCollector::with_capacity(),
             interval_stats: StatsCollector::with_capacity(),
-            last_periodic_dump: Instant::now(), // Start timing immediately
-            logger_first_event_us: None,
-            last_log_was_syn: true, // Assume initial state allows header
+
+            last_dump_time: Instant::now(),
+            first_event_us: None,
         }
     }
 
-    /// Runs the logger thread's main loop.
+    /// Manages the logger thread's main loop.
     ///
-    /// Listens for messages, updates stats, performs logging, handles periodic dumps.
-    /// Exits when the input channel is disconnected or the `logger_running` flag is set to false.
+    /// It receives messages from the main thread, processes them (logging and stats),
+    /// and handles periodic stats dumping. It exits when the `logger_running` flag
+    /// is set to false and the channel is empty or disconnected.
+    ///
     /// Returns the final cumulative statistics upon exit.
     pub fn run(&mut self) -> StatsCollector { // Removed info print
         // How often to check the timer/channel when idle.
@@ -113,76 +114,98 @@ impl Logger {
             // This allows the logger to exit quickly even if the channel still has messages
             // or if the main thread exited without dropping the sender cleanly (e.g., panic).
             if !self.logger_running.load(Ordering::SeqCst) {
-                // eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, exiting.".dimmed()); // REMOVED: Potential blocking point
-                break;
+                eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, attempting to drain channel.".dimmed());
+                // Signal received, try to drain the channel before exiting.
+                // This ensures we process any messages sent just before the signal.
+                while let Ok(msg) = self.receiver.try_recv() {
+                    eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after shutdown signal.".dimmed());
+                    self.process_message(msg);
+                }
+                eprintln!("{}", "[DEBUG] Logger thread finished draining channel. Exiting run loop.".dimmed());
+                break; // Exit the loop
             }
 
-            // --- Check for Periodic Stats ---
-            // Only dump if interval is enabled and elapsed time is sufficient.
-            if self.log_interval != Duration::MAX
-                && self.last_periodic_dump.elapsed() >= self.log_interval
-            {
-                // Attempt to dump stats even if shutting down, to see if this blocks.
+            // --- Check for periodic dump ---
+            if self.log_interval != Duration::MAX && self.last_dump_time.elapsed() >= self.log_interval {
+                eprintln!("{}", "[DEBUG] Logger thread triggering periodic stats dump.".dimmed());
                 self.dump_periodic_stats();
-                // Reset interval stats and timer *after* dumping.
-                self.interval_stats = StatsCollector::with_capacity(); // Reset by creating new
-                self.last_periodic_dump = Instant::now();
-                // Note: If dump_periodic_stats blocks, we won't reach here during shutdown.
+                self.last_dump_time = Instant::now(); // Reset timer
+                eprintln!("{}", "[DEBUG] Logger thread periodic stats dump complete. Timer reset.".dimmed());
             }
 
-            // --- Receive Log Messages ---
-            // Use recv_timeout to periodically check the timer and the running flag
-            // even if no messages arrive.
+            // --- Receive and process messages ---
+            // Use `try_recv` with a timeout to allow checking the running flag and timer.
+            eprintln!("{}", format!("[DEBUG] Logger thread attempting to receive message with timeout: {:?}", check_interval).dimmed());
             match self.receiver.recv_timeout(check_interval) {
-                Ok(LogMessage::Event(data)) => {
-                    // Track the first event timestamp seen by the logger.
-                    if self.logger_first_event_us.is_none() {
-                        self.logger_first_event_us = Some(data.event_us);
-                    }
-
-                    // --- Accumulate Stats ---
-                    // Update both cumulative and interval statistics.
-                    self.cumulative_stats.record_event_info(&data);
-                    self.interval_stats.record_event_info(&data);
-
-                    // --- Log Event (if needed) ---
-                    // Attempt to log event even if shutting down, to see if this blocks.
-                    let is_syn = data.event.type_ == EV_SYN as u16;
-                    if self.log_all_events {
-                        // Print header if needed before logging the event packet.
-                        if self.last_log_was_syn && !is_syn {
-                             eprintln!(
-                                 "{}",
-                                 "--- Event Packet ---".on_bright_black().bold().underline().truecolor(255, 255, 0)
-                             );
-                        }
-                        self.log_event_detailed(&data);
-                    } else if self.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
-                        // Only log key event bounces if log_all is off.
-                        self.log_simple_bounce_detailed(&data);
-                    }
-                    self.last_log_was_syn = is_syn; // Update SYN flag
-                    // Note: If logging blocks, we won't reach the next loop iteration during shutdown.
+                Ok(msg) => {
+                    eprintln!("{}", "[DEBUG] Logger thread received message from channel.".dimmed());
+                    self.process_message(msg);
+                    eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed());
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    // No message received within the timeout. Loop again to check timer/flag.
+                    // No message received within the timeout. Loop continues,
+                    // checking the running flag and timer again.
+                    eprintln!("{}", "[DEBUG] Logger thread receive timed out. Re-checking flags.".dimmed());
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    // Main thread dropped the sender. This is a valid shutdown signal,
-                    // but the AtomicBool check is the primary mechanism now.
-                    // eprintln!("{}", "[DEBUG] Logger channel disconnected.".dimmed()); // REMOVED: Potential blocking point
-                    break; // Exit the loop gracefully.
+                    // Sender was dropped, meaning the main thread has exited.
+                    eprintln!("{}", "[DEBUG] Logger thread detected channel disconnected. Attempting to drain channel.".dimmed());
+                    // Drain any remaining messages before exiting.
+                    while let Ok(msg) = self.receiver.try_recv() {
+                         eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after disconnect.".dimmed());
+                         self.process_message(msg);
+                    }
+                    eprintln!("{}", "[DEBUG] Logger thread finished draining channel. Exiting run loop.".dimmed());
+                    break; // Exit the loop
                 }
             }
         }
-        // Return the final cumulative stats when the thread exits.
-        // Use take to move ownership out of self, replacing with default.
+
+        eprintln!("{}", "[DEBUG] Logger thread run loop exited. Preparing final stats.".dimmed());
+        // The loop has exited. Print final cumulative stats.
+        // The main thread will wait for this thread to join and then print the stats.
+        // We return the cumulative stats collector.
+        // Use std::mem::take to move the cumulative_stats out, leaving a default in self.
+        eprintln!("{}", "[DEBUG] Logger thread taking cumulative_stats for return.".dimmed());
         std::mem::take(&mut self.cumulative_stats)
+    }
+
+    /// Processes a single message received from the main thread.
+    /// Updates statistics and performs logging if enabled.
+    fn process_message(&mut self, msg: LogMessage) {
+        eprintln!("{}", "[DEBUG] Logger thread processing message.".dimmed());
+        match msg {
+            LogMessage::Event(data) => {
+                eprintln!("{}", format!("[DEBUG] Logger thread processing EventInfo: {:?}", data).dimmed());
+                // Record stats for both cumulative and interval collectors.
+                self.cumulative_stats.record_event_info(&data);
+                self.interval_stats.record_event_info(&data);
+
+                // Set the first event timestamp if not already set.
+                if self.first_event_us.is_none() {
+                    self.first_event_us = Some(data.event_us);
+                    eprintln!("{}", format!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us).dimmed());
+                }
+
+                // Perform logging based on flags.
+                if self.log_all_events {
+                    eprintln!("{}", "[DEBUG] Logger thread logging all events.".dimmed());
+                    self.log_event_detailed(&data);
+                } else if self.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
+                    // Only log bounces if log_all_events is false, log_bounces is true,
+                    // it's a bounce, and it's a key event.
+                    eprintln!("{}", "[DEBUG] Logger thread logging bounce event.".dimmed());
+                    self.log_simple_bounce_detailed(&data);
+                }
+            }
+        }
+        eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed());
     }
 
     /// Dumps the current interval statistics to stderr.
     fn dump_periodic_stats(&self) {
+        eprintln!("{}", "[DEBUG] Logger thread dumping periodic stats.".dimmed());
         // Print header with wallclock time.
         eprintln!(
             "\n{} {} {}",
@@ -191,62 +214,56 @@ impl Logger {
                 .format("%Y-%m-%d %H:%M:%S%.3f")
                 .to_string()
                 .on_bright_black()
-                .bright_yellow()
-                .bold(),
+                .bright_yellow(),
             ") ---".magenta().bold()
         );
 
-        // Use the current interval_stats for printing.
+        // Create a temporary Meta struct for the dump.
+        let meta = Meta {
+            debounce_time_us: self.debounce_us,
+            log_all_events: self.log_all_events,
+            log_bounces: self.log_bounces,
+            log_interval_us: self.log_interval.as_micros() as u64, // Convert Duration to u64 µs
+        };
+
+        // Note: Runtime is not included in periodic dumps as it's a cumulative value.
+        // Pass None for runtime_us.
         if self.stats_json {
-            // Calculate interval runtime based on wall clock timer.
-            let interval_runtime_us = self.last_periodic_dump.elapsed().as_micros() as u64;
-            eprintln!(
-                "{}",
-                "Interval stats (since last dump):"
-                    .on_bright_black()
-                    .bold()
-                    .bright_white()
-            );
-            // Print interval stats as JSON.
-            self.interval_stats.print_stats_json(
-                self.debounce_time_us,
+            eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in JSON format.".dimmed());
+            // Use a temporary StatsCollector for the interval stats.
+            // We need to clone it because print_stats_json takes &self.
+            // A more efficient approach might be to pass the interval_stats directly
+            // if print_stats_json took a mutable reference or was a method on Logger.
+            // For now, cloning is acceptable for periodic dumps which are infrequent.
+            let interval_stats_clone = self.interval_stats.clone();
+             interval_stats_clone.print_stats_json(
+                self.debounce_us,
                 self.log_all_events,
                 self.log_bounces,
-                self.log_interval.as_micros() as u64, // Convert Duration back to us
-                Some(interval_runtime_us),
+                self.log_interval.as_micros() as u64,
+                None, // No runtime for periodic dump
                 &mut io::stderr().lock(), // Lock stderr for writing
             );
-            // Optionally print cumulative stats snapshot too in JSON periodic dump
-            // eprintln!("{}", "Cumulative stats snapshot:".on_bright_black().bold().bright_white());
-            // self.cumulative_stats.print_stats_json(...)
+            eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in JSON format.".dimmed());
         } else {
-            eprintln!(
-                "{}",
-                "Interval stats (since last dump):"
-                    .on_bright_black()
-                    .bold()
-                    .bright_white()
-            );
-            // Print interval stats in human-readable format.
-            self.interval_stats.print_stats_to_stderr(
-                self.debounce_time_us,
+            eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in human-readable format.".dimmed());
+            // Use a temporary StatsCollector for the interval stats.
+            let interval_stats_clone = self.interval_stats.clone();
+            interval_stats_clone.print_stats_to_stderr(
+                self.debounce_us,
                 self.log_all_events,
                 self.log_bounces,
                 self.log_interval.as_micros() as u64,
             );
-            // Optionally print cumulative stats snapshot too
-            // eprintln!("{}", "Cumulative stats snapshot:".on_bright_black().bold().bright_white());
-            // self.cumulative_stats.print_stats_to_stderr(...)
+            eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in human-readable format.".dimmed());
         }
-        eprintln!(
-            "{}",
-            "-------------------------------------------\n"
-                .magenta()
-                .bold()
-        );
+
+        // Reset interval stats after dumping.
+        eprintln!("{}", "[DEBUG] Logger thread resetting interval stats.".dimmed());
+        self.interval_stats = StatsCollector::with_capacity();
+        eprintln!("{}", "[DEBUG] Logger thread interval stats reset.".dimmed());
     }
 
-    /// Logs detailed information about any event (if log_all_events is true).
     /// Adapts logic from the old BounceFilter::log_event.
     fn log_event_detailed(&self, data: &EventInfo) {
         // Determine PASS/DROP status indicator.
@@ -259,92 +276,83 @@ impl Logger {
         // Calculate relative timestamp based on the first event *this logger* saw.
         let relative_us = data
             .event_us
-            .saturating_sub(self.logger_first_event_us.unwrap_or(data.event_us));
-        // Format relative time (e.g., "+123.4 ms").
-        let relative_time_str = format_relative_us(relative_us)
-            .on_bright_black()
-            .bright_yellow()
-            .bold();
+            .checked_sub(self.first_event_us.unwrap_or(data.event_us)) // Use event_us if first_event_us is None
+            .unwrap_or(0); // Handle potential time going backwards
 
-        // Get human-readable event type name.
+        // Get event type name.
         let type_name = get_event_type_name(data.event.type_)
             .on_bright_black()
             .bright_cyan()
             .bold();
 
-        let mut event_details = String::new();
-        let mut timing_info = String::new();
-
-        // Format details differently for key events vs other events.
-        if event::is_key_event(&data.event) {
-            let key_code = data.event.code;
-            let key_value = data.event.value;
-            let key_name = get_key_name(key_code)
+        // Get key name if it's a key event.
+        let key_info = if event::is_key_event(&data.event) {
+            let key_name = get_key_name(data.event.code)
                 .on_bright_black()
                 .bright_magenta()
                 .bold();
-            let code_str = format!("{}", key_code).bright_blue().bold();
-            let value_str = format!("{}", key_value).bright_yellow().bold();
-            event_details.push_str(&format!("[{}] ({}, {})", key_name, code_str, value_str));
+            format!(" Key [{}] ({})", key_name, data.event.code)
+        } else {
+            "".to_string() // No key info for non-key events
+        };
 
-            // Add timing information based on bounce status and previous event time.
-            if data.is_bounce {
-                if let Some(diff) = data.diff_us {
-                    timing_info.push_str(&format!(
-                        " {} {}",
-                        "Bounce Diff:".on_bright_black().bright_red().bold(),
-                        stats::format_us(diff).on_bright_black().bright_red().bold()
-                    ));
-                }
-            } else if let Some(prev) = data.last_passed_us {
-                let time_since_last_passed = data.event_us.saturating_sub(prev);
-                timing_info.push_str(&format!(
-                    " {} {}",
-                    "Time since last passed:".on_bright_black().bright_green().bold(),
-                    stats::format_us(time_since_last_passed)
-                        .on_bright_black()
-                        .bright_green()
-                        .bold()
-                ));
+        // Add bounce timing info if it was a dropped key event.
+        let bounce_info = if data.is_bounce && event::is_key_event(&data.event) {
+            if let Some(diff) = data.diff_us {
+                format!(" (Bounce Time: {})", format_relative_us(diff).on_bright_black().bright_red().bold())
             } else {
-                // Indicate if this was the first passed event of its type.
-                timing_info.push_str(&format!(
-                    " {}", // Add space separator
-                    "First passed event of this type"
-                        .on_bright_black()
-                        .dimmed() // Dimmed for less emphasis
-                        .to_string()
-                ));
+                " (Bounce Time: N/A)".on_bright_black().dimmed().to_string() // Should have diff_us if is_bounce is true for key events
             }
         } else {
-            // Format for non-key events (e.g., EV_SYN).
-            let code_str = format!("{}", data.event.code).bright_blue().bold();
-            let value_str = format!("{}", data.event.value).bright_yellow().bold();
-            event_details.push_str(&format!("Code: {}, Value: {}", code_str, value_str));
-        }
+            "".to_string() // No bounce info for passed or non-key events
+        };
 
-        // Pad details for alignment.
-        let padded_details = format!("{:<30}", event_details).on_bright_black().white();
-        let indentation = "  "; // Indent log lines slightly.
+        // Add near-miss info if it was a passed key event.
+        let near_miss_info = if !data.is_bounce && event::is_key_event(&data.event) {
+            if let Some(last_us) = data.last_passed_us {
+                // Calculate diff since last passed event
+                if let Some(diff) = data.event_us.checked_sub(last_us) {
+                    // Check if it's within the near-miss window (e.g., debounce_us <= diff < 100ms)
+                    // Note: The 100ms threshold is hardcoded in stats.rs for accumulation.
+                    // Here, we just report the diff if it's > debounce_us.
+                    // A more precise near-miss log might check against the 100ms threshold too.
+                    // For now, just show the diff if it's a passed event with a previous passed event.
+                     if diff >= self.debounce_us { // Only show diff if it's >= debounce time (i.e., not a bounce)
+                         format!(" (Diff since last passed: {})", format_relative_us(diff).on_bright_black().bright_green().bold())
+                     } else {
+                         // This case (diff < debounce_us for a passed event) should ideally not happen
+                         // if the filter logic is correct, unless time went backwards.
+                         "".to_string()
+                     }
+                } else {
+                    // Time went backwards since last passed event.
+                    "".to_string()
+                }
+            } else {
+                // This is the first passed event of this type.
+                "".to_string()
+            }
+        } else {
+            "".to_string() // No near-miss info for dropped or non-key events
+        };
 
-        // Print the fully formatted log line to stderr.
-        // Lock stderr for the duration of the print.
-        let mut stderr = io::stderr().lock();
-        let _ = writeln!(
-            stderr,
-            "{}{}{} {} ({}) {}{}",
-            indentation,
+
+        // Print the formatted log line to stderr.
+        eprintln!(
+            "{} {} {} ({}, {}){}{}{}",
             status,
-            relative_time_str,
+            format_relative_us(relative_us).on_bright_black().bright_yellow().bold(), // Relative timestamp
             type_name,
-            data.event.type_, // Include raw type code
-            padded_details,
-            timing_info
+            data.event.code,
+            data.event.value,
+            key_info, // Includes key name if applicable
+            bounce_info, // Includes bounce time if dropped key
+            near_miss_info // Includes diff if passed key with previous passed event
         );
     }
 
-    /// Logs minimal information about a dropped key event (if log_bounces is true).
     /// Adapts logic from the old BounceFilter::log_simple_bounce.
+    /// This is used when only `--log-bounces` is enabled.
     fn log_simple_bounce_detailed(&self, data: &EventInfo) {
         // Assumes data.is_bounce is true and it's a key event.
         let code = data.event.code;
@@ -357,36 +365,32 @@ impl Logger {
             .on_bright_black()
             .bright_magenta()
             .bold();
-        let code_str = format!("{}", code).bright_blue().bold();
-        let value_str = format!("{}", value).bright_yellow().bold();
 
-        // Lock stderr for the duration of the print.
-        let mut stderr = io::stderr().lock();
+        // Calculate relative timestamp based on the first event *this logger* saw.
+        let relative_us = data
+            .event_us
+            .checked_sub(self.first_event_us.unwrap_or(data.event_us))
+            .unwrap_or(0);
 
-        // Print basic drop info.
-        let _ = write!(
-            stderr,
-            "{} {} {} {}, Type: {} ({}), Code: {} [{}], Value: {}",
-            "[DROP]".on_red().white().bold(), // Status
-            data.event_us.to_string().on_bright_black().bright_yellow().bold(), // Timestamp
-            "µs".on_bright_black().bright_yellow().bold(), // Units
-            " ".on_bright_black(), // Separator
+        // Get bounce timing info.
+        let bounce_info = if let Some(diff) = data.diff_us {
+            format!(" (Bounce Time: {})", format_relative_us(diff).on_bright_black().bright_red().bold())
+        } else {
+            " (Bounce Time: N/A)".on_bright_black().dimmed().to_string() // Should have diff_us if is_bounce is true for key events
+        };
+
+        // Print the formatted log line to stderr.
+        eprintln!(
+            "{} {} {} ({}, {}) Key [{}] ({}){}",
+            "[DROP]".on_red().white().bold(), // Always [DROP] for this function
+            format_relative_us(relative_us).on_bright_black().bright_yellow().bold(), // Relative timestamp
             type_name,
-            data.event.type_,
-            code_str,
+            code,
+            value,
             key_name,
-            value_str
+            code,
+            bounce_info // Includes bounce time
         );
-        // Add bounce difference if available.
-        if let Some(diff) = data.diff_us {
-            let _ = write!(
-                stderr,
-                ", {} {}",
-                "Bounce Diff:".on_bright_black().bright_red().bold(),
-                stats::format_us(diff).on_bright_black().bright_red().bold()
-            );
-        }
-        let _ = writeln!(stderr); // Newline
     }
 }
 
@@ -402,6 +406,6 @@ fn format_relative_us(relative_us: u64) -> String {
         // Seconds with three decimal places
         format!("+{:.3} s", relative_us as f64 / 1_000_000.0)
     };
-    // Pad to a fixed width for alignment in logs.
-    format!("{:>12}", s)
+    // Pad to a fixed width for alignment in logs
+    format!("{:<10}", s) // Adjust padding as needed for alignment
 }
