@@ -224,14 +224,13 @@ fn main() -> io::Result<()> {
                                 e
                             );
                             running.store(false, Ordering::SeqCst); // Signal exit
-                            exit(4); // Exit with error code
+                            break; // Exit loop gracefully to allow shutdown
                         }
                     }
                 }
             }
             Ok(None) => {
                 // Clean EOF on stdin
-                eprintln!("{}", "[INFO] Input EOF reached.".dimmed());
                 running.store(false, Ordering::SeqCst); // Signal exit
                 break; // Exit loop
             }

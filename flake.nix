@@ -22,7 +22,7 @@
         # cargoHash needs update after Cargo.lock changes
         # Run: nix run .# -- update-cargo-lock
         # Or manually get hash: nix build .#intercept-bounce.cargoDeps --print-out-paths | xargs nix-hash --type sha256 --base32
-        cargoHash = "sha256-CujsfmtAl54/qiMz1X+gpBcHokkd3irkE2J6eD4ktEw=";
+        cargoHash = "sha256-7577777777777777777777777777777777777777777="; # <-- REPLACE THIS with the actual new hash
 
         meta = {
           description = "Interception Tools bounce filter with statistics";
