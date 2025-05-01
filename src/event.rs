@@ -48,8 +48,8 @@ pub fn write_event(writer: &mut impl Write, event: &input_event) -> io::Result<(
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
     // Defensive: avoid negative values, but also clamp to avoid overflow
-    let sec = event.time.tv_sec.max(0).min(86_400_000) as u64; // ~1000 days
-    let usec = event.time.tv_usec.max(0).min(999_999) as u64;
+    let sec = event.time.tv_sec.clamp(0, 86_400_000) as u64; // ~1000 days
+    let usec = event.time.tv_usec.clamp(0, 999_999) as u64;
     sec * 1_000_000 + usec
 }
 
@@ -63,7 +63,7 @@ pub fn is_key_event(event: &input_event) -> bool {
 
 /// Lists available input devices and their capabilities. Requires root privileges.
 pub fn list_input_devices() -> io::Result<()> {
-    eprintln!("{:<15} {:<30} {}", "Device", "Name", "Capabilities");
+    eprintln!("{:<15} {:<30} Capabilities", "Device", "Name");
     eprintln!("-------------------------------------------------------------------");
 
     let mut entries: Vec<_> = fs::read_dir("/dev/input/")?

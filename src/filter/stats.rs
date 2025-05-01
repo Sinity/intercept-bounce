@@ -21,21 +21,11 @@ impl Default for KeyValueStats {
 }
 
 /// Aggregated statistics for a specific key code.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub struct KeyStats {
     pub press: KeyValueStats,
     pub release: KeyValueStats,
     pub repeat: KeyValueStats,
-}
-
-impl Default for KeyStats {
-    fn default() -> Self {
-        KeyStats {
-            press: KeyValueStats::default(),
-            release: KeyValueStats::default(),
-            repeat: KeyValueStats::default(),
-        }
-    }
 }
 
 /// Top-level statistics collector for all events.
@@ -48,6 +38,12 @@ pub struct StatsCollector {
     pub per_key_passed_near_miss_timing: HashMap<(u16, i32), Vec<u64>>,
     pub first_event_us: Option<u64>,
     pub last_event_us: Option<u64>,
+}
+
+impl Default for StatsCollector {
+    fn default() -> Self {
+        StatsCollector::with_capacity(1024)
+    }
 }
 
 impl StatsCollector {
