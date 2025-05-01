@@ -185,10 +185,13 @@ fn handles_time_going_backwards() {
  #[test]
 fn initial_state_empty() {
     let filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
-    // assert!(filter.last_event_us.is_empty()); // Field is private, cannot assert directly
-    assert!(filter.stats.key_events_processed == 0);
-    assert!(filter.stats.per_key_stats.is_empty());
-    assert!(filter.stats.per_key_passed_near_miss_timing.is_empty());
+    // Check initial counts, arrays are now fixed size Box<[]>
+    assert_eq!(filter.stats.key_events_processed, 0);
+    assert_eq!(filter.stats.key_events_passed, 0);
+    assert_eq!(filter.stats.key_events_dropped, 0);
+    // We can check a specific element is default if needed, but not is_empty()
+    assert_eq!(filter.stats.per_key_stats[0].press.count, 0); // Example check
+    assert!(filter.stats.per_key_passed_near_miss_timing[0].is_empty()); // Inner Vec can be empty
 }
 
 #[test]
@@ -205,23 +208,24 @@ fn stats_tracking() {
     assert_eq!(filter.stats.key_events_passed, 3);
     assert_eq!(filter.stats.key_events_dropped, 2);
 
-    // Check stats for KEY_A
-    let key_a_stats = filter.stats.per_key_stats.get(&KEY_A).unwrap();
+    // Check stats for KEY_A using direct indexing
+    let key_a_stats = &filter.stats.per_key_stats[KEY_A as usize];
     assert_eq!(key_a_stats.press.count, 1); // One dropped press
     assert_eq!(key_a_stats.release.count, 0);
     assert_eq!(key_a_stats.press.timings_us.len(), 1);
     assert_eq!(key_a_stats.press.timings_us[0], DEBOUNCE_US / 2); // Bounce diff
 
-    // Check stats for KEY_B
-    let key_b_stats = filter.stats.per_key_stats.get(&KEY_B).unwrap();
+    // Check stats for KEY_B using direct indexing
+    let key_b_stats = &filter.stats.per_key_stats[KEY_B as usize];
     assert_eq!(key_b_stats.press.count, 0);
     assert_eq!(key_b_stats.release.count, 1); // One dropped release
     assert_eq!(key_b_stats.release.timings_us.len(), 1);
     // Bounce diff for e5 relative to e4
     assert_eq!(key_b_stats.release.timings_us[0], (DEBOUNCE_US * 3) - (DEBOUNCE_US * 2 + 1));
 
-    // Check near miss (none in this specific sequence)
-    assert!(filter.stats.per_key_passed_near_miss_timing.is_empty());
+    // Check near miss (none in this specific sequence) - check a specific index is empty
+    let near_miss_idx_a1 = KEY_A as usize * 3 + 1;
+    assert!(filter.stats.per_key_passed_near_miss_timing[near_miss_idx_a1].is_empty());
 }
 
  #[test]
@@ -240,7 +244,9 @@ fn near_miss_tracking() {
     assert_eq!(filter.stats.key_events_passed, 3);
     assert_eq!(filter.stats.key_events_dropped, 0);
 
-    let near_misses = filter.stats.per_key_passed_near_miss_timing.get(&(KEY_A, 1)).unwrap();
+    // Use direct indexing for near miss array
+    let near_miss_idx = KEY_A as usize * 3 + 1; // Index for (KEY_A, 1)
+    let near_misses = &filter.stats.per_key_passed_near_miss_timing[near_miss_idx];
     assert_eq!(near_misses.len(), 1);
     assert_eq!(near_misses[0], near_miss_time); // Diff between e2 and e1
     // e3 doesn't trigger near miss as it's > 100ms after e2

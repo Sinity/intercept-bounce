@@ -58,7 +58,7 @@ pub struct Args {
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub stats_json: bool,
 
-    /// Bypass all filtering and statistics, act as a simple passthrough pipe.
+    // Removed dangling doc comment for non-existent field
 }
 
 pub fn parse_args() -> Args {
