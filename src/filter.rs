@@ -76,7 +76,8 @@ impl BounceFilter {
         }
 
         let mut bounce_diff_us: Option<u64> = None;
-        let is_bounce = if is_key && self.debounce_time_us > 0 {
+        // Do not debounce key repeats (value == 2)
+        let is_bounce = if is_key && self.debounce_time_us > 0 && key_value != 2 {
             match previous_last_passed_us {
                 Some(last_us) => {
                     if let Some(diff) = event_us.checked_sub(last_us) {
