@@ -144,7 +144,8 @@ pub fn list_input_devices() -> io::Result<()> {
     }
 
     eprintln!("-------------------------------------------------------------------");
-    eprintln!("Look for devices with 'EV_KEY (Keyboard)' capability.");
+    eprintln!("Devices with 'EV_KEY (Keyboard)' capability are most likely keyboards.");
+    eprintln!("(This tool does not try to guess or filter for you: please check the capabilities column above.)");
     eprintln!("You will likely need to run this command with `sudo`.");
 
     Ok(())
