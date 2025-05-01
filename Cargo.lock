@@ -232,9 +232,9 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "float-cmp"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b09cf3155332e944990140d967ff5eceb70df778b34f77d8075db46e4704e6d8"
+checksum = "080794d4311706876574170512911114b45121f76bc4058411acd654a89ddbfd"
 dependencies = [
  "num-traits",
 ]
@@ -287,6 +287,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "crossbeam-channel",
  "input-linux-sys",
  "libc",
  "phf",
@@ -326,21 +327,21 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.172"
+version = "0.2.173"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
+checksum = "1517a0061806959741a7655e7031fb63350e43113a0101f113f0801dbe6a71f9"
 
 [[package]]
 name = "log"
-version = "0.4.27"
+version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
+checksum = "197a757816c8670187719809387774f0084711065b0840108f301f15014986d0"
 
 [[package]]
 name = "memchr"
-version = "2.7.4"
+version = "2.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+checksum = "4ce38c917ccf471e600117300860406d0679f1c533b560056b3894857534bd53"
 
 [[package]]
 name = "nix"
