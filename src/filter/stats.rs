@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use crate::filter::keynames::get_key_name;
 use serde::Serialize;
 use colored::*;
-use std::collections::HashMap;
-use crate::filter::keynames::get_key_name;
-use serde::Serialize;
+// Removed duplicate imports below
+// use std::collections::HashMap;
+// use crate::filter::keynames::get_key_name;
+// use serde::Serialize;
 
 /// Metadata included in JSON statistics output.
 #[derive(Serialize)]
