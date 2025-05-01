@@ -364,6 +364,14 @@ impl StatsCollector {
             );
         }
 
+        // Print runtime separately if provided (only in human-readable mode)
+        // Note: runtime_us is now passed to print_stats_json, but not print_stats_to_stderr
+        // It's printed separately in main.rs after calling this function.
+        // if let Some(rt) = runtime_us {
+        //      eprintln!(...)
+        // }
+
+
         // --- Footer ---
         eprintln!("{}", "----------------------------------------------------------".on_bright_black().blue().bold());
     }
