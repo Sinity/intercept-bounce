@@ -60,7 +60,7 @@ fn drops_bounce() {
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -85,7 +85,7 @@ fn passes_outside_window() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -110,7 +110,7 @@ fn passes_non_key_events() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -136,7 +136,7 @@ fn filters_different_keys_independently() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -160,7 +160,7 @@ fn filters_key_release() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -208,7 +208,7 @@ fn window_zero_passes_all() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("0") // 0ms window
         .write_stdin(input_bytes);
 
@@ -232,7 +232,7 @@ fn handles_time_going_backwards() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
@@ -257,7 +257,7 @@ fn filters_just_below_window_boundary() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg(WINDOW_MS.to_string())
         .write_stdin(input_bytes);
 
@@ -282,7 +282,7 @@ fn passes_at_window_boundary() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg(WINDOW_MS.to_string())
         .write_stdin(input_bytes);
 
@@ -333,7 +333,7 @@ fn test_complex_sequence() {
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
+    cmd.arg("--debounce-time")
         .arg(WINDOW_MS.to_string())
         .write_stdin(input_bytes);
 

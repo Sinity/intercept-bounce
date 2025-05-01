@@ -16,7 +16,6 @@ const DEBOUNCE_US: u64 = DEBOUNCE_MS * 1_000; // Debounce time in microseconds
 /// Creates an EV_KEY input_event with a specific microsecond timestamp.
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
     input_event {
-        // Corrected: Only one timeval definition
         time: timeval {
             tv_sec: (ts_us / 1_000_000) as i64, // Integer division gives seconds
             tv_usec: (ts_us % 1_000_000) as i64, // Remainder gives microseconds

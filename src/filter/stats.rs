@@ -3,7 +3,6 @@
 
 use crate::filter::keynames::get_key_name;
 use crate::logger::EventInfo; // Use EventInfo from logger module
-use colored::*;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Write; // Need Write for print_stats_json
@@ -53,7 +52,7 @@ pub struct StatsCollector {
     /// Total count of key events processed (passed or dropped).
     pub key_events_processed: u64,
     /// Total count of key events that passed the filter.
-    pub key_events_passed: u664,
+    pub key_events_passed: u64,
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
@@ -160,7 +159,7 @@ impl StatsCollector {
         );
         eprintln!("Periodic Log Interval (--log-interval): {}",
             if log_interval_us > 0 { format!("Every {} seconds", log_interval_us / 1_000_000) }
-            else { "Disabled" }
+            else { "Disabled".to_string() } // Ensure String type
         );
 
         eprintln!("\n--- Overall Statistics ---");

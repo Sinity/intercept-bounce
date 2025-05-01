@@ -6,7 +6,6 @@ use crate::event;
 use crate::filter::keynames::{get_key_name, get_event_type_name};
 use crate::filter::stats::StatsCollector;
 use crate::config::Config;
-use colored::*;
 use crossbeam_channel::Receiver;
 use input_linux_sys::{input_event, EV_SYN, EV_MSC};
 use std::io;
@@ -79,7 +78,7 @@ impl Logger {
     ///
     /// Returns the final cumulative statistics upon exit.
     pub fn run(&mut self) -> StatsCollector {
-        if self.config.verbose { eprintln!("{}", "[LOGGER] Logger thread started.".dimmed()); }
+        if self.config.verbose { eprintln!("[LOGGER] Logger thread started."); }
         let log_interval = if self.config.log_interval_us > 0 {
             Duration::from_micros(self.config.log_interval_us)
         } else {
@@ -89,46 +88,46 @@ impl Logger {
 
         loop {
             if !self.logger_running.load(Ordering::SeqCst) {
-                if self.config.verbose { eprintln!("{}", "[LOGGER] Received shutdown signal via AtomicBool, attempting to drain channel.".dimmed()); }
+                if self.config.verbose { eprintln!("[LOGGER] Received shutdown signal via AtomicBool, attempting to drain channel."); }
                 while let Ok(msg) = self.receiver.try_recv() {
-                    if self.config.verbose { eprintln!("{}", "[LOGGER] Draining channel: Processing message after shutdown signal.".dimmed()); }
+                    if self.config.verbose { eprintln!("[LOGGER] Draining channel: Processing message after shutdown signal."); }
                     self.process_message(msg);
                 }
-                if self.config.verbose { eprintln!("{}", "[LOGGER] Finished draining channel. Exiting run loop.".dimmed()); }
+                if self.config.verbose { eprintln!("[LOGGER] Finished draining channel. Exiting run loop."); }
                 break;
             }
 
             if log_interval != Duration::MAX && self.last_dump_time.elapsed() >= log_interval {
-                if self.config.verbose { eprintln!("{}", "[LOGGER] Triggering periodic stats dump.".dimmed()); }
+                if self.config.verbose { eprintln!("[LOGGER] Triggering periodic stats dump."); }
                 self.dump_periodic_stats();
                 self.last_dump_time = Instant::now();
-                if self.config.verbose { eprintln!("{}", "[LOGGER] Periodic stats dump complete. Timer reset.".dimmed()); }
+                if self.config.verbose { eprintln!("[LOGGER] Periodic stats dump complete. Timer reset."); }
             }
 
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
-                    if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread received message from channel.".dimmed()); }
+                    if self.config.verbose { eprintln!("[DEBUG] Logger thread received message from channel."); }
                     self.process_message(msg);
-                    if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread finished processing message.".dimmed()); }
+                    if self.config.verbose { eprintln!("[DEBUG] Logger thread finished processing message."); }
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread receive timed out. Re-checking flags.".dimmed()); }
+                    if self.config.verbose { eprintln!("[LOGGER] Logger thread receive timed out. Re-checking flags."); }
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    eprintln!("{}", "[LOGGER] Detected channel disconnected. Attempting to drain channel.".dimmed());
+                    eprintln!("[LOGGER] Detected channel disconnected. Attempting to drain channel.");
                     while let Ok(msg) = self.receiver.try_recv() {
-                        if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread draining channel: Processing message after disconnect.".dimmed()); }
+                        if self.config.verbose { eprintln!("[DEBUG] Logger thread draining channel: Processing message after disconnect."); }
                         self.process_message(msg);
                     }
-                    eprintln!("{}", "[LOGGER] Finished draining channel. Exiting run loop.".dimmed());
+                    eprintln!("[LOGGER] Finished draining channel. Exiting run loop.");
                     break;
                 }
             }
         }
 
-        if self.config.verbose { eprintln!("{}", "[LOGGER] Run loop exited. Preparing final stats.".dimmed()); }
-        if self.config.verbose { eprintln!("{}", "[LOGGER] Taking cumulative_stats for return.".dimmed()); }
+        if self.config.verbose { eprintln!("[LOGGER] Run loop exited. Preparing final stats."); }
+        if self.config.verbose { eprintln!("[LOGGER] Taking cumulative_stats for return."); }
         std::mem::take(&mut self.cumulative_stats)
     }
 
@@ -139,10 +138,10 @@ impl Logger {
             LogMessage::Event(data) => {
                 // Cannot print EventInfo directly due to input_event not implementing Debug.
                 if self.config.verbose {
-                    eprintln!("{}", format!(
+                    eprintln!(
                         "[DEBUG] Logger thread processing EventInfo: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
                         data.event.type_, data.event.code, data.event.value, data.event_us, data.is_bounce, data.diff_us, data.last_passed_us
-                    ).dimmed());
+                    );
                 }
 
                 self.cumulative_stats.record_event_info_with_config(&data, &self.config);
@@ -150,17 +149,17 @@ impl Logger {
 
                 if self.first_event_us.is_none() {
                     self.first_event_us = Some(data.event_us);
-                    if self.config.verbose { eprintln!("{}", format!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us).dimmed()); }
+                    if self.config.verbose { eprintln!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us); }
                 }
 
                 if self.config.log_all_events {
                     if data.event.type_ == EV_SYN as u16 || data.event.type_ == EV_MSC as u16 {
                         return;
                     }
-                    if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread logging all events.".dimmed()); }
+                    if self.config.verbose { eprintln!("[DEBUG] Logger thread logging all events."); }
                     self.log_event_detailed(&data);
                 } else if self.config.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
-                    if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread logging bounce event.".dimmed()); }
+                    if self.config.verbose { eprintln!("[DEBUG] Logger thread logging bounce event."); }
                     self.log_simple_bounce_detailed(&data);
                 }
             }
@@ -175,22 +174,22 @@ impl Logger {
 
         let interval_stats_clone = self.interval_stats.clone();
         if self.config.stats_json {
-            if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in JSON format.".dimmed()); }
+            if self.config.verbose { eprintln!("[DEBUG] Logger thread printing periodic stats in JSON format."); }
             interval_stats_clone.print_stats_json(
                 &*self.config,
                 None,
                 &mut io::stderr().lock(),
             );
-            if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in JSON format.".dimmed()); }
+            if self.config.verbose { eprintln!("[DEBUG] Logger thread finished printing periodic stats in JSON format."); }
         } else {
-            if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in human-readable format.".dimmed()); }
+            if self.config.verbose { eprintln!("[DEBUG] Logger thread printing periodic stats in human-readable format."); }
             interval_stats_clone.print_stats_to_stderr(&*self.config);
-            if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in human-readable format.".dimmed()); }
+            if self.config.verbose { eprintln!("[DEBUG] Logger thread finished printing periodic stats in human-readable format."); }
         }
 
-        if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread resetting interval stats.".dimmed()); }
+        if self.config.verbose { eprintln!("[DEBUG] Logger thread resetting interval stats."); }
         self.interval_stats = StatsCollector::with_capacity();
-        if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread interval stats reset.".dimmed()); }
+        if self.config.verbose { eprintln!("[DEBUG] Logger thread interval stats reset."); }
     }
 
     /// Adapts logic from the old BounceFilter::log_event.

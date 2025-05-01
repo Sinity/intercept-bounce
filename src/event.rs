@@ -88,7 +88,7 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
                 let err = io::Error::last_os_error();
                 if err.kind() != ErrorKind::Interrupted {
                     if err.kind() == ErrorKind::BrokenPipe {
-                         eprintln!("{}", "[DEBUG] write_event_raw detected BrokenPipe".dimmed());
+                         eprintln!("[DEBUG] write_event_raw detected BrokenPipe");
                     }
                     return Err(err);
                 }

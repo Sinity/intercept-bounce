@@ -10,8 +10,7 @@
     nixpkgs,
     flake-utils,
     ...
-  }:
-    flake-utils.lib.eachDefaultSystem (system: let
+  : let
       pkgs = import nixpkgs {inherit system;};
     in {
       packages.default = pkgs.rustPlatform.buildRustPackage {
@@ -19,7 +18,9 @@
         version = "0.6.0"; # Updated version
 
         src = ./.;
-        cargoHash = "sha256-t88QzISCYdgSum6nngQz42N52u9B/0zrz/+vlb849fw="; # Updated hash for 544425e - This hash will need updating after changes
+        # The cargoHash below will need to be updated after these changes.
+        # Run `nix build .` and it will tell you the correct hash.
+        cargoHash = "sha256-t88QzISCYdgSum6nngQz42N52u9B/0zrz/+vlb849fw="; # Placeholder - UPDATE THIS HASH
 
         meta = {
           description = "Interception Tools bounce filter with statistics";
