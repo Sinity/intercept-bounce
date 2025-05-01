@@ -100,11 +100,14 @@ impl BounceFilter {
                             bounce_diff_us = Some(diff);
                             true
                         } else {
+                            // Check for near miss *before* returning false
                             if diff < 100_000 {
+                                // Define the key tuple before using it
+                                let key = (key_code, key_value);
                                 self.stats.record_near_miss(key, diff);
                                 self.interval_stats.record_near_miss(key, diff);
                             }
-                            false
+                            false // Event is not a bounce, pass it
                         }
                     } else {
                         false
