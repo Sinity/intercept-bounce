@@ -100,47 +100,47 @@ impl StatsCollector {
         log_bounces: bool,
         log_interval_us: u64,
     ) {
-        eprintln!("{}", "--- intercept-bounce status ---".bold().blue());
+        eprintln!("{}", "--- intercept-bounce status ---".on_bright_black().bold().blue().underline());
         eprintln!(
             "{} {}",
-            "Debounce Threshold:".bold(),
-            format_us(debounce_time_us).yellow()
+            "Debounce Threshold:".on_bright_black().bold().bright_yellow(),
+            format_us(debounce_time_us).on_bright_black().bright_yellow().bold()
         );
         eprintln!(
             "{} {}",
-            "Log All Events (--log-all-events):".bold(),
-            if log_all_events { "Active".green() } else { "Inactive".dimmed() }
+            "Log All Events (--log-all-events):".on_bright_black().bold().bright_cyan(),
+            if log_all_events { "Active".on_green().black().bold() } else { "Inactive".on_bright_black().dimmed() }
         );
         eprintln!(
             "{} {}",
-            "Log Bounces (--log-bounces):".bold(),
-            if log_bounces { "Active".green() } else { "Inactive".dimmed() }
+            "Log Bounces (--log-bounces):".on_bright_black().bold().bright_red(),
+            if log_bounces { "Active".on_red().white().bold() } else { "Inactive".on_bright_black().dimmed() }
         );
         eprintln!(
             "{} {}",
-            "Periodic Log Interval (--log-interval):".bold(),
+            "Periodic Log Interval (--log-interval):".on_bright_black().bold().bright_magenta(),
             if log_interval_us > 0 {
-                format!("Every {} seconds", log_interval_us / 1_000_000).yellow()
+                format!("Every {} seconds", log_interval_us / 1_000_000).on_bright_black().bright_magenta().bold()
             } else {
-                "Disabled".dimmed()
+                "Disabled".on_bright_black().dimmed()
             }
         );
 
-        eprintln!("\n{}", "--- Overall Statistics ---".bold().blue());
+        eprintln!("\n{}", "--- Overall Statistics ---".on_bright_black().bold().blue().underline());
         eprintln!(
             "{} {}",
-            "Key Events Processed:".bold(),
-            self.key_events_processed
+            "Key Events Processed:".on_bright_black().bold().bright_white(),
+            self.key_events_processed.to_string().on_bright_black().bright_white().bold()
         );
         eprintln!(
             "{} {}",
-            "Key Events Passed:   ".bold(),
-            self.key_events_passed
+            "Key Events Passed:   ".on_bright_black().bold().bright_green(),
+            self.key_events_passed.to_string().on_bright_black().bright_green().bold()
         );
         eprintln!(
             "{} {}",
-            "Key Events Dropped:  ".bold(),
-            self.key_events_dropped
+            "Key Events Dropped:  ".on_bright_black().bold().bright_red(),
+            self.key_events_dropped.to_string().on_bright_black().bright_red().bold()
         );
         let percentage = if self.key_events_processed > 0 {
             (self.key_events_dropped as f64 / self.key_events_processed as f64) * 100.0
@@ -149,7 +149,7 @@ impl StatsCollector {
         };
         eprintln!(
             "{} {:.2}%",
-            "Percentage Dropped:  ".bold(),
+            "Percentage Dropped:  ".on_bright_black().bold().bright_red(),
             percentage
         );
 
@@ -157,37 +157,37 @@ impl StatsCollector {
             let duration = last.saturating_sub(first);
             eprintln!(
                 "{} {}",
-                "Total runtime:".bold(),
-                format_us(duration).yellow()
+                "Total runtime:".on_bright_black().bold().bright_yellow(),
+                format_us(duration).on_bright_black().bright_yellow().bold()
             );
         }
 
         if !self.per_key_stats.is_empty() {
-            eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".bold().blue());
-            eprintln!("{}", "Format: Key [Name] (Code):".dimmed());
-            eprintln!("{}", "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)".dimmed());
+            eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".on_bright_black().bold().blue().underline());
+            eprintln!("{}", "Format: Key [Name] (Code):".on_bright_black().dimmed());
+            eprintln!("{}", "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)".on_bright_black().dimmed());
 
             let mut sorted_keys: Vec<_> = self.per_key_stats.keys().collect();
             sorted_keys.sort();
 
             for key_code in sorted_keys {
                 if let Some(stats) = self.per_key_stats.get(key_code) {
-                    let key_name = get_key_name(*key_code);
+                    let key_name = get_key_name(*key_code).on_bright_black().bright_magenta().bold();
                     let total_drops_for_key = stats.press.count + stats.release.count + stats.repeat.count;
 
                     if total_drops_for_key > 0 {
                         eprintln!(
                             "\n{}",
-                            format!("Key [{}] ({}):", key_name, key_code).bold().cyan()
+                            format!("Key [{}] ({}):", key_name, key_code).on_bright_black().bold().cyan()
                         );
 
                         let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
                             if value_stats.count > 0 {
                                 eprint!(
                                     "  {:<7} ({}): {}",
-                                    value_name,
-                                    value_code,
-                                    value_stats.count.to_string().red().bold()
+                                    value_name.on_bright_black().bold().bright_yellow(),
+                                    value_code.to_string().on_bright_black().bright_blue().bold(),
+                                    value_stats.count.to_string().on_red().white().bold()
                                 );
                                 if !value_stats.timings_us.is_empty() {
                                     let timings = &value_stats.timings_us;
@@ -196,13 +196,14 @@ impl StatsCollector {
                                     let sum: u64 = timings.iter().sum();
                                     let avg = sum as f64 / timings.len() as f64;
                                     eprintln!(
-                                        " (Bounce Time: {} / {} / {})",
-                                        format_us(*min).yellow(),
-                                        format_us(avg as u64).yellow(),
-                                        format_us(*max).yellow()
+                                        " ({}: {} / {} / {})",
+                                        "Bounce Time".on_bright_black().bright_red().bold(),
+                                        format_us(*min).on_bright_black().bright_red().bold(),
+                                        format_us(avg as u64).on_bright_black().bright_yellow().bold(),
+                                        format_us(*max).on_bright_black().bright_red().bold()
                                     );
                                 } else {
-                                    eprintln!(" (No timing data collected)");
+                                    eprintln!("{}", " (No timing data collected)".on_bright_black().dimmed());
                                 }
                             }
                         };
@@ -216,7 +217,7 @@ impl StatsCollector {
         } else {
             eprintln!(
                 "\n{}",
-                "--- No key events dropped ---".green().bold()
+                "--- No key events dropped ---".on_bright_black().green().bold()
             );
         }
 
@@ -224,30 +225,33 @@ impl StatsCollector {
             eprintln!(
                 "\n{}",
                 "--- Passed Event Near-Miss Statistics (Passed within 100ms) ---"
+                    .on_bright_black()
                     .bold()
                     .blue()
+                    .underline()
             );
-            eprintln!("{}", "Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)".dimmed());
+            eprintln!("{}", "Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)".on_bright_black().dimmed());
 
             let mut sorted_near_misses: Vec<_> = self.per_key_passed_near_miss_timing.iter().collect();
             sorted_near_misses.sort_by_key(|(k, _)| *k);
 
             for ((code, value), timings) in sorted_near_misses {
                 if !timings.is_empty() {
-                    let key_name = get_key_name(*code);
+                    let key_name = get_key_name(*code).on_bright_black().bright_magenta().bold();
                     let min = timings.iter().min().unwrap_or(&0);
                     let max = timings.iter().max().unwrap_or(&0);
                     let sum: u64 = timings.iter().sum();
                     let avg = sum as f64 / timings.len() as f64;
                     eprintln!(
-                        "  Key [{}] ({}, {}): {} (Timings: {} / {} / {})",
+                        "  Key [{}] ({}, {}): {} ({}: {} / {} / {})",
                         key_name,
-                        code,
-                        value,
-                        timings.len().to_string().yellow(),
-                        format_us(*min).yellow(),
-                        format_us(avg as u64).yellow(),
-                        format_us(*max).yellow()
+                        code.to_string().on_bright_black().bright_blue().bold(),
+                        value.to_string().on_bright_black().bright_yellow().bold(),
+                        timings.len().to_string().on_bright_black().bright_yellow().bold(),
+                        "Timings".on_bright_black().bright_green().bold(),
+                        format_us(*min).on_bright_black().bright_green().bold(),
+                        format_us(avg as u64).on_bright_black().bright_yellow().bold(),
+                        format_us(*max).on_bright_black().bright_green().bold()
                     );
                 }
             }
@@ -255,12 +259,13 @@ impl StatsCollector {
             eprintln!(
                 "\n{}",
                 "--- No near-miss events recorded (< 100ms) ---"
+                    .on_bright_black()
                     .green()
                     .bold()
             );
         }
 
-        eprintln!("{}", "----------------------------------------------------------".blue().bold());
+        eprintln!("{}", "----------------------------------------------------------".on_bright_black().blue().bold());
     }
 
     /// Print JSON stats to the given writer (e.g. stderr).

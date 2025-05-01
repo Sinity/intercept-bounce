@@ -68,7 +68,10 @@ impl BounceFilter {
         let previous_last_passed_us = self.last_event_us.get(&key).copied();
 
         if self.log_all_events && self.last_event_was_syn {
-            eprintln!("{}", "--- Event Packet ---".blue().bold());
+            eprintln!(
+                "{}",
+                "--- Event Packet ---".on_bright_black().bold().underline().truecolor(255, 255, 0)
+            );
         }
 
         let mut bounce_diff_us: Option<u64> = None;
@@ -149,14 +152,23 @@ impl BounceFilter {
         bounce_diff_us: Option<u64>,
         previous_last_passed_us: Option<u64>,
     ) {
+        // Colorful status
         let status = if is_bounce {
-            "[DROP]".red().bold()
+            "[DROP]".on_red().white().bold()
         } else {
-            "[PASS]".green().bold()
+            "[PASS]".on_green().black().bold()
         };
+
         let relative_us = event_us.saturating_sub(self.first_event_us.unwrap_or(event_us));
-        let relative_time_str = Self::format_timestamp_relative(relative_us);
-        let type_name = get_event_type_name(event.type_);
+        let relative_time_str = Self::format_timestamp_relative(relative_us)
+            .on_bright_black()
+            .bright_yellow()
+            .bold();
+
+        let type_name = get_event_type_name(event.type_)
+            .on_bright_black()
+            .bright_cyan()
+            .bold();
 
         let mut event_details = String::new();
         let mut timing_info = String::new();
@@ -164,24 +176,61 @@ impl BounceFilter {
         if is_key_event(event) {
             let key_code = event.code;
             let key_value = event.value;
-            let key_name = get_key_name(key_code);
-            event_details.push_str(&format!("[{}] ({}, {})", key_name, key_code, key_value));
+            let key_name = get_key_name(key_code)
+                .on_bright_black()
+                .bright_magenta()
+                .bold();
+            let code_str = format!("{}", key_code).bright_blue().bold();
+            let value_str = format!("{}", key_value).bright_yellow().bold();
+            event_details.push_str(&format!(
+                "[{}] ({}, {})",
+                key_name, code_str, value_str
+            ));
 
             if is_bounce {
                 if let Some(diff) = bounce_diff_us {
-                    timing_info.push_str(&format!(" Bounce Diff: {}", crate::filter::stats::format_us(diff)));
+                    timing_info.push_str(&format!(
+                        " {} {}",
+                        "Bounce Diff:".on_bright_black().bright_red().bold(),
+                        crate::filter::stats::format_us(diff)
+                            .on_bright_black()
+                            .bright_red()
+                            .bold()
+                    ));
                 }
             } else if let Some(prev) = previous_last_passed_us {
                 let time_since_last_passed = event_us.saturating_sub(prev);
-                timing_info.push_str(&format!(" Time since last passed: {}", crate::filter::stats::format_us(time_since_last_passed)));
+                timing_info.push_str(&format!(
+                    " {} {}",
+                    "Time since last passed:".on_bright_black().bright_green().bold(),
+                    crate::filter::stats::format_us(time_since_last_passed)
+                        .on_bright_black()
+                        .bright_green()
+                        .bold()
+                ));
             } else {
-                timing_info.push_str(", First passed event of this type");
+                timing_info.push_str(
+                    ", ".to_string()
+                        + &"First passed event of this type"
+                            .on_bright_black()
+                            .bright_cyan()
+                            .bold()
+                            .to_string(),
+                );
             }
         } else {
-            event_details.push_str(&format!("Code: {}, Value: {}", event.code, event.value));
+            let code_str = format!("{}", event.code).bright_blue().bold();
+            let value_str = format!("{}", event.value).bright_yellow().bold();
+            event_details.push_str(&format!(
+                "Code: {}, Value: {}",
+                code_str, value_str
+            ));
         }
 
-        let padded_details = format!("{:<30}", event_details);
+        let padded_details = format!("{:<30}", event_details)
+            .on_bright_black()
+            .white();
+
         let indentation = "  ";
 
         eprintln!(
@@ -189,7 +238,7 @@ impl BounceFilter {
             indentation,
             status,
             relative_time_str,
-            type_name.cyan(),
+            type_name,
             event.type_,
             padded_details,
             timing_info
@@ -199,21 +248,38 @@ impl BounceFilter {
     fn log_simple_bounce(&self, event: &input_event, event_us: u64, bounce_diff_us: Option<u64>) {
         let code = event.code;
         let value = event.value;
-        let type_name = get_event_type_name(event.type_);
-        let key_name = get_key_name(code);
+        let type_name = get_event_type_name(event.type_)
+            .on_bright_black()
+            .bright_cyan()
+            .bold();
+        let key_name = get_key_name(code)
+            .on_bright_black()
+            .bright_magenta()
+            .bold();
+        let code_str = format!("{}", code).bright_blue().bold();
+        let value_str = format!("{}", value).bright_yellow().bold();
 
         eprint!(
-            "{} {} µs, Type: {} ({}), Code: {} [{}], Value: {}",
-            "[DROP]".red().bold(),
-            event_us,
-            type_name.cyan(),
+            "{} {} {} {}, Type: {} ({}), Code: {} [{}], Value: {}",
+            "[DROP]".on_red().white().bold(),
+            event_us.to_string().on_bright_black().bright_yellow().bold(),
+            "µs".on_bright_black().bright_yellow().bold(),
+            " ".on_bright_black(),
+            type_name,
             event.type_,
-            code,
+            code_str,
             key_name,
-            value
+            value_str
         );
         if let Some(diff) = bounce_diff_us {
-            eprint!(", Bounce Diff: {}", crate::filter::stats::format_us(diff));
+            eprint!(
+                ", {} {}",
+                "Bounce Diff:".on_bright_black().bright_red().bold(),
+                crate::filter::stats::format_us(diff)
+                    .on_bright_black()
+                    .bright_red()
+                    .bold()
+            );
         }
         eprintln!();
     }
