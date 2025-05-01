@@ -115,16 +115,23 @@ impl BounceFilter {
         self.last_event_was_syn = event.type_ == EV_SYN as u16;
 
         if self.log_interval_us > 0 {
+            // Use wallclock time for periodic logging, not event timestamp
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros() as u64)
+                .unwrap_or(event_us);
+
             let dump_needed = match self.last_stats_dump_time_us {
-                Some(last_dump_us) => event_us.saturating_sub(last_dump_us) >= self.log_interval_us,
+                Some(last_dump_us) => now_us.saturating_sub(last_dump_us) >= self.log_interval_us,
                 None => true,
             };
             if dump_needed {
                 eprintln!(
                     "\n{} {} {}",
-                    "--- Periodic Stats Dump (Time:".magenta().bold(),
-                    event_us,
-                    "µs) ---".magenta().bold()
+                    "--- Periodic Stats Dump (Wallclock:".magenta().bold(),
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string().on_bright_black().bright_yellow().bold(),
+                    ") ---".magenta().bold()
                 );
                 if std::env::args().any(|a| a == "--stats-json") {
                     self.stats.print_stats_json(
@@ -137,7 +144,7 @@ impl BounceFilter {
                 }
                 let _ = self.print_stats(&mut io::stderr());
                 eprintln!("{}", "-------------------------------------------\n".magenta().bold());
-                self.last_stats_dump_time_us = Some(event_us);
+                self.last_stats_dump_time_us = Some(now_us);
             }
         }
 

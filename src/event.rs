@@ -63,8 +63,15 @@ pub fn is_key_event(event: &input_event) -> bool {
 
 /// Lists available input devices and their capabilities. Requires root privileges.
 pub fn list_input_devices() -> io::Result<()> {
-    eprintln!("{:<15} {:<30} Capabilities", "Device", "Name");
-    eprintln!("-------------------------------------------------------------------");
+    use colored::*;
+    eprintln!(
+        "{}",
+        format!("{:<15} {:<30} {}", "Device", "Name", "Capabilities")
+            .on_bright_black()
+            .bold()
+            .bright_cyan()
+    );
+    eprintln!("{}", "-------------------------------------------------------------------".on_bright_black().bright_white());
 
     let mut entries: Vec<_> = fs::read_dir("/dev/input/")?
         .filter_map(|entry| {
@@ -92,10 +99,22 @@ pub fn list_input_devices() -> io::Result<()> {
             Err(e) => {
                 let msg = format!("{}", e);
                 if msg.contains("Permission denied") {
-                    eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
+                    eprintln!(
+                        "{}",
+                        format!("{:<15} {:<30} {}", path_str, "", "Permission Denied")
+                            .on_bright_black()
+                            .red()
+                            .bold()
+                    );
                     continue;
                 } else {
-                    eprintln!("{:<15} {:<30} Error opening: {}", path_str, "", e);
+                    eprintln!(
+                        "{}",
+                        format!("{:<15} {:<30} Error opening: {}", path_str, "", e)
+                            .on_bright_black()
+                            .red()
+                            .bold()
+                    );
                     continue;
                 }
             }
@@ -107,7 +126,13 @@ pub fn list_input_devices() -> io::Result<()> {
         let device_name = match eviocgname(fd, &mut name_buf) {
             Ok(name) => name,
             Err(e) => {
-                eprintln!("Warning: Could not get name for {}: {}", path_str, e);
+                eprintln!(
+                    "{}",
+                    format!("Warning: Could not get name for {}: {}", path_str, e)
+                        .on_bright_black()
+                        .yellow()
+                        .bold()
+                );
                 "<Unknown Name>".to_string()
             }
         };
@@ -132,16 +157,28 @@ pub fn list_input_devices() -> io::Result<()> {
                 if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
             }
             Err(e) => {
-                eprintln!("Warning: Could not get capabilities for {}: {}", path_str, e);
+                eprintln!(
+                    "{}",
+                    format!("Warning: Could not get capabilities for {}: {}", path_str, e)
+                        .on_bright_black()
+                        .yellow()
+                        .bold()
+                );
                 capabilities.push("Error getting capabilities");
             }
         }
 
         if has_ev_key {
-            eprintln!("{:<15} {:<30} {}",
-                path_str,
-                device_name,
-                capabilities.join(", ")
+            eprintln!(
+                "{}",
+                format!(
+                    "{:<15} {:<30} {}",
+                    path_str,
+                    device_name,
+                    capabilities.join(", ")
+                )
+                .on_bright_black()
+                .bright_white()
             );
         }
 
@@ -149,9 +186,21 @@ pub fn list_input_devices() -> io::Result<()> {
         drop(file);
     }
 
-    eprintln!("-------------------------------------------------------------------");
-    eprintln!("Only devices with 'EV_KEY (Keyboard)' capability are shown above.");
-    eprintln!("You will likely need to run this command with `sudo`.");
+    eprintln!("{}", "-------------------------------------------------------------------".on_bright_black().bright_white());
+    eprintln!(
+        "{}",
+        "Only devices with 'EV_KEY (Keyboard)' capability are shown above."
+            .on_bright_black()
+            .bright_cyan()
+            .bold()
+    );
+    eprintln!(
+        "{}",
+        "You will likely need to run this command with `sudo`."
+            .on_bright_black()
+            .yellow()
+            .bold()
+    );
 
     Ok(())
 }

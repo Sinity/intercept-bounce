@@ -44,18 +44,25 @@ fn main() -> io::Result<()> {
 
     // Check for the list_devices flag first
     if args.list_devices {
-        eprintln!("{}", "Scanning input devices (requires root)...".cyan());
+        eprintln!(
+            "{}",
+            "Scanning input devices (requires root)..."
+                .on_bright_black()
+                .bold()
+                .bright_cyan()
+        );
         match list_input_devices() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 eprintln!(
                     "{} {}",
-                    "Error listing devices:".red().bold(),
+                    "Error listing devices:".on_bright_black().red().bold(),
                     e
                 );
                 eprintln!(
                     "{}",
                     "Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges."
+                        .on_bright_black()
                         .yellow()
                 );
                 exit(2); // Exit with a specific error code for device listing failure
@@ -85,7 +92,7 @@ fn main() -> io::Result<()> {
             if !printed_clone.swap(true, Ordering::SeqCst) {
                 eprintln!(
                     "\n{} {}",
-                    "Received signal, printing final stats and exiting:".yellow(),
+                    "Received signal, printing final stats and exiting:".on_bright_black().yellow().bold(),
                     sig
                 );
                 match filter_clone.lock() {
@@ -102,7 +109,7 @@ fn main() -> io::Result<()> {
                         let _ = filter.print_stats(&mut io::stderr());
                     }
                     Err(poisoned) => {
-                        eprintln!("{}", "Error: BounceFilter mutex was poisoned during signal handling!".red());
+                        eprintln!("{}", "Error: BounceFilter mutex was poisoned during signal handling!".on_bright_black().red().bold());
                         let filter = poisoned.into_inner();
                         if stats_json {
                             filter.stats.print_stats_json(
@@ -128,14 +135,18 @@ fn main() -> io::Result<()> {
     while let Some(ev) = match read_event(&mut stdin_locked) {
         Ok(ev) => ev,
         Err(e) => {
-            eprintln!("{} {}", "Error reading input event:".red().bold(), e);
+            eprintln!(
+                "{} {}",
+                "Error reading input event:".on_bright_black().red().bold(),
+                e
+            );
             exit(3);
         }
     } {
         let is_bounce = match bounce_filter.lock() {
             Ok(mut filter) => filter.process_event(&ev),
             Err(poisoned) => {
-                eprintln!("{}", "FATAL: BounceFilter mutex poisoned in main event loop.".red().bold());
+                eprintln!("{}", "FATAL: BounceFilter mutex poisoned in main event loop.".on_bright_black().red().bold());
                 let mut filter = poisoned.into_inner();
                 filter.process_event(&ev)
             }
@@ -143,7 +154,11 @@ fn main() -> io::Result<()> {
 
         if !is_bounce {
             if let Err(e) = write_event(&mut stdout_locked, &ev) {
-                eprintln!("{} {}", "Error writing output event:".red().bold(), e);
+                eprintln!(
+                    "{} {}",
+                    "Error writing output event:".on_bright_black().red().bold(),
+                    e
+                );
                 exit(4);
             }
         }
@@ -154,9 +169,9 @@ fn main() -> io::Result<()> {
         match bounce_filter.lock() {
             Ok(filter) => {
                 let _ = filter.print_stats(&mut io::stderr());
-            },
+            }
             Err(poisoned) => {
-                eprintln!("{}", "Error: BounceFilter mutex was poisoned on clean exit!".red());
+                eprintln!("{}", "Error: BounceFilter mutex was poisoned on clean exit!".on_bright_black().red().bold());
                 let _ = poisoned.into_inner().print_stats(&mut io::stderr());
             }
         }
