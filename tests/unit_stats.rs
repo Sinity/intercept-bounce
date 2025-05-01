@@ -1,5 +1,4 @@
-mod filter_stats;
-use filter_stats::StatsCollector;
+use intercept_bounce::stats::StatsCollector;
 
 #[test]
 fn test_stats_collector_basic_counts() {
@@ -59,4 +58,38 @@ fn test_stats_collector_runtime_fields() {
     stats.record_event(30, 1, false, None, 3000);
     assert_eq!(stats.first_event_us, Some(1000));
     assert_eq!(stats.last_event_us, Some(3000));
+}
+
+// Additional test: ensure stats are correct for only passed events
+#[test]
+fn test_stats_collector_only_passed() {
+    let mut stats = StatsCollector::new();
+    stats.record_event(40, 1, false, None, 1000);
+    stats.record_event(40, 0, false, None, 2000);
+    stats.record_event(41, 1, false, None, 3000);
+
+    assert_eq!(stats.key_events_processed, 3);
+    assert_eq!(stats.key_events_passed, 3);
+    assert_eq!(stats.key_events_dropped, 0);
+
+    let key_40 = stats.per_key_stats.get(&40);
+    assert!(key_40.is_none() || (key_40.unwrap().press.count == 0 && key_40.unwrap().release.count == 0));
+}
+
+// Additional test: ensure stats are correct for only dropped events
+#[test]
+fn test_stats_collector_only_dropped() {
+    let mut stats = StatsCollector::new();
+    stats.record_event(50, 1, true, Some(100), 1000);
+    stats.record_event(50, 1, true, Some(200), 2000);
+
+    assert_eq!(stats.key_events_processed, 2);
+    assert_eq!(stats.key_events_passed, 0);
+    assert_eq!(stats.key_events_dropped, 2);
+
+    let key_50 = stats.per_key_stats.get(&50).unwrap();
+    assert_eq!(key_50.press.count, 2);
+    assert_eq!(key_50.release.count, 0);
+    assert_eq!(key_50.repeat.count, 0);
+    assert_eq!(key_50.press.timings_us, vec![100, 200]);
 }

@@ -16,10 +16,10 @@
     in {
       packages.default = pkgs.rustPlatform.buildRustPackage {
         pname = "intercept-bounce";
-        version = "0.2.0";
+        version = "0.5.0";
 
         src = ./.;
-        cargoHash = "sha256-ksQ8BBVAqXxlKq8CV5RAwZ1e/X/lhlWU1SkGz5ah9+I=";
+        cargoHash = "sha256-t9qhridOtKlIn0FVPDfNBrbphilbuEtY2icikqJMgOw=";
 
         meta = {
           description = "Interception Tools bounce filter with statistics";

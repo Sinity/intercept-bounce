@@ -72,6 +72,28 @@ This is particularly useful for mechanical keyboards which can sometimes registe
     sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60 | uinput -d ...'
     ```
 
+5. **udevmon Integration (YAML Example):**
+    You can use `intercept-bounce` directly in your `udevmon.yaml` configuration for Interception Tools. Here are some example jobs:
+
+    ```yaml
+    # --- Example 1: Basic Filtering ---
+    - JOB: "intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE"
+      DEVICE:
+        LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd" # Replace this!
+
+    # --- Example 2: Filtering with Periodic Stats ---
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15 --log-interval 300 | uinput -d $DEVNODE"
+      DEVICE:
+        LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd" # Replace/adjust this!
+
+    # --- Example 3: Logging Only Bounced Events ---
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20 --log-bounces | uinput -d $DEVNODE"
+      DEVICE:
+        LINK: "/dev/input/by-id/usb-Another_Keyboard_*-event-kbd" # Replace this!
+    ```
+
+    *Find device links in `/dev/input/by-id/` or use `udevadm info` on your `/dev/input/eventX` device.*
+
 ## How it Works
 
 ### Debouncing Logic
