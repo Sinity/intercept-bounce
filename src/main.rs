@@ -251,7 +251,7 @@ fn main() -> io::Result<()> {
                     e
                 );
                 running.store(false, Ordering::SeqCst); // Signal exit
-                exit(3); // Exit with error code
+                break; // Exit loop gracefully to allow shutdown
             }
         }
     }
