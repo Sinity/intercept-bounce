@@ -260,13 +260,13 @@ impl Logger {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
                     // Check if it's within the near-miss window (e.g., debounce_us <= diff < 100ms)
                     // Note: The 100ms threshold is hardcoded in stats.rs for accumulation.
-                    // Here, we just report the diff if it's > debounce_us.
+                    // Here, we just report the diff if it's >= the debounce threshold.
                     // A more precise near-miss log might check against the 100ms threshold too.
                     // For now, just show the diff if it's a passed event with a previous passed event.
-                     if diff >= self.debounce_us { // Only show diff if it's >= debounce time (i.e., not a bounce)
+                     if diff >= self.config.debounce_us { // Only show diff if it's >= debounce time (i.e., not a bounce)
                          format!(" (Diff since last passed: {})", format_relative_us(diff).on_bright_black().bright_green().bold())
                      } else {
-                         // This case (diff < debounce_us for a passed event) should ideally not happen
+                         // This case (diff < config.debounce_us for a passed event) should ideally not happen
                          // if the filter logic is correct, unless time went backwards.
                          "".to_string()
                      }

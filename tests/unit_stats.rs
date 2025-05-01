@@ -2,6 +2,7 @@
 //! These tests focus on verifying the accumulation of statistics based on
 //! EventInfo messages, simulating what the logger thread would do.
 
+use intercept_bounce::config::Config; // Import Config
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::logger::EventInfo; // Use EventInfo from logger
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN}; // Use event types
@@ -183,8 +184,17 @@ fn stats_json_output_structure() {
     stats.record_event_info(&passed_event_info(ev3, DEBOUNCE_US + 2000, Some(1000))); // Near miss relative to ev1
 
     let mut buf = Vec::new();
-    // Provide dummy config values and runtime for the JSON call.
-    stats.print_stats_json(DEBOUNCE_US, true, false, 0, Some(DEBOUNCE_US + 1000), &mut buf);
+    // Create a dummy config for the JSON call.
+    let config = Config {
+        debounce_us: DEBOUNCE_US,
+        log_all_events: true,
+        log_bounces: false,
+        log_interval_us: 0,
+        stats_json: true, // Assume JSON is enabled for this test
+        verbose: false,
+    };
+    // Provide runtime for the JSON call.
+    stats.print_stats_json(&config, Some(DEBOUNCE_US + 1000), &mut buf);
     let s = String::from_utf8(buf).unwrap();
     println!("JSON Output:\n{}", s); // Print JSON for debugging if test fails
 

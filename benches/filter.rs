@@ -1,6 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use intercept_bounce::config::Config; // Import Config
 use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::logger::{Logger, EventInfo, LogMessage};
+use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -85,63 +87,90 @@ fn bench_filter_check_event(c: &mut Criterion) {
     });
 }
 
+// Helper to create a dummy Config Arc for benches
+fn dummy_config(
+    debounce_us: u64,
+    log_all: bool,
+    log_bounces: bool,
+    log_interval_us: u64,
+    stats_json: bool,
+    verbose: bool,
+) -> Arc<Config> {
+    Arc::new(Config {
+        debounce_us,
+        log_interval_us,
+        log_all_events: log_all,
+        log_bounces,
+        stats_json,
+        verbose,
+    })
+}
+
+
 fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
     let (_sender, receiver) = bounded::<LogMessage>(1); // Channel not used in process_message directly
     let running = Arc::new(AtomicBool::new(true));
-    let debounce_us = 10_000;
+    let debounce_us = 10_000; // 10ms
 
     // Create sample EventInfo messages
-    let passed_info = create_event_info(10_000, 30, 1, false, None, Some(0)); // Passed event
+    let passed_info = create_event_info(debounce_us, 30, 1, false, None, Some(0)); // Passed event
     let bounced_info = create_event_info(15_000, 30, 1, true, Some(5_000), Some(10_000)); // Bounced event
     let near_miss_info = create_event_info(25_000, 30, 1, false, None, Some(10_000)); // Near miss passed event (diff 15000)
     let syn_info = create_syn_info(30_000); // SYN event
 
     // Benchmark processing messages with different logging configurations
     c.bench_function("logger::process_message_passed_no_log", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), false, false, 0, false, debounce_us, false); // No logging, not verbose
+        let cfg = dummy_config(debounce_us, false, false, 0, false, false); // No logging, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_bounced_no_log", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), false, false, 0, false, debounce_us, false); // No logging, not verbose
+        let cfg = dummy_config(debounce_us, false, false, 0, false, false); // No logging, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_passed_log_all", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, false); // Log all, not verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, false); // Log all, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_bounced_log_bounces", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), false, true, 0, false, debounce_us, false); // Log bounces, not verbose
+        let cfg = dummy_config(debounce_us, false, true, 0, false, false); // Log bounces, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_bounced_log_all", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, false); // Log all, not verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, false); // Log all, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_near_miss_log_all", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, false); // Log all, not verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, false); // Log all, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(near_miss_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_syn_log_all", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, false); // Log all, not verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, false); // Log all, not verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(syn_info.clone())); // SYN events should be skipped
         })
@@ -149,14 +178,16 @@ fn bench_logger_process_message(c: &mut Criterion) {
 
     // Add benchmarks with verbose logging enabled
     c.bench_function("logger::process_message_passed_log_all_verbose", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, true); // Log all, verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, true); // Log all, verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
         })
     });
 
     c.bench_function("logger::process_message_bounced_log_all_verbose", |b| {
-        let mut logger = Logger::new(receiver.clone(), running.clone(), true, false, 0, false, debounce_us, true); // Log all, verbose
+        let cfg = dummy_config(debounce_us, true, false, 0, false, true); // Log all, verbose
+        let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
         })
