@@ -54,11 +54,13 @@ pub struct Args {
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub list_devices: bool,
 
-    /// Output statistics as JSON to stderr on exit and periodic dump.
+    /// Output statistics as JSON format to stderr on exit and periodic dump.
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub stats_json: bool,
 
-    // Removed dangling doc comment for non-existent field
+    /// Enable verbose logging (internal state, thread startup, etc).
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub verbose: bool,
 }
 
 pub fn parse_args() -> Args {

@@ -28,3 +28,4 @@ crossbeam-channel = "0.5" # Added dependency
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
+criterion = "0.5" # Added criterion

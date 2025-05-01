@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github.com/numtide/flake-utils"; # Corrected flake-utils URL
   };
 
   outputs = {
@@ -19,7 +19,7 @@
         version = "0.6.0"; # Updated version
 
         src = ./.;
-        cargoHash = "sha256-t88QzISCYdgSum6nngQz42N52u9B/0zrz/+vlb849fw="; # Updated hash for 544425e
+        cargoHash = "sha256-t88QzISCYdgSum6nngQz42N52u9B/0zrz/+vlb849fw="; # Updated hash for 544425e - This hash will need updating after changes
 
         meta = {
           description = "Interception Tools bounce filter with statistics";

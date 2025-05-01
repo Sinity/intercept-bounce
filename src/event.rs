@@ -256,13 +256,14 @@ pub fn list_input_devices() -> io::Result<()> {
         };
 
         // Get supported event types bitmask using EVIOCGBIT ioctl
-        let mut capabilities = Vec::new();
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
+        let mut capabilities = Vec::new();
 
         let mut has_ev_key = false;
         match eviocgbit(fd, 0, &mut type_bits_buf) {
             Ok(_) => {
+                if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
                 if is_bit_set(&type_bits_buf, EV_KEY as usize) {
                     capabilities.push("EV_KEY (Keyboard)");
                     has_ev_key = true;
@@ -272,7 +273,6 @@ pub fn list_input_devices() -> io::Result<()> {
                 if is_bit_set(&type_bits_buf, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
                 if is_bit_set(&type_bits_buf, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
                 if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
-                if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
             }
             Err(e) => {
                 eprintln!(
@@ -286,6 +286,7 @@ pub fn list_input_devices() -> io::Result<()> {
             }
         }
 
+        // Only print devices that have EV_KEY capability
         if has_ev_key {
             eprintln!(
                 "{}",

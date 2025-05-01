@@ -10,7 +10,7 @@ use input_linux_sys::input_event;
 
 /// Holds the minimal state required for bounce filtering decisions.
 ///
-/// This struct only stores the timestamp of the last *passed* event
+/// This struct only stores the timestamp (in microseconds) of the last *passed* event
 /// for each key code and value combination. It does not store historical
 /// statistics; that responsibility is delegated to the `Logger` thread.
 #[derive(Debug)] // Add Debug derive
