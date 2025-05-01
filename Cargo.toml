@@ -1,6 +1,6 @@
 [package]
 name = "intercept-bounce"
-version = "0.6.0" # Updated version
+version = "0.6.0"
 edition = "2021"
 authors = ["sinity <ezo.dev@gmail.com>"]
 description = "An Interception Tools filter to eliminate keyboard chatter (switch bounce)."
@@ -21,15 +21,14 @@ phf             = { version = "0.11", features = ["macros"] }
 libc            = "0.2"
 serde           = { version = "1.0", features = ["derive"] }
 serde_json      = "1.0"
-colored         = "2.1"
 chrono          = "0.4"
-crossbeam-channel = "0.5" # Added dependency
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
-criterion = "0.5" # Added criterion
+criterion = "0.5"
 
 [[bench]]
 name     = "filter"
-harness  = false     # Criterion supplies its own harness
+harness  = false

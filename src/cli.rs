@@ -3,7 +3,7 @@ use clap::Parser;
 /// An Interception Tools filter to eliminate keyboard chatter (switch bounce).
 /// Reads Linux input events from stdin, filters rapid duplicate key events,
 /// and writes the filtered events to stdout. Statistics are printed to stderr on exit.
-#[derive(Parser, Debug, Clone)] // Added Clone derive
+#[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
@@ -41,6 +41,11 @@ pub struct Args {
     /// Periodically dump statistics to stderr every S seconds (default: 0 = disabled).
     #[arg(long, default_value = "0", value_name = "SECONDS")]
     pub log_interval: u64,
+
+    /// Threshold for logging "near-miss" events (milliseconds). Passed key events
+    /// occurring within this time of the previous passed event are logged/counted. (Default: 100ms)
+    #[arg(long, default_value = "100", value_name = "MS")]
+    pub near_miss_threshold_time: u64,
 
     /// Log details of *every* incoming event to stderr ([PASS] or [DROP]).
     #[arg(long, action = clap::ArgAction::SetTrue)]

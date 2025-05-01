@@ -108,12 +108,12 @@ static KEY_NAMES: phf::Map<u16, &'static str> = phf::phf_map! {
     127u16 => "KEY_COMPOSE",
 };
 
-#[inline] // Add inline hint
+#[inline]
 pub fn get_key_name(code: u16) -> &'static str {
     KEY_NAMES.get(&code).copied().unwrap_or("UNKNOWN")
 }
 
-#[inline] // Add inline hint
+#[inline]
 pub fn get_event_type_name(type_: u16) -> &'static str {
     match i32::from(type_) {
         EV_SYN => "EV_SYN",

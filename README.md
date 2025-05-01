@@ -32,6 +32,10 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 >   * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
 >   * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
 >   * Setting `--debounce-time 0` effectively disables filtering.
+>* `--near-miss-threshold-time <MS>`:
+>   * Sets the time threshold in milliseconds for identifying "near-miss" events (default: `100`).
+>   * Passed key events occurring within this time of the previous passed event for the same key/value are counted and reported in the statistics as near-misses. This helps identify keys that might be *almost* bouncing or have inconsistent timing just outside the debounce window.
+>   * Setting this to `0` effectively disables near-miss tracking.
 > * `--log-interval <SECONDS>`:
 >   * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
 > * `--log-all-events`:
@@ -100,7 +104,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
         LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd" # Replace/adjust this!
 
     # --- Example 3: Logging Only Bounced Events ---
-    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20 --log-bounces | uinput -d $DEVNODE"
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ... # Replace ... with your device link"
       DEVICE:
         LINK: "/dev/input/by-id/usb-Another_Keyboard_*-event-kbd" # Replace this!
     ```
@@ -131,7 +135,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 1.  **Decoupled Processing:** Runs independently from the main event pipeline.
 2.  **Receives Event Info:** Waits for `EventInfo` messages from the main thread via the channel.
-3.  **Statistics Accumulation:** Updates detailed statistics (overall counts, per-key drop counts, bounce timings, near-miss timings) based on the received `EventInfo`. It maintains both cumulative stats for the entire run and interval stats for periodic reporting.
+3.  **Statistics Accumulation:** Updates detailed statistics (overall counts, per-key drop counts, bounce timings, near-miss timings) based on the received `EventInfo`. It maintains both cumulative stats for the entire run and interval stats for periodic reporting. Near-miss events are counted if they pass the filter and occur within the configured `--near-miss-threshold-time` of the previous passed event for the same key/value.
 4.  **Event Logging:** If `--log-all-events` or `--log-bounces` is enabled, formats and prints the relevant event details to standard error. `EV_SYN` and `EV_MSC` events are skipped in `--log-all-events` mode for cleaner output.
 5.  **Periodic Stats:** If `--log-interval` is set, this thread periodically calculates and prints the *interval* statistics (stats accumulated since the last dump) to standard error, then resets the interval counters.
 6.  **Final Stats:** When the main thread signals shutdown (by closing the channel), the logger thread finishes processing any remaining messages and returns the final *cumulative* statistics object to the main thread.
@@ -140,14 +144,14 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 Statistics provide insight into the filter's operation and are collected by the logger thread. **Final cumulative statistics are printed to stderr on exit** (clean EOF or signal termination).
 
-*   **Status Header:** Shows the configured debounce threshold and the status of logging flags.
+*   **Status Header:** Shows the configured debounce and near-miss thresholds and the status of logging flags.
 *   **Runtime:** Total duration from the first event seen to the last event seen by the main thread.
 *   **Overall Statistics:** Total key events processed, passed, and dropped, along with the percentage dropped.
 *   **Dropped Event Statistics:** A detailed breakdown for each key where events were dropped:
     *   Grouped by key code (e.g., `KEY_A (30)`).
     *   Shows drop counts for each state (`Press (1)`, `Release (0)`). *Note: Repeat (2) events are not debounced, so drop counts for repeats should always be zero.*
     *   Includes **Bounce Time** statistics (Min / Avg / Max) indicating the time difference between the dropped event and the previous *passed* event of the same type.
-*   **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within 100ms of the previous *passed* event for that specific key code and value. Timings (Min / Avg / Max) relative to the previous event are shown.
+*   **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within the configured `--near-miss-threshold-time` of the previous *passed* event for that specific key code and value. Timings (Min / Avg / Max) relative to the previous event are shown.
 *   **Periodic Logging (`--log-interval`):** If set > 0, the *interval* statistics block (stats accumulated since the last dump) is printed periodically by the logger thread.
 *   **JSON Output (`--stats-json`):** Outputs final and periodic statistics in JSON format for easier machine parsing.
 
@@ -183,21 +187,22 @@ This will prevent your typed characters from appearing amidst the log output.
 
 ---
 
-## Additional Ideas for README
+## Additional Ideas
 
 - **Configuration tips:**
   - How to choose a good debounce time for your keyboard.
   - How to test for chatter using `--log-all-events` and `--log-bounces`.
 - **Performance:**
   - `intercept-bounce` is designed to be fast and low-overhead, suitable for real-time input pipelines. Benchmarks can be run using `cargo bench`.
-- **Extending the tool:**
-  - How to contribute new features (e.g., per-key debounce times, configuration files).
 - **Security:**
   - `intercept-bounce` does not require root itself, but you may need root to access input devices.
 - **Platform support:**
   - Only tested on Linux with Interception Tools.
 - **Contact:**
   - For bugs, feature requests, or questions, open an issue on [GitHub](https://github.com/sinity/intercept-bounce).
+- **Systemd Service Unit:** Provide a ready-to-use `.service` file example.
+- **Install Script:** A simple script to build and install (e.g., to `/usr/local/bin`).
+- **Logging to File:** Instead of just stderr, allow logging directly to a specified file.
 
 ## License
 
