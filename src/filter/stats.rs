@@ -1,20 +1,41 @@
 use std::collections::HashMap;
 use crate::filter::keynames::get_key_name;
 use serde::Serialize;
+use colored::*;
 
 /// Statistics for a specific key value (press/release/repeat).
-#[derive(Default, Debug, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct KeyValueStats {
     pub count: u64,
     pub timings_us: Vec<u64>,
 }
 
+impl Default for KeyValueStats {
+    fn default() -> Self {
+        // Generous: pre-allocate timings vector
+        KeyValueStats {
+            count: 0,
+            timings_us: Vec::with_capacity(1024),
+        }
+    }
+}
+
 /// Aggregated statistics for a specific key code.
-#[derive(Default, Debug, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct KeyStats {
     pub press: KeyValueStats,
     pub release: KeyValueStats,
     pub repeat: KeyValueStats,
+}
+
+impl Default for KeyStats {
+    fn default() -> Self {
+        KeyStats {
+            press: KeyValueStats::default(),
+            release: KeyValueStats::default(),
+            repeat: KeyValueStats::default(),
+        }
+    }
 }
 
 /// Top-level statistics collector for all events.
@@ -31,12 +52,16 @@ pub struct StatsCollector {
 
 impl StatsCollector {
     pub fn new() -> Self {
+        StatsCollector::with_capacity(1024)
+    }
+
+    pub fn with_capacity(cap: usize) -> Self {
         StatsCollector {
             key_events_processed: 0,
             key_events_passed: 0,
             key_events_dropped: 0,
-            per_key_stats: HashMap::with_capacity(1024),
-            per_key_passed_near_miss_timing: HashMap::with_capacity(1024),
+            per_key_stats: HashMap::with_capacity(cap),
+            per_key_passed_near_miss_timing: HashMap::with_capacity(cap),
             first_event_us: None,
             last_event_us: None,
         }
@@ -66,7 +91,7 @@ impl StatsCollector {
     }
 
     pub fn record_near_miss(&mut self, key: (u16, i32), diff: u64) {
-        self.per_key_passed_near_miss_timing.entry(key).or_default().push(diff);
+        self.per_key_passed_near_miss_timing.entry(key).or_insert_with(|| Vec::with_capacity(128)).push(diff);
     }
 
     /// Print human-readable stats to stderr.
@@ -77,33 +102,72 @@ impl StatsCollector {
         log_bounces: bool,
         log_interval_us: u64,
     ) {
-        eprintln!("--- intercept-bounce status ---");
-        eprintln!("Debounce Threshold: {}",
-            format_us(debounce_time_us));
-        eprintln!("Log All Events (--log-all-events): {}", if log_all_events { "Active" } else { "Inactive" });
-        eprintln!("Log Bounces (--log-bounces): {}", if log_bounces { "Active" } else { "Inactive" });
-        eprintln!("Periodic Log Interval (--log-interval): {}", if log_interval_us > 0 { format!("Every {} seconds", log_interval_us / 1_000_000) } else { "Disabled".to_string() });
+        eprintln!("{}", "--- intercept-bounce status ---".bold().blue());
+        eprintln!(
+            "{} {}",
+            "Debounce Threshold:".bold(),
+            format_us(debounce_time_us).yellow()
+        );
+        eprintln!(
+            "{} {}",
+            "Log All Events (--log-all-events):".bold(),
+            if log_all_events { "Active".green() } else { "Inactive".dimmed() }
+        );
+        eprintln!(
+            "{} {}",
+            "Log Bounces (--log-bounces):".bold(),
+            if log_bounces { "Active".green() } else { "Inactive".dimmed() }
+        );
+        eprintln!(
+            "{} {}",
+            "Periodic Log Interval (--log-interval):".bold(),
+            if log_interval_us > 0 {
+                format!("Every {} seconds", log_interval_us / 1_000_000).yellow()
+            } else {
+                "Disabled".dimmed().to_string()
+            }
+        );
 
-        eprintln!("\n--- Overall Statistics ---");
-        eprintln!("Key Events Processed: {}", self.key_events_processed);
-        eprintln!("Key Events Passed:    {}", self.key_events_passed);
-        eprintln!("Key Events Dropped:   {}", self.key_events_dropped);
+        eprintln!("\n{}", "--- Overall Statistics ---".bold().blue());
+        eprintln!(
+            "{} {}",
+            "Key Events Processed:".bold(),
+            self.key_events_processed
+        );
+        eprintln!(
+            "{} {}",
+            "Key Events Passed:   ".bold(),
+            self.key_events_passed
+        );
+        eprintln!(
+            "{} {}",
+            "Key Events Dropped:  ".bold(),
+            self.key_events_dropped
+        );
         let percentage = if self.key_events_processed > 0 {
             (self.key_events_dropped as f64 / self.key_events_processed as f64) * 100.0
         } else {
             0.0
         };
-        eprintln!("Percentage Dropped:   {:.2}%", percentage);
+        eprintln!(
+            "{} {:.2}%",
+            "Percentage Dropped:  ".bold(),
+            percentage
+        );
 
         if let (Some(first), Some(last)) = (self.first_event_us, self.last_event_us) {
             let duration = last.saturating_sub(first);
-            eprintln!("Total runtime: {}", format_us(duration));
+            eprintln!(
+                "{} {}",
+                "Total runtime:".bold(),
+                format_us(duration).yellow()
+            );
         }
 
         if !self.per_key_stats.is_empty() {
-            eprintln!("\n--- Dropped Event Statistics Per Key ---");
-            eprintln!("Format: Key [Name] (Code):");
-            eprintln!("  State (Value): Drop Count (Bounce Time: Min / Avg / Max)");
+            eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".bold().blue());
+            eprintln!("{}", "Format: Key [Name] (Code):".dimmed());
+            eprintln!("{}", "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)".dimmed());
 
             let mut sorted_keys: Vec<_> = self.per_key_stats.keys().collect();
             sorted_keys.sort();
@@ -114,21 +178,30 @@ impl StatsCollector {
                     let total_drops_for_key = stats.press.count + stats.release.count + stats.repeat.count;
 
                     if total_drops_for_key > 0 {
-                        eprintln!("\nKey [{}] ({}):", key_name, key_code);
+                        eprintln!(
+                            "\n{}",
+                            format!("Key [{}] ({}):", key_name, key_code).bold().cyan()
+                        );
 
                         let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
                             if value_stats.count > 0 {
-                                eprint!("  {:<7} ({}): {}", value_name, value_code, value_stats.count);
+                                eprint!(
+                                    "  {:<7} ({}): {}",
+                                    value_name,
+                                    value_code,
+                                    value_stats.count.to_string().red().bold()
+                                );
                                 if !value_stats.timings_us.is_empty() {
                                     let timings = &value_stats.timings_us;
                                     let min = timings.iter().min().unwrap_or(&0);
                                     let max = timings.iter().max().unwrap_or(&0);
                                     let sum: u64 = timings.iter().sum();
                                     let avg = sum as f64 / timings.len() as f64;
-                                    eprintln!(" (Bounce Time: {} / {} / {})",
-                                        format_us(*min),
-                                        format_us(avg as u64),
-                                        format_us(*max)
+                                    eprintln!(
+                                        " (Bounce Time: {} / {} / {})",
+                                        format_us(*min).yellow(),
+                                        format_us(avg as u64).yellow(),
+                                        format_us(*max).yellow()
                                     );
                                 } else {
                                     eprintln!(" (No timing data collected)");
@@ -143,12 +216,20 @@ impl StatsCollector {
                 }
             }
         } else {
-            eprintln!("\n--- No key events dropped ---");
+            eprintln!(
+                "\n{}",
+                "--- No key events dropped ---".green().bold()
+            );
         }
 
         if !self.per_key_passed_near_miss_timing.is_empty() {
-            eprintln!("\n--- Passed Event Near-Miss Statistics (Passed within 100ms) ---");
-            eprintln!("Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)");
+            eprintln!(
+                "\n{}",
+                "--- Passed Event Near-Miss Statistics (Passed within 100ms) ---"
+                    .bold()
+                    .blue()
+            );
+            eprintln!("{}", "Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)".dimmed());
 
             let mut sorted_near_misses: Vec<_> = self.per_key_passed_near_miss_timing.iter().collect();
             sorted_near_misses.sort_by_key(|(k, _)| *k);
@@ -160,19 +241,28 @@ impl StatsCollector {
                     let max = timings.iter().max().unwrap_or(&0);
                     let sum: u64 = timings.iter().sum();
                     let avg = sum as f64 / timings.len() as f64;
-                    eprintln!("  Key [{}] ({}, {}): {} (Timings: {} / {} / {})",
-                        key_name, code, value, timings.len(),
-                        format_us(*min),
-                        format_us(avg as u64),
-                        format_us(*max)
+                    eprintln!(
+                        "  Key [{}] ({}, {}): {} (Timings: {} / {} / {})",
+                        key_name,
+                        code,
+                        value,
+                        timings.len().to_string().yellow(),
+                        format_us(*min).yellow(),
+                        format_us(avg as u64).yellow(),
+                        format_us(*max).yellow()
                     );
                 }
             }
         } else {
-            eprintln!("\n--- No near-miss events recorded (< 100ms) ---");
+            eprintln!(
+                "\n{}",
+                "--- No near-miss events recorded (< 100ms) ---"
+                    .green()
+                    .bold()
+            );
         }
 
-        eprintln!("----------------------------------------------------------");
+        eprintln!("{}", "----------------------------------------------------------".blue().bold());
     }
 
     /// Print JSON stats to the given writer (e.g. stderr).

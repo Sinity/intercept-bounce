@@ -5,6 +5,7 @@ use crate::event::{event_microseconds, is_key_event};
 use input_linux_sys::{input_event, EV_SYN};
 use std::collections::HashMap;
 use std::io::{self, Write};
+use colored::*;
 
 use keynames::{get_key_name, get_event_type_name};
 use stats::StatsCollector;
@@ -25,16 +26,17 @@ pub struct BounceFilter {
 
 impl BounceFilter {
     pub fn new(debounce_time_ms: u64, log_interval_s: u64, log_all_events: bool, log_bounces: bool) -> Self {
+        // Generous memory: pre-allocate large hashmaps and vectors
         BounceFilter {
             debounce_time_us: debounce_time_ms * 1_000,
             log_interval_us: log_interval_s * 1_000_000,
             log_all_events,
             log_bounces,
-            last_event_us: HashMap::with_capacity(1024),
-            last_any_event_us: HashMap::with_capacity(1024),
+            last_event_us: HashMap::with_capacity(4096),
+            last_any_event_us: HashMap::with_capacity(4096),
             first_event_us: None,
             last_event_was_syn: true,
-            stats: StatsCollector::new(),
+            stats: StatsCollector::with_capacity(4096),
             last_stats_dump_time_us: None,
         }
     }
@@ -72,7 +74,7 @@ impl BounceFilter {
         let previous_last_passed_us = self.last_event_us.get(&key).copied();
 
         if self.log_all_events && self.last_event_was_syn {
-            eprintln!("--- Event Packet ---");
+            eprintln!("{}", "--- Event Packet ---".blue().bold());
         }
 
         let mut bounce_diff_us: Option<u64> = None;
@@ -121,7 +123,12 @@ impl BounceFilter {
                 None => true,
             };
             if dump_needed {
-                eprintln!("\n--- Periodic Stats Dump (Time: {} µs) ---", event_us);
+                eprintln!(
+                    "\n{} {} {}",
+                    "--- Periodic Stats Dump (Time:".magenta().bold(),
+                    event_us,
+                    "µs) ---".magenta().bold()
+                );
                 if std::env::args().any(|a| a == "--stats-json") {
                     self.stats.print_stats_json(
                         self.debounce_time_us,
@@ -132,7 +139,7 @@ impl BounceFilter {
                     );
                 }
                 let _ = self.print_stats(&mut io::stderr());
-                eprintln!("-------------------------------------------\n");
+                eprintln!("{}", "-------------------------------------------\n".magenta().bold());
                 self.last_stats_dump_time_us = Some(event_us);
             }
         }
@@ -148,7 +155,11 @@ impl BounceFilter {
         bounce_diff_us: Option<u64>,
         previous_last_passed_us: Option<u64>,
     ) {
-        let status = if is_bounce { "[DROP]" } else { "[PASS]" };
+        let status = if is_bounce {
+            "[DROP]".red().bold()
+        } else {
+            "[PASS]".green().bold()
+        };
         let relative_us = event_us.saturating_sub(self.first_event_us.unwrap_or(event_us));
         let relative_time_str = Self::format_timestamp_relative(relative_us);
         let type_name = get_event_type_name(event.type_);
@@ -183,7 +194,13 @@ impl BounceFilter {
 
         eprintln!(
             "{}{}{} {} ({}) {}{}",
-            indentation, status, relative_time_str, type_name, event.type_, padded_details, timing_info
+            indentation,
+            status,
+            relative_time_str,
+            type_name.cyan(),
+            event.type_,
+            padded_details,
+            timing_info
         );
     }
 
@@ -194,8 +211,14 @@ impl BounceFilter {
         let key_name = get_key_name(code);
 
         eprint!(
-            "[DROP] Timestamp: {} µs, Type: {} ({}), Code: {} [{}], Value: {}",
-            event_us, event.type_, type_name, code, key_name, value
+            "{} {} µs, Type: {} ({}), Code: {} [{}], Value: {}",
+            "[DROP]".red().bold(),
+            event_us,
+            type_name.cyan(),
+            event.type_,
+            code,
+            key_name,
+            value
         );
         if let Some(diff) = bounce_diff_us {
             eprint!(", Bounce Diff: {}", Self::format_us(diff));

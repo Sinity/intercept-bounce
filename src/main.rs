@@ -1,5 +1,5 @@
 use std::io;
-use std::process::exit;
+use std::process::{exit, Command};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -7,30 +7,61 @@ use std::sync::{
 
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
+use colored::*;
 
 mod cli;
 mod event;
 mod filter;
 
-use event::{read_event, write_event, list_input_devices}; // Import the new function
+use event::{read_event, write_event, list_input_devices};
 use filter::BounceFilter;
+
+/// Set process niceness to -20 if possible (warn if not permitted).
+fn set_high_priority() {
+    #[cfg(target_os = "linux")]
+    {
+        use libc::{setpriority, PRIO_PROCESS};
+        unsafe {
+            let res = setpriority(PRIO_PROCESS, 0, -20);
+            if res != 0 {
+                eprintln!(
+                    "{}",
+                    "Warning: Unable to set process niceness to -20 (try running as root or with CAP_SYS_NICE)."
+                        .yellow()
+                );
+            } else {
+                eprintln!("{}", "Process priority set to -20 (highest)".green());
+            }
+        }
+    }
+}
 
 fn main() -> io::Result<()> {
     let args = cli::parse_args();
 
+    // Set high priority for the process (if possible)
+    set_high_priority();
+
     // Check for the list_devices flag first
     if args.list_devices {
-        // Running in device listing mode
-        eprintln!("Scanning input devices (requires root)...");
+        eprintln!("{}", "Scanning input devices (requires root)...".cyan());
         match list_input_devices() {
-            Ok(_) => {}, // Success, nothing more to do
+            Ok(_) => {},
             Err(e) => {
-                eprintln!("Error listing devices: {}", e);
-                eprintln!("Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges.");
-                exit(1); // Exit with an error code
+                eprintln!(
+                    "{} {}",
+                    "Error listing devices:".red().bold(),
+                    e
+                );
+                eprintln!(
+                    "{}",
+                    "Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges."
+                        .yellow()
+                );
+                exit(2); // Exit with a specific error code for device listing failure
             }
         }
-        return Ok(()); // Exit after listing devices
+        return Ok(());
     }
 
     // Proceed with normal filtering mode
@@ -52,7 +83,11 @@ fn main() -> io::Result<()> {
     std::thread::spawn(move || {
         if let Some(sig) = signals.forever().next() {
             if !printed_clone.swap(true, Ordering::SeqCst) {
-                eprintln!("\nReceived signal {}, printing final stats and exiting.", sig);
+                eprintln!(
+                    "\n{} {}",
+                    "Received signal, printing final stats and exiting:".yellow(),
+                    sig
+                );
                 match filter_clone.lock() {
                     Ok(filter) => {
                         if stats_json {
@@ -67,7 +102,7 @@ fn main() -> io::Result<()> {
                         let _ = filter.print_stats(&mut io::stderr());
                     }
                     Err(poisoned) => {
-                        eprintln!("Error: BounceFilter mutex was poisoned during signal handling!");
+                        eprintln!("{}", "Error: BounceFilter mutex was poisoned during signal handling!".red());
                         let filter = poisoned.into_inner();
                         if stats_json {
                             filter.stats.print_stats_json(
@@ -90,28 +125,41 @@ fn main() -> io::Result<()> {
     let mut stdout_locked = io::stdout().lock();
 
     // Main event processing loop
-    while let Some(ev) = read_event(&mut stdin_locked)? {
-        let is_bounce = bounce_filter
-            .lock()
-            .expect("FATAL: BounceFilter mutex poisoned in main event loop.")
-            .process_event(&ev);
+    while let Some(ev) = match read_event(&mut stdin_locked) {
+        Ok(ev) => ev,
+        Err(e) => {
+            eprintln!("{} {}", "Error reading input event:".red().bold(), e);
+            exit(3);
+        }
+    } {
+        let is_bounce = match bounce_filter.lock() {
+            Ok(mut filter) => filter.process_event(&ev),
+            Err(poisoned) => {
+                eprintln!("{}", "FATAL: BounceFilter mutex poisoned in main event loop.".red().bold());
+                let mut filter = poisoned.into_inner();
+                filter.process_event(&ev)
+            }
+        };
 
         if !is_bounce {
-            write_event(&mut stdout_locked, &ev)?;
+            if let Err(e) = write_event(&mut stdout_locked, &ev) {
+                eprintln!("{} {}", "Error writing output event:".red().bold(), e);
+                exit(4);
+            }
         }
-    } // EOF reached
+    }
 
     // Print final statistics on clean exit
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
-         match bounce_filter.lock() {
-             Ok(filter) => {
-                 let _ = filter.print_stats(&mut io::stderr()); // Ignore errors writing stats at exit
-             },
-             Err(poisoned) => {
-                 eprintln!("Error: BounceFilter mutex was poisoned on clean exit!");
-                 let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
-             }
-         }
+        match bounce_filter.lock() {
+            Ok(filter) => {
+                let _ = filter.print_stats(&mut io::stderr());
+            },
+            Err(poisoned) => {
+                eprintln!("{}", "Error: BounceFilter mutex was poisoned on clean exit!".red());
+                let _ = poisoned.into_inner().print_stats(&mut io::stderr());
+            }
+        }
     }
 
     Ok(())
