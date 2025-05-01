@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write}; // Add Write trait here
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

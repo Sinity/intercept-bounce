@@ -11,9 +11,7 @@ use chrono;
 use keynames::{get_key_name, get_event_type_name};
 use stats::StatsCollector;
 
-// Unit tests module
-#[cfg(test)]
-mod tests;
+// Unit tests moved to tests/filter_tests.rs
 
 /// Holds the state for bounce filtering.
 pub struct BounceFilter {
@@ -21,13 +19,13 @@ pub struct BounceFilter {
     pub log_interval_us: u64,
     pub log_all_events: bool,
     pub log_bounces: bool,
-    last_event_us: HashMap<(u16, i32), u64>,
-    last_any_event_us: HashMap<u16, u64>,
-    // first_event_us: Option<u64>, // Removed, use overall_first_event_us
-    overall_first_event_us: Option<u64>, // Timestamp of the very first event processed
-    overall_last_event_us: Option<u64>,  // Timestamp of the very last event processed
-    last_event_was_syn: bool,
-    pub stats: StatsCollector, // cumulative
+    last_event_us: HashMap<(u16, i32), u64>, // Timestamp of last *passed* event for (code, value)
+    last_any_event_us: HashMap<u16, u64>, // Timestamp of last event (any value) for code
+    // first_event_us: Option<u64>, // Removed
+    pub overall_first_event_us: Option<u64>, // Timestamp of the very first event processed
+    pub overall_last_event_us: Option<u64>,  // Timestamp of the very last event processed
+    last_event_was_syn: bool, // Flag to help group log output
+    pub stats: StatsCollector, // Cumulative statistics
     interval_stats: StatsCollector, // reset after each interval dump
     last_stats_dump_time_us: Option<u64>,
 }

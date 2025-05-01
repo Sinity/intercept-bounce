@@ -2,6 +2,19 @@ use std::collections::HashMap;
 use crate::filter::keynames::get_key_name;
 use serde::Serialize;
 use colored::*;
+use std::collections::HashMap;
+use crate::filter::keynames::get_key_name;
+use serde::Serialize;
+
+/// Metadata included in JSON statistics output.
+#[derive(Serialize)]
+pub struct Meta {
+    pub debounce_time_us: u64,
+    pub log_all_events: bool,
+    pub log_bounces: bool,
+    pub log_interval_us: u64,
+}
+
 
 /// Statistics for a specific key value (press/release/repeat).
 #[derive(Debug, Serialize)]
@@ -280,13 +293,8 @@ impl StatsCollector {
 
     /// Print JSON stats to the given writer (e.g. stderr).
     pub fn print_stats_json(&self, debounce_time_us: u64, log_all_events: bool, log_bounces: bool, log_interval_us: u64, mut writer: impl std::io::Write) {
-        #[derive(Serialize)]
-        pub struct Meta { // Made public for use in main.rs signal handler
-            pub debounce_time_us: u64,
-            pub log_all_events: bool,
-            log_bounces: bool,
-            log_interval_us: u64,
-        }
+        // Meta struct moved outside this function
+
         // Removed first_event_us and last_event_us from JSON output as well
         #[derive(Serialize)]
         struct FilteredStats<'a> {
@@ -319,11 +327,11 @@ impl StatsCollector {
             log_bounces,
             log_interval_us,
         };
-        // TODO: If JSON output is desired, the caller (BounceFilter or main)
-        // should calculate the runtime and potentially add it to the Output struct here.
+        // The caller (main.rs) now constructs the final JSON output including runtime
         let output = Output { meta, stats: filtered_stats };
         let _ = serde_json::to_writer_pretty(&mut writer, &output);
-        let _ = writeln!(writer);
+        // Remove the writeln! here, let the caller handle final newline if needed
+        // let _ = writeln!(writer);
     }
 }
 

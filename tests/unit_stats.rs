@@ -50,15 +50,7 @@ fn test_stats_collector_json_output() {
     assert!(s.contains("\"repeat\""));
 }
 
-#[test]
-fn test_stats_collector_runtime_fields() {
-    let mut stats = StatsCollector::new();
-    stats.record_event(30, 1, false, None, 1000);
-    stats.record_event(30, 1, false, None, 2000);
-    stats.record_event(30, 1, false, None, 3000);
-    assert_eq!(stats.first_event_us, Some(1000));
-    assert_eq!(stats.last_event_us, Some(3000));
-}
+// Removed test_stats_collector_runtime_fields as these fields are gone from StatsCollector
 
 // Additional test: ensure stats are correct for only passed events
 #[test]

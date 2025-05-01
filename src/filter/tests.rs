@@ -32,7 +32,7 @@ mod tests {
                 tv_sec: (ts_us / 1_000_000) as i64,
                 tv_usec: (ts_us % 1_000_000) as i64,
             },
-            type_: EV_SYN, // Example: SYN event
+            type_: EV_SYN as u16, // Cast i32 constant to u16
             code: 0,       // SYN_REPORT
             value: 0,
         }
