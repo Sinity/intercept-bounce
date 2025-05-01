@@ -19,6 +19,7 @@
         version = "0.5.0";
 
         src = ./.;
+        # cargoHash is already correct
         cargoHash = "sha256-CujsfmtAl54/qiMz1X+gpBcHokkd3irkE2J6eD4ktEw=";
 
         meta = {
