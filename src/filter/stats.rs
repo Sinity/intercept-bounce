@@ -169,12 +169,13 @@ impl StatsCollector {
     // Note: runtime_us is no longer calculated or printed here.
     // It's calculated from BounceFilter state and printed in main.rs.
     pub fn print_stats_to_stderr(
-        &self, // Corrected: Only one &self
-        debounce_time_us: u64,
-        log_all_events: bool,
-        log_bounces: bool,
-        log_interval_us: u64,
+        &self,
+        config: &crate::config::Config,
     ) {
+        let debounce_time_us = config.debounce_us;
+        let log_all_events = config.log_all_events;
+        let log_bounces = config.log_bounces;
+        let log_interval_us = config.log_interval_us;
         // --- Configuration Summary ---
         // Display the settings the filter was running with.
         eprintln!("{}", "--- intercept-bounce status ---".on_bright_black().bold().blue().underline());
@@ -380,13 +381,14 @@ impl StatsCollector {
     /// Includes runtime provided externally (calculated in main thread).
     pub fn print_stats_json(
         &self,
-        debounce_time_us: u64,
-        log_all_events: bool,
-        log_bounces: bool,
-        log_interval_us: u64,
-        runtime_us: Option<u64>, // Runtime is passed in
-        mut writer: impl Write, // Use std::io::Write
+        config: &crate::config::Config,
+        runtime_us: Option<u64>,
+        mut writer: impl Write,
     ) {
+        let debounce_time_us = config.debounce_us;
+        let log_all_events = config.log_all_events;
+        let log_bounces = config.log_bounces;
+        let log_interval_us = config.log_interval_us;
         // --- Data Preparation for Serialization ---
         // To avoid serializing potentially huge arrays with mostly default values,
         // we collect only the keys with non-zero drop counts or non-empty near-miss timings

@@ -16,17 +16,17 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration; // Added Duration for check_interval
 
-// Application modules
 mod cli;
 mod event;
 mod filter;
-mod logger; // Include the new logger module
+mod logger;
+mod config;
 
-// Specific imports
-use event::{list_input_devices, read_event_raw, write_event_raw, event_microseconds}; // Use raw I/O functions, added event_microseconds
+use config::Config;
+use event::{list_input_devices, read_event_raw, write_event_raw, event_microseconds};
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
-use filter::stats::StatsCollector; // Import StatsCollector for final result type
+use filter::stats::StatsCollector;
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -109,42 +109,37 @@ fn main() -> io::Result<()> {
     // Proceed with normal filtering mode
     set_high_priority(verbose); // Attempt to increase priority
 
+    // Unified config struct
+    let cfg = Arc::new(Config::from(&args));
+
     // Shared state setup
-    if verbose { eprintln!("{}", "[MAIN] Setting up shared state (BounceFilter, AtomicBools)...".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Setting up shared state (BounceFilter, AtomicBools)...".dimmed()); }
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));
     let final_stats_printed = Arc::new(AtomicBool::new(false));
     let main_running = Arc::new(AtomicBool::new(true)); // Flag for main loop
     let logger_running = Arc::new(AtomicBool::new(true)); // Flag for logger loop
-    if verbose { eprintln!("{}", "[MAIN] Shared state initialized.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Shared state initialized.".dimmed()); }
 
     // --- Channel for Main -> Logger communication ---
-    if verbose { eprintln!("{}", "[MAIN] Creating bounded channel for logger communication...".dimmed()); }
-    // Use a bounded channel to prevent unbounded memory growth if the logger falls behind.
-    // A capacity of 1024 should be sufficient for most bursts.
-    // Note: Channel capacity might need tuning based on expected event rates.
+    if cfg.verbose { eprintln!("{}", "[MAIN] Creating bounded channel for logger communication...".dimmed()); }
     let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1024);
-    if verbose { eprintln!("{}", "[MAIN] Channel created with capacity 1024.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Channel created with capacity 1024.".dimmed()); }
 
     // --- Logger Thread ---
-    if verbose { eprintln!("{}", "[MAIN] Spawning logger thread...".dimmed()); }
-    let logger_args = args.clone(); // Clone args for the logger thread
-    let logger_running_clone_for_logger = Arc::clone(&logger_running); // Clone for logger thread
+    if cfg.verbose { eprintln!("{}", "[MAIN] Spawning logger thread...".dimmed()); }
+    let logger_cfg = Arc::clone(&cfg);
+    let logger_running_clone_for_logger = Arc::clone(&logger_running);
     let logger_handle: JoinHandle<StatsCollector> = thread::spawn(move || {
         let mut logger = Logger::new(
             log_receiver,
-            logger_running_clone_for_logger, // Pass the atomic flag
-            logger_args.log_all_events,
-            logger_args.log_bounces,
-            logger_args.log_interval,
-            logger_args.stats_json,
-            logger_args.debounce_time * 1000, // Pass debounce time in µs
-            logger_args.verbose, // Pass verbose flag to logger
+            logger_running_clone_for_logger,
+            logger_cfg,
         );
-        let final_stats = logger.run(); // Returns final StatsCollector when done
-        if logger_args.verbose { eprintln!("{}", "[LOGGER] Logger run loop finished. Returning final stats.".dimmed()); }
+        let final_stats = logger.run();
+        // Use config.verbose for logger thread
         final_stats
     });
-    if verbose { eprintln!("{}", "[MAIN] Logger thread spawned.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Logger thread spawned.".dimmed()); }
 
 
     // --- Signal Handling Thread ---
@@ -183,8 +178,8 @@ fn main() -> io::Result<()> {
     if verbose { eprintln!("{}", "[MAIN] Entering main event loop.".dimmed()); }
     let stdin_fd = io::stdin().as_raw_fd();
     let stdout_fd = io::stdout().as_raw_fd();
-    let debounce_time_us = args.debounce_time * 1000; // Convert ms to µs once
-    if verbose { eprintln!("{}", format!("[MAIN] Using stdin_fd: {}, stdout_fd: {}, debounce_time_us: {}", stdin_fd, stdout_fd, debounce_time_us).dimmed()); }
+    let debounce_time_us = cfg.debounce_us;
+    if cfg.verbose { eprintln!("{}", format!("[MAIN] Using stdin_fd: {}, stdout_fd: {}, debounce_time_us: {}", stdin_fd, stdout_fd, debounce_time_us).dimmed()); }
 
 
     // State for managing logger communication backpressure
@@ -194,30 +189,30 @@ fn main() -> io::Result<()> {
         currently_dropping: false,
         total_dropped_log_messages: 0,
     };
-    if verbose { eprintln!("{}", "[MAIN] MainState initialized.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] MainState initialized.".dimmed()); }
 
 
     // How often to check the running flag when read is interrupted.
     let check_interval = Duration::from_millis(100);
-    if verbose { eprintln!("{}", format!("[MAIN] Read check_interval: {:?}", check_interval).dimmed()); }
+    if cfg.verbose { eprintln!("{}", format!("[MAIN] Read check_interval: {:?}", check_interval).dimmed()); }
 
 
     while main_running.load(Ordering::SeqCst) {
-        if verbose { eprintln!("{}", "[MAIN] Loop iteration: Checking main_running flag (true).".dimmed()); }
-        if verbose { eprintln!("{}", "[MAIN] Attempting to read event from stdin...".dimmed()); }
+        if cfg.verbose { eprintln!("{}", "[MAIN] Loop iteration: Checking main_running flag (true).".dimmed()); }
+        if cfg.verbose { eprintln!("{}", "[MAIN] Attempting to read event from stdin...".dimmed()); }
         match read_event_raw(stdin_fd) {
             Ok(Some(ev)) => {
                 let event_us = event_microseconds(&ev);
-                if verbose { eprintln!("{}", format!("[MAIN] Read event: type={}, code={}, value={}, ts_us={}", ev.type_, ev.code, ev.value, event_us).dimmed()); }
+                if cfg.verbose { eprintln!("{}", format!("[MAIN] Read event: type={}, code={}, value={}, ts_us={}", ev.type_, ev.code, ev.value, event_us).dimmed()); }
 
-                if verbose { eprintln!("{}", "[MAIN] Locking BounceFilter mutex...".dimmed()); }
+                if cfg.verbose { eprintln!("{}", "[MAIN] Locking BounceFilter mutex...".dimmed()); }
                 let (is_bounce, diff_us, last_passed_us) = {
                     // Lock filter only for the check_event call
                     match bounce_filter.lock() {
                         Ok(mut filter) => {
-                            if verbose { eprintln!("{}", "[MAIN] BounceFilter mutex locked successfully.".dimmed()); }
+                            if cfg.verbose { eprintln!("{}", "[MAIN] BounceFilter mutex locked successfully.".dimmed()); }
                             let result = filter.check_event(&ev, debounce_time_us);
-                            if verbose { eprintln!("{}", format!("[MAIN] BounceFilter check_event returned: {:?}", result).dimmed()); }
+                            if cfg.verbose { eprintln!("{}", format!("[MAIN] BounceFilter check_event returned: {:?}", result).dimmed()); }
                             result
                         },
                         Err(poisoned) => {
@@ -225,12 +220,12 @@ fn main() -> io::Result<()> {
                             // Attempt to continue with the poisoned guard, might be inconsistent
                             let mut filter = poisoned.into_inner();
                             let result = filter.check_event(&ev, debounce_time_us);
-                            if verbose { eprintln!("{}", format!("[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed()); }
+                            if cfg.verbose { eprintln!("{}", format!("[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed()); }
                             result
                         }
                     }
                 }; // Mutex unlocked here
-                if verbose { eprintln!("{}", "[MAIN] BounceFilter mutex unlocked.".dimmed()); }
+                if cfg.verbose { eprintln!("{}", "[MAIN] BounceFilter mutex unlocked.".dimmed()); }
 
 
                 // Prepare message for logger thread
@@ -242,7 +237,7 @@ fn main() -> io::Result<()> {
                     last_passed_us,
                 };
                 // Cannot print EventInfo directly due to input_event not implementing Debug
-                if verbose {
+                if cfg.verbose {
                     eprintln!("{}", format!(
                         "[MAIN] Prepared EventInfo for logger: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
                         event_info.event.type_, event_info.event.code, event_info.event.value, event_info.event_us, event_info.is_bounce, event_info.diff_us, event_info.last_passed_us
@@ -251,63 +246,59 @@ fn main() -> io::Result<()> {
 
 
                 // Send event info to logger thread (non-blocking)
-                if verbose { eprintln!("{}", "[MAIN] Attempting to send EventInfo to logger channel...".dimmed()); }
+                if cfg.verbose { eprintln!("{}", "[MAIN] Attempting to send EventInfo to logger channel...".dimmed()); }
                 match main_state.log_sender.try_send(LogMessage::Event(event_info)) {
                     Ok(_) => {
-                        if verbose { eprintln!("{}", "[MAIN] Successfully sent EventInfo to logger.".dimmed()); }
-                        // If we were dropping, print a recovery message once
+                        if cfg.verbose { eprintln!("{}", "[MAIN] Successfully sent EventInfo to logger.".dimmed()); }
                         if main_state.currently_dropping {
                             eprintln!("{}", "[INFO] Logger channel caught up, resuming logging.".dimmed());
                             main_state.currently_dropping = false;
                         }
                     }
                     Err(TrySendError::Full(_)) => {
-                        // Channel is full, drop the message
                         main_state.total_dropped_log_messages += 1;
                         if !main_state.warned_about_dropping {
                             eprintln!("{}", "[WARN] Logger channel full, dropping log messages to maintain performance.".yellow());
-                            main_state.warned_about_dropping = true; // Warn only once per session
+                            main_state.warned_about_dropping = true;
                             main_state.currently_dropping = true;
                         }
-                        if verbose { eprintln!("{}", format!("[MAIN] Logger channel full. Dropped log message. Total dropped: {}", main_state.total_dropped_log_messages).dimmed()); }
+                        if cfg.verbose { eprintln!("{}", format!("[MAIN] Logger channel full. Dropped log message. Total dropped: {}", main_state.total_dropped_log_messages).dimmed()); }
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        // Logger thread likely panicked or exited early
                         eprintln!("{}", "[ERROR] Logger channel disconnected unexpectedly.".red());
-                        if verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to logger channel disconnect.".dimmed()); }
-                        main_running.store(false, Ordering::SeqCst); // Stop main loop
-                        if verbose { eprintln!("{}", "[MAIN] Breaking main loop due to logger channel disconnect.".dimmed()); }
-                        break; // Exit loop immediately
+                        if cfg.verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to logger channel disconnect.".dimmed()); }
+                        main_running.store(false, Ordering::SeqCst);
+                        if cfg.verbose { eprintln!("{}", "[MAIN] Breaking main loop due to logger channel disconnect.".dimmed()); }
+                        break;
                     }
                 }
 
                 // Write event to stdout if it wasn't a bounce
                 if !is_bounce {
-                    if verbose { eprintln!("{}", "[MAIN] Event passed filter. Attempting to write to stdout...".dimmed()); }
+                    if cfg.verbose { eprintln!("{}", "[MAIN] Event passed filter. Attempting to write to stdout...".dimmed()); }
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
-                        // Handle broken pipe gracefully (downstream closed)
                         if e.kind() == ErrorKind::BrokenPipe {
                             eprintln!("{}", "[INFO] Output pipe broken, exiting.".dimmed());
-                            if verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to BrokenPipe.".dimmed()); }
-                            main_running.store(false, Ordering::SeqCst); // Signal exit
-                            if verbose { eprintln!("{}", "[MAIN] Breaking main loop due to BrokenPipe.".dimmed()); }
-                            break; // Exit loop
+                            if cfg.verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to BrokenPipe.".dimmed()); }
+                            main_running.store(false, Ordering::SeqCst);
+                            if cfg.verbose { eprintln!("{}", "[MAIN] Breaking main loop due to BrokenPipe.".dimmed()); }
+                            break;
                         } else {
                             eprintln!(
                                 "{} {}",
                                 "Error writing output event:".on_bright_black().red().bold(),
                                 e
                             );
-                            if verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to write error.".dimmed()); }
-                            main_running.store(false, Ordering::SeqCst); // Signal exit
-                            if verbose { eprintln!("{}", "[MAIN] Breaking main loop due to write error.".dimmed()); }
-                            break; // Exit loop gracefully to allow shutdown
+                            if cfg.verbose { eprintln!("{}", "[MAIN] Setting main_running flag to false due to write error.".dimmed()); }
+                            main_running.store(false, Ordering::SeqCst);
+                            if cfg.verbose { eprintln!("{}", "[MAIN] Breaking main loop due to write error.".dimmed()); }
+                            break;
                         }
                     } else {
-                         if verbose { eprintln!("{}", "[MAIN] Successfully wrote event to stdout.".dimmed()); }
+                        if cfg.verbose { eprintln!("{}", "[MAIN] Successfully wrote event to stdout.".dimmed()); }
                     }
                 } else {
-                    if verbose { eprintln!("{}", "[MAIN] Event dropped by filter. Not writing to stdout.".dimmed()); }
+                    if cfg.verbose { eprintln!("{}", "[MAIN] Event dropped by filter. Not writing to stdout.".dimmed()); }
                 }
             }
             Ok(None) => {
@@ -348,107 +339,83 @@ fn main() -> io::Result<()> {
         }
     }
 
-    if verbose { eprintln!("{}", "[MAIN] Main event loop finished.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Main event loop finished.".dimmed()); }
 
     // --- Shutdown ---
-    if verbose { eprintln!("{}", "[MAIN] Starting shutdown process.".dimmed()); }
-    // Drop the sender to signal the logger thread to exit (redundant with atomic flag, but good practice).
-    if verbose { eprintln!("{}", "[MAIN] Dropping main_state.log_sender.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Starting shutdown process.".dimmed()); }
     drop(main_state.log_sender);
-    if verbose { eprintln!("{}", "[MAIN] log_sender dropped.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] log_sender dropped.".dimmed()); }
 
-
-    // Wait for the logger thread to finish and collect the final stats.
-    if verbose { eprintln!("{}", "[MAIN] Waiting for logger thread to join...".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Waiting for logger thread to join...".dimmed()); }
     let final_stats = match logger_handle.join() {
         Ok(stats) => {
-            if verbose { eprintln!("{}", "[MAIN] Logger thread joined successfully.".dimmed()); }
+            if cfg.verbose { eprintln!("{}", "[MAIN] Logger thread joined successfully.".dimmed()); }
             stats
         }
         Err(e) => {
             eprintln!("{} {:?}", "[ERROR] Logger thread panicked:".red().bold(), e);
-            if verbose { eprintln!("{}", "[MAIN] Logger thread panicked. Returning default stats.".dimmed()); }
-            // Return default/empty stats if logger panicked
+            if cfg.verbose { eprintln!("{}", "[MAIN] Logger thread panicked. Returning default stats.".dimmed()); }
             StatsCollector::with_capacity()
         }
     };
-    if verbose { eprintln!("{}", "[MAIN] Logger thread joined. Final stats collected.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Logger thread joined. Final stats collected.".dimmed()); }
 
-
-    // Print final statistics if they haven't been printed by the signal handler already.
-    // The signal handler now only sets the flag, it doesn't print stats itself.
-    if verbose { eprintln!("{}", "[MAIN] Checking final_stats_printed flag before printing.".dimmed()); }
+    if cfg.verbose { eprintln!("{}", "[MAIN] Checking final_stats_printed flag before printing.".dimmed()); }
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
-        if verbose { eprintln!("{}", "[MAIN] Final stats flag was not set. Proceeding to print final stats.".dimmed()); }
-        // Get runtime from the BounceFilter
-        if verbose { eprintln!("{}", "[MAIN] Locking BounceFilter mutex to get runtime...".dimmed()); }
+        if cfg.verbose { eprintln!("{}", "[MAIN] Final stats flag was not set. Proceeding to print final stats.".dimmed()); }
         let runtime_us = {
             match bounce_filter.lock() {
                 Ok(filter) => {
-                    if verbose { eprintln!("{}", "[MAIN] BounceFilter mutex locked for runtime calculation.".dimmed()); }
+                    if cfg.verbose { eprintln!("{}", "[MAIN] BounceFilter mutex locked for runtime calculation.".dimmed()); }
                     let rt = filter.get_runtime_us();
-                    if verbose { eprintln!("{}", format!("[MAIN] BounceFilter runtime_us: {:?}", rt).dimmed()); }
+                    if cfg.verbose { eprintln!("{}", format!("[MAIN] BounceFilter runtime_us: {:?}", rt).dimmed()); }
                     rt
                 },
                 Err(_) => {
                     eprintln!("{}", "[WARN] BounceFilter mutex poisoned during final runtime calculation.".yellow());
-                    if verbose { eprintln!("{}", "[MAIN] BounceFilter mutex poisoned. Cannot get runtime.".dimmed()); }
-                    None // Cannot get runtime if poisoned
+                    if cfg.verbose { eprintln!("{}", "[MAIN] BounceFilter mutex poisoned. Cannot get runtime.".dimmed()); }
+                    None
                 }
             }
         };
-        if verbose { eprintln!("{}", "[MAIN] BounceFilter mutex unlocked after runtime calculation.".dimmed()); }
+        if cfg.verbose { eprintln!("{}", "[MAIN] BounceFilter mutex unlocked after runtime calculation.".dimmed()); }
 
-
-        // Use the final_stats collected from the logger thread.
-        if args.stats_json {
-            if verbose { eprintln!("{}", "[MAIN] Printing final stats in JSON format.".dimmed()); }
+        if cfg.stats_json {
+            if cfg.verbose { eprintln!("{}", "[MAIN] Printing final stats in JSON format.".dimmed()); }
             final_stats.print_stats_json(
-                args.debounce_time * 1000, // Pass debounce time in µs
-                args.log_all_events,
-                args.log_bounces,
-                args.log_interval * 1_000_000, // Pass interval in µs
+                &cfg,
                 runtime_us,
-                &mut io::stderr().lock(), // Lock stderr for writing
+                &mut io::stderr().lock(),
             );
-            if verbose { eprintln!("{}", "[MAIN] Finished printing final stats in JSON format.".dimmed()); }
+            if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing final stats in JSON format.".dimmed()); }
         } else {
-            if verbose { eprintln!("{}", "[MAIN] Printing final stats in human-readable format.".dimmed()); }
-            final_stats.print_stats_to_stderr(
-                args.debounce_time * 1000, // Pass debounce time in µs
-                args.log_all_events,
-                args.log_bounces,
-                args.log_interval * 1_000_000, // Pass interval in µs
-            );
-            if verbose { eprintln!("{}", "[MAIN] Finished printing main stats block.".dimmed()); }
-            // Print runtime separately in human-readable mode
+            if cfg.verbose { eprintln!("{}", "[MAIN] Printing final stats in human-readable format.".dimmed()); }
+            final_stats.print_stats_to_stderr(&cfg);
+            if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing main stats block.".dimmed()); }
             if let Some(rt) = runtime_us {
-                 eprintln!(
-                     "{} {}",
-                     "Total Runtime:".on_bright_black().bold().bright_white(),
-                     filter::stats::format_us(rt).on_bright_black().bright_yellow().bold()
-                 );
-                 eprintln!("{}", "----------------------------------------------------------".on_bright_black().blue().bold());
-                 if verbose { eprintln!("{}", "[MAIN] Finished printing runtime.".dimmed()); }
+                eprintln!(
+                    "{} {}",
+                    "Total Runtime:".on_bright_black().bold().bright_white(),
+                    filter::stats::format_us(rt).on_bright_black().bright_yellow().bold()
+                );
+                eprintln!("{}", "----------------------------------------------------------".on_bright_black().blue().bold());
+                if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing runtime.".dimmed()); }
             } else {
-                 if verbose { eprintln!("{}", "[MAIN] Runtime not available.".dimmed()); }
+                if cfg.verbose { eprintln!("{}", "[MAIN] Runtime not available.".dimmed()); }
             }
         }
-        // Print total dropped log messages if any occurred
         if main_state.total_dropped_log_messages > 0 {
-             eprintln!(
-                 "{} {}",
-                 "[WARN] Total log messages dropped due to logger backpressure:".yellow().bold(),
-                 main_state.total_dropped_log_messages.to_string().on_bright_black().yellow().bold()
-             );
-             if verbose { eprintln!("{}", "[MAIN] Finished printing dropped log message count.".dimmed()); }
+            eprintln!(
+                "{} {}",
+                "[WARN] Total log messages dropped due to logger backpressure:".yellow().bold(),
+                main_state.total_dropped_log_messages.to_string().on_bright_black().yellow().bold()
+            );
+            if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing dropped log message count.".dimmed()); }
         } else {
-             if verbose { eprintln!("{}", "[MAIN] No log messages were dropped.".dimmed()); }
+            if cfg.verbose { eprintln!("{}", "[MAIN] No log messages were dropped.".dimmed()); }
         }
     } else {
-        // This path is expected when shutdown is initiated by a signal.
-        // The signal handler already set the flag. No need to print anything here.
-        if verbose { eprintln!("{}", "[MAIN] Final statistics flag was already set (expected on signal). Skipping final stats print in main.".dimmed()); }
+        if cfg.verbose { eprintln!("{}", "[MAIN] Final statistics flag was already set (expected on signal). Skipping final stats print in main.".dimmed()); }
     }
 
     eprintln!("{}", "[MAIN] Application exiting successfully.".dimmed());

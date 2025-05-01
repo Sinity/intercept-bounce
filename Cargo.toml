@@ -29,3 +29,7 @@ crossbeam-channel = "0.5" # Added dependency
 assert_cmd = "2.0"
 predicates = "3.0"
 criterion = "0.5" # Added criterion
+
+[[bench]]
+name     = "filter"
+harness  = false     # Criterion supplies its own harness
