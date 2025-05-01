@@ -117,9 +117,13 @@ pub fn list_input_devices() -> io::Result<()> {
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
 
+        let mut has_ev_key = false;
         match eviocgbit(fd, 0, &mut type_bits_buf) {
             Ok(_) => {
-                if is_bit_set(&type_bits_buf, EV_KEY as usize) { capabilities.push("EV_KEY (Keyboard)"); }
+                if is_bit_set(&type_bits_buf, EV_KEY as usize) {
+                    capabilities.push("EV_KEY (Keyboard)");
+                    has_ev_key = true;
+                }
                 if is_bit_set(&type_bits_buf, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
                 if is_bit_set(&type_bits_buf, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
                 if is_bit_set(&type_bits_buf, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
@@ -133,19 +137,20 @@ pub fn list_input_devices() -> io::Result<()> {
             }
         }
 
-        eprintln!("{:<15} {:<30} {}",
-            path_str,
-            device_name,
-            capabilities.join(", ")
-        );
+        if has_ev_key {
+            eprintln!("{:<15} {:<30} {}",
+                path_str,
+                device_name,
+                capabilities.join(", ")
+            );
+        }
 
         // File closes automatically when dropped
         drop(file);
     }
 
     eprintln!("-------------------------------------------------------------------");
-    eprintln!("Devices with 'EV_KEY (Keyboard)' capability are most likely keyboards.");
-    eprintln!("(This tool does not try to guess or filter for you: please check the capabilities column above.)");
+    eprintln!("Only devices with 'EV_KEY (Keyboard)' capability are shown above.");
     eprintln!("You will likely need to run this command with `sudo`.");
 
     Ok(())
