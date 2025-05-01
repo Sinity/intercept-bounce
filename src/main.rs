@@ -153,7 +153,6 @@ fn main() -> io::Result<()> {
     let main_running_clone = Arc::clone(&main_running);
     let logger_running_clone_for_signal = Arc::clone(&logger_running); // Clone logger flag for signal handler
     let final_stats_printed_clone = Arc::clone(&final_stats_printed);
-    let log_sender_clone = log_sender.clone(); // Clone sender for signal handler
 
     thread::spawn(move || {
         eprintln!("{}", "[SIGNAL] Signal handling thread started.".dimmed());
@@ -168,9 +167,6 @@ fn main() -> io::Result<()> {
             main_running_clone.store(false, Ordering::SeqCst);
             eprintln!("{}", "[SIGNAL] Setting logger_running flag to false.".dimmed());
             logger_running_clone_for_signal.store(false, Ordering::SeqCst); // Signal logger thread directly
-            // Dropping the sender signals the logger thread to shut down.
-            eprintln!("{}", "[SIGNAL] Dropping log_sender clone to signal logger.".dimmed());
-            drop(log_sender_clone);
             // Set flag to prevent double printing if main loop also exits cleanly.
             eprintln!("{}", "[SIGNAL] Setting final_stats_printed flag to true.".dimmed());
             final_stats_printed_clone.store(true, Ordering::SeqCst);
