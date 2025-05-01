@@ -19,7 +19,7 @@
         version = "0.5.0";
 
         src = ./.;
-        cargoHash = "sha256-t9qhridOtKlIn0FVPDfNBrbphilbuEtY2icikqJMgOw=";
+        cargoHash = "sha256-CujsfmtAl54/qiMz1X+gpBcHokkd3irkE2J6eD4ktEw=";
 
         meta = {
           description = "Interception Tools bounce filter with statistics";

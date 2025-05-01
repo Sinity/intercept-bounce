@@ -6,6 +6,7 @@ use input_linux_sys::{input_event, EV_SYN};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use colored::*;
+use chrono;
 
 use keynames::{get_key_name, get_event_type_name};
 use stats::StatsCollector;
@@ -217,12 +218,14 @@ impl BounceFilter {
                 ));
             } else {
                 timing_info.push_str(
-                    ", ".to_string()
-                        + &"First passed event of this type"
-                            .on_bright_black()
-                            .bright_cyan()
-                            .bold()
-                            .to_string(),
+                    ", "
+                );
+                timing_info.push_str(
+                    &"First passed event of this type"
+                        .on_bright_black()
+                        .bright_cyan()
+                        .bold()
+                        .to_string()
                 );
             }
         } else {
