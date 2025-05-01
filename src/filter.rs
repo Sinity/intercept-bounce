@@ -169,11 +169,11 @@ impl BounceFilter {
 
             if is_bounce {
                 if let Some(diff) = bounce_diff_us {
-                    timing_info.push_str(&format!(" Bounce Diff: {}", Self::format_us(diff)));
+                    timing_info.push_str(&format!(" Bounce Diff: {}", crate::filter::stats::format_us(diff)));
                 }
             } else if let Some(prev) = previous_last_passed_us {
                 let time_since_last_passed = event_us.saturating_sub(prev);
-                timing_info.push_str(&format!(" Time since last passed: {}", Self::format_us(time_since_last_passed)));
+                timing_info.push_str(&format!(" Time since last passed: {}", crate::filter::stats::format_us(time_since_last_passed)));
             } else {
                 timing_info.push_str(", First passed event of this type");
             }
@@ -213,7 +213,7 @@ impl BounceFilter {
             value
         );
         if let Some(diff) = bounce_diff_us {
-            eprint!(", Bounce Diff: {}", Self::format_us(diff));
+            eprint!(", Bounce Diff: {}", crate::filter::stats::format_us(diff));
         }
         eprintln!();
     }
