@@ -387,6 +387,7 @@ impl StatsCollector {
     }
 }
 
+#[inline] // Add inline hint
 pub fn format_us(us: u64) -> String {
     if us >= 1000 {
         format!("{:.1} ms", us as f64 / 1000.0)

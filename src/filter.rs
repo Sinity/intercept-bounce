@@ -19,6 +19,7 @@ pub struct BounceFilter {
     pub log_interval_us: u64,
     pub log_all_events: bool,
     pub log_bounces: bool,
+    pub stats_json: bool, // Store the flag here
     last_event_us: Box<[[u64; 3]; 1024]>, // [keycode][value] = last passed event timestamp
     last_any_event_us: Box<[u64; 1024]>, // [keycode] = last event timestamp (any value)
     pub overall_first_event_us: Option<u64>, // Timestamp of the very first event processed
@@ -167,7 +168,8 @@ impl BounceFilter {
                     chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string().on_bright_black().bright_yellow().bold(),
                     ") ---".magenta().bold()
                 );
-                if std::env::args().any(|a| a == "--stats-json") {
+                // Use the stored stats_json flag instead of checking env::args
+                if self.stats_json {
                     eprintln!("{}", "Cumulative stats:".on_bright_black().bold().bright_white());
                     // Calculate overall runtime for cumulative stats
                     let overall_runtime = self.overall_last_event_us.and_then(|last| {

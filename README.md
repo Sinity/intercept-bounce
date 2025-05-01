@@ -100,7 +100,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 ### Debouncing Logic
 
-`intercept-bounce` filters events based on a simple time threshold. It works by remembering the timestamp of the last *passed* event for each unique combination of `(key_code, key_value)`. The `key_value` represents the key state: `1` for press, `0` for release, and `2` for repeat.
+`intercept-bounce` filters events based on a simple time threshold. It uses pre-allocated arrays indexed by key code and value for efficient state tracking, minimizing overhead in the hot path. It remembers the timestamp of the last *passed* event for each unique combination of `(key_code, key_value)`. The `key_value` represents the key state: `1` for press, `0` for release, and `2` for repeat.
 
 When a new **key event** arrives:
 
@@ -130,6 +130,7 @@ Statistics provide insight into the filter's operation and are **always collecte
 * **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within 100ms of the previous event for that specific key code and value. This can help identify keys that are close to the debounce threshold or exhibit borderline chatter. Timings (Min / Avg / Max) relative to the previous event are shown.
 * **Periodic Logging (`--log-interval`):** If set > 0, the full statistics block is also printed periodically during runtime, including both cumulative and interval (since last dump) stats.
 * **Event Logging (`--log-all-events`, `--log-bounces`):** Provides per-event details logged to stderr *after* the filtering decision, useful for fine-grained debugging.
+* **JSON Output (`--stats-json`):** Outputs statistics in JSON format for easier machine parsing.
 
 ## Troubleshooting / Notes
 

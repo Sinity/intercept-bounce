@@ -79,6 +79,7 @@ fn main() -> io::Result<()> {
         args.log_interval,
         args.log_all_events,
         args.log_bounces,
+        args.stats_json, // Pass the flag here
     )));
 
     let final_stats_printed = Arc::new(AtomicBool::new(false));
