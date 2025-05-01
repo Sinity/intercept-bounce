@@ -36,8 +36,9 @@ impl BounceFilter {
             log_interval_us: log_interval_s * 1_000_000,
             log_all_events,
             log_bounces,
-            last_event_us: Box::new([[0u64; 3]; 1024]),
-            last_any_event_us: Box::new([0u64; 1024]),
+            // Initialize with MAX to distinguish from timestamp 0
+            last_event_us: Box::new([[u64::MAX; 3]; 1024]),
+            last_any_event_us: Box::new([u64::MAX; 1024]),
             overall_first_event_us: None,
             overall_last_event_us: None,
             last_event_was_syn: true,
@@ -76,11 +77,20 @@ impl BounceFilter {
         let is_key = is_key_event(event);
         let key_code = event.code;
         let key_value = event.value;
-        let previous_last_passed_us = if (key_code as usize) < 1024 && (key_value as usize) < 3 {
-            let t = self.last_event_us[key_code as usize][key_value as usize];
-            if t == 0 { None } else { Some(t) }
+
+        // Get the timestamp of the last *passed* event for this specific key_code and value.
+        // Handle out-of-bounds codes/values gracefully.
+        let last_us_for_key_value = if (key_code as usize) < 1024 && (key_value as usize) < 3 {
+            self.last_event_us[key_code as usize][key_value as usize]
         } else {
+            u64::MAX // Treat out-of-bounds as if no event has passed
+        };
+
+        // Convert MAX to None, representing no previous passed event.
+        let previous_last_passed_us = if last_us_for_key_value == u64::MAX {
             None
+        } else {
+            Some(last_us_for_key_value)
         };
 
         if self.log_all_events && self.last_event_was_syn {
