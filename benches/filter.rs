@@ -2,10 +2,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{Logger, EventInfo, LogMessage};
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use crossbeam_channel::{bounded, Sender};
-use std::time::Duration;
+use crossbeam_channel::bounded;
+
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -56,7 +56,6 @@ fn bench_filter_check_event(c: &mut Criterion) {
 
     // Benchmark a passing scenario (first event or outside window)
     c.bench_function("filter::check_event_pass", |b| {
-        let mut filter_iter = BounceFilter::new();
         let event_iter = key_ev(0, 30, 1); // First event
         b.iter(|| {
             // Reset filter state for each iteration to simulate independent events

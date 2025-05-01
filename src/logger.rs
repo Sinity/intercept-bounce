@@ -24,6 +24,7 @@ pub enum LogMessage {
 }
 
 /// Detailed information about a single processed event, sent to the logger.
+#[derive(Clone)] // Added Clone derive
 // #[derive(Debug)] // input_event does not implement Debug
 pub struct EventInfo {
     /// The raw input event.
@@ -179,7 +180,7 @@ impl Logger {
 
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
-    fn process_message(&mut self, msg: LogMessage) {
+    pub fn process_message(&mut self, msg: LogMessage) { // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
                 // Cannot print EventInfo directly due to input_event not implementing Debug
