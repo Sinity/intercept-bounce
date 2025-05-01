@@ -1,5 +1,5 @@
 mod filter_stats;
-use filter_stats::{StatsCollector, KeyStats, KeyValueStats};
+use filter_stats::StatsCollector;
 
 #[test]
 fn test_stats_collector_basic_counts() {
