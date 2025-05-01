@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use intercept_bounce::filter::stats::{StatsCollector, KeyStats, KeyValueStats};
+mod filter_stats;
+use filter_stats::{StatsCollector, KeyStats, KeyValueStats};
 
 #[test]
 fn test_stats_collector_basic_counts() {
