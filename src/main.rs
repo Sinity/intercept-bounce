@@ -337,9 +337,9 @@ fn main() -> io::Result<()> {
         // This case should ideally not be reached with the current signal handling logic,
         // as the signal handler only sets the flag and drops the sender, it doesn't print stats.
         // Keep it as a defensive measure.
-        eprintln!("{}", "[DEBUG] Final statistics flag was already set.".dimmed());
+        eprintln!("[MAIN] Final statistics flag was already set (unexpected)."); // DEBUG
     }
-
+ 
     Ok(())
 }
 
