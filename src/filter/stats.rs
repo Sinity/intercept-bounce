@@ -46,6 +46,7 @@ impl Default for StatsCollector {
     }
 }
 
+#[allow(dead_code)]
 impl StatsCollector {
     pub fn new() -> Self {
         StatsCollector::with_capacity(1024)

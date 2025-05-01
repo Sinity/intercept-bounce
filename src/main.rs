@@ -1,5 +1,5 @@
 use std::io;
-use std::process::{exit, Command};
+use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
