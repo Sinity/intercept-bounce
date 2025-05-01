@@ -59,8 +59,6 @@ pub struct Args {
     pub stats_json: bool,
 
     /// Bypass all filtering and statistics, act as a simple passthrough pipe.
-    #[arg(long, action = clap::ArgAction::SetTrue)]
-    pub bypass: bool,
 }
 
 pub fn parse_args() -> Args {

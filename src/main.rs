@@ -39,63 +39,12 @@ fn set_high_priority() {
 fn main() -> io::Result<()> {
     let args = cli::parse_args();
 
-    // --- Bypass Mode ---
-    if args.bypass {
-        eprintln!("{}", "Bypass mode enabled: Acting as a simple passthrough.".yellow().bold());
-        let mut stdin_locked = io::stdin().lock();
-        let mut stdout_locked = io::stdout().lock();
-        while let Some(ev) = match read_event(&mut stdin_locked) {
-            Ok(ev) => ev,
-            Err(e) => {
-                eprintln!(
-                    "{} {}",
-                    "Bypass: Error reading input event:".on_bright_black().red().bold(),
-                    e
-                );
-                exit(3);
-            }
-        } {
-            if let Err(e) = write_event(&mut stdout_locked, &ev) {
-                // Handle broken pipe gracefully in bypass mode
-                if e.kind() == io::ErrorKind::BrokenPipe {
-                    eprintln!("{}", "Bypass: Output pipe broken, exiting.".yellow());
-                    break; // Exit loop cleanly
-                } else {
-                    eprintln!(
-                        "{} {}",
-                        "Bypass: Error writing output event:".on_bright_black().red().bold(),
-                        e
-                    );
-                    exit(4);
-                }
-            }
-            // Flush stdout immediately after writing each event in bypass mode
-            // to prevent buffering delays.
-            if let Err(e) = stdout_locked.flush() {
-                 if e.kind() == io::ErrorKind::BrokenPipe {
-                    eprintln!("{}", "Bypass: Output pipe broken on flush, exiting.".yellow());
-                    break; // Exit loop cleanly
-                } else {
-                    eprintln!(
-                        "{} {}",
-                        "Bypass: Error flushing stdout:".on_bright_black().red().bold(),
-                        e
-                    );
-                    // Treat flush errors seriously in bypass mode
-                    exit(5);
-                }
-            }
-        }
-        // In bypass mode, we just exit cleanly after the loop finishes (e.g., EOF or broken pipe)
-        return Ok(());
-    }
-
     // --- Normal Filtering Mode ---
 
-    // Set high priority for the process (if possible) - only needed for filtering mode
+    // Set high priority for the process (if possible)
     set_high_priority();
 
-    // Check for the list_devices flag first (already handled if bypass=false)
+    // Check for the list_devices flag first
     if args.list_devices {
         eprintln!(
             "{}",
@@ -123,9 +72,8 @@ fn main() -> io::Result<()> {
         }
         return Ok(());
     }
-    // list_devices check is now implicitly part of the non-bypass path
 
-    // Proceed with normal filtering mode (bypass is false)
+    // Proceed with normal filtering mode
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(
         args.debounce_time,
         args.log_interval,
