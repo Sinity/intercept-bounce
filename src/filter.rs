@@ -21,7 +21,8 @@ pub struct BounceFilter {
     last_any_event_us: HashMap<u16, u64>,
     first_event_us: Option<u64>,
     last_event_was_syn: bool,
-    pub stats: StatsCollector,
+    pub stats: StatsCollector, // cumulative
+    interval_stats: StatsCollector, // reset after each interval dump
     last_stats_dump_time_us: Option<u64>,
 }
 
@@ -38,6 +39,7 @@ impl BounceFilter {
             first_event_us: None,
             last_event_was_syn: true,
             stats: StatsCollector::with_capacity(4096),
+            interval_stats: StatsCollector::with_capacity(4096),
             last_stats_dump_time_us: None,
         }
     }
@@ -76,8 +78,8 @@ impl BounceFilter {
         }
 
         let mut bounce_diff_us: Option<u64> = None;
-        // Do not debounce key repeats (value == 2)
-        let is_bounce = if is_key && self.debounce_time_us > 0 && key_value != 2 {
+        // Debounce all key values, including repeats (value == 2)
+        let is_bounce = if is_key && self.debounce_time_us > 0 {
             match previous_last_passed_us {
                 Some(last_us) => {
                     if let Some(diff) = event_us.checked_sub(last_us) {
@@ -87,6 +89,7 @@ impl BounceFilter {
                         } else {
                             if diff < 100_000 {
                                 self.stats.record_near_miss(key, diff);
+                                self.interval_stats.record_near_miss(key, diff);
                             }
                             false
                         }
@@ -102,6 +105,7 @@ impl BounceFilter {
 
         if is_key {
             self.stats.record_event(key_code, key_value, is_bounce, bounce_diff_us, event_us);
+            self.interval_stats.record_event(key_code, key_value, is_bounce, bounce_diff_us, event_us);
             let _ = self.last_any_event_us.insert(key_code, event_us);
             if !is_bounce {
                 self.last_event_us.insert(key, event_us);
@@ -136,6 +140,7 @@ impl BounceFilter {
                     ") ---".magenta().bold()
                 );
                 if std::env::args().any(|a| a == "--stats-json") {
+                    eprintln!("{}", "Cumulative stats:".on_bright_black().bold().bright_white());
                     self.stats.print_stats_json(
                         self.debounce_time_us,
                         self.log_all_events,
@@ -143,10 +148,27 @@ impl BounceFilter {
                         self.log_interval_us,
                         std::io::stderr(),
                     );
+                    eprintln!("{}", "Interval stats (since last dump):".on_bright_black().bold().bright_white());
+                    self.interval_stats.print_stats_json(
+                        self.debounce_time_us,
+                        self.log_all_events,
+                        self.log_bounces,
+                        self.log_interval_us,
+                        std::io::stderr(),
+                    );
                 }
+                eprintln!("{}", "Cumulative stats:".on_bright_black().bold().bright_white());
                 let _ = self.print_stats(&mut io::stderr());
+                eprintln!("{}", "Interval stats (since last dump):".on_bright_black().bold().bright_white());
+                self.interval_stats.print_stats_to_stderr(
+                    self.debounce_time_us,
+                    self.log_all_events,
+                    self.log_bounces,
+                    self.log_interval_us,
+                );
                 eprintln!("{}", "-------------------------------------------\n".magenta().bold());
                 self.last_stats_dump_time_us = Some(now_us);
+                self.interval_stats = StatsCollector::with_capacity(4096);
             }
         }
 
