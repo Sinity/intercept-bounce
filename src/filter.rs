@@ -19,9 +19,8 @@ pub struct BounceFilter {
     pub log_interval_us: u64,
     pub log_all_events: bool,
     pub log_bounces: bool,
-    last_event_us: HashMap<(u16, i32), u64>, // Timestamp of last *passed* event for (code, value)
-    last_any_event_us: HashMap<u16, u64>, // Timestamp of last event (any value) for code
-    // first_event_us: Option<u64>, // Removed
+    last_event_us: Box<[[u64; 3]; 1024]>, // [keycode][value] = last passed event timestamp
+    last_any_event_us: Box<[u64; 1024]>, // [keycode] = last event timestamp (any value)
     pub overall_first_event_us: Option<u64>, // Timestamp of the very first event processed
     pub overall_last_event_us: Option<u64>,  // Timestamp of the very last event processed
     last_event_was_syn: bool, // Flag to help group log output
@@ -32,20 +31,18 @@ pub struct BounceFilter {
 
 impl BounceFilter {
     pub fn new(debounce_time_ms: u64, log_interval_s: u64, log_all_events: bool, log_bounces: bool) -> Self {
-        // Generous memory: pre-allocate large hashmaps and vectors
         BounceFilter {
             debounce_time_us: debounce_time_ms * 1_000,
             log_interval_us: log_interval_s * 1_000_000,
             log_all_events,
             log_bounces,
-            last_event_us: HashMap::with_capacity(4096),
-            last_any_event_us: HashMap::with_capacity(4096),
-            // first_event_us: None, // Removed
+            last_event_us: Box::new([[0u64; 3]; 1024]),
+            last_any_event_us: Box::new([0u64; 1024]),
             overall_first_event_us: None,
             overall_last_event_us: None,
             last_event_was_syn: true,
-            stats: StatsCollector::with_capacity(4096),
-            interval_stats: StatsCollector::with_capacity(4096),
+            stats: StatsCollector::with_capacity(),
+            interval_stats: StatsCollector::with_capacity(),
             last_stats_dump_time_us: None,
         }
     }
@@ -79,10 +76,12 @@ impl BounceFilter {
         let is_key = is_key_event(event);
         let key_code = event.code;
         let key_value = event.value;
-        let key = (key_code, key_value);
-        // Retrieve the timestamp of the last *passed* event for this specific key code *and* value.
-        // This ensures press (1) and release (0) events are debounced independently.
-        let previous_last_passed_us = self.last_event_us.get(&key).copied();
+        let previous_last_passed_us = if (key_code as usize) < 1024 && (key_value as usize) < 3 {
+            let t = self.last_event_us[key_code as usize][key_value as usize];
+            if t == 0 { None } else { Some(t) }
+        } else {
+            None
+        };
 
         if self.log_all_events && self.last_event_was_syn {
             eprintln!(
@@ -120,9 +119,11 @@ impl BounceFilter {
         if is_key {
             self.stats.record_event(key_code, key_value, is_bounce, bounce_diff_us, event_us);
             self.interval_stats.record_event(key_code, key_value, is_bounce, bounce_diff_us, event_us);
-            let _ = self.last_any_event_us.insert(key_code, event_us);
-            if !is_bounce {
-                self.last_event_us.insert(key, event_us);
+            if (key_code as usize) < 1024 {
+                self.last_any_event_us[key_code as usize] = event_us;
+                if !is_bounce && (key_value as usize) < 3 {
+                    self.last_event_us[key_code as usize][key_value as usize] = event_us;
+                }
             }
         }
 

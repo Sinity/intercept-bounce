@@ -21,9 +21,20 @@ pub struct KeyValueStats {
     pub timings_us: Vec<u64>,
 }
 
+impl KeyValueStats {
+    pub fn push_timing(&mut self, value: u64) {
+        if self.timings_us.len() == self.timings_us.capacity() {
+            // Double the capacity if full
+            let new_cap = self.timings_us.capacity().max(1024) * 2;
+            self.timings_us.reserve(new_cap - self.timings_us.capacity());
+        }
+        self.timings_us.push(value);
+    }
+}
+
 impl Default for KeyValueStats {
     fn default() -> Self {
-        // Generous: pre-allocate timings vector
+        // Pre-allocate timings vector to 1024
         KeyValueStats {
             count: 0,
             timings_us: Vec::with_capacity(1024),
@@ -45,8 +56,8 @@ pub struct StatsCollector {
     pub key_events_processed: u64,
     pub key_events_passed: u64,
     pub key_events_dropped: u64,
-    pub per_key_stats: HashMap<u16, KeyStats>,
-    pub per_key_passed_near_miss_timing: HashMap<(u16, i32), Vec<u64>>,
+    pub per_key_stats: Box<[KeyStats; 1024]>,
+    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; 3072]>,
     // Removed: These are now tracked in BounceFilter for overall duration
     // pub first_event_us: Option<u64>,
     // pub last_event_us: Option<u64>,
@@ -54,23 +65,26 @@ pub struct StatsCollector {
 
 impl Default for StatsCollector {
     fn default() -> Self {
-        StatsCollector::with_capacity(1024)
+        StatsCollector::with_capacity()
     }
 }
 
 #[allow(dead_code)]
 impl StatsCollector {
     pub fn new() -> Self {
-        StatsCollector::with_capacity(1024)
+        StatsCollector::with_capacity()
     }
 
-    pub fn with_capacity(cap: usize) -> Self {
+    pub fn with_capacity() -> Self {
+        // Pre-allocate all arrays and vectors
+        let per_key_stats = Box::new([(); 1024].map(|_| KeyStats::default()));
+        let per_key_passed_near_miss_timing = Box::new([(); 3072].map(|_| Vec::with_capacity(1024)));
         StatsCollector {
             key_events_processed: 0,
             key_events_passed: 0,
             key_events_dropped: 0,
-            per_key_stats: HashMap::with_capacity(cap),
-            per_key_passed_near_miss_timing: HashMap::with_capacity(cap),
+            per_key_stats,
+            per_key_passed_near_miss_timing,
             // first_event_us: None, // Removed
             // last_event_us: None, // Removed
         }
@@ -78,30 +92,36 @@ impl StatsCollector {
 
     pub fn record_event(&mut self, key_code: u16, key_value: i32, is_bounce: bool, bounce_diff_us: Option<u64>, _event_us: u64) {
         self.key_events_processed += 1;
-        // Removed timestamp tracking from StatsCollector
-        // self.last_event_us = Some(event_us);
-        // if self.first_event_us.is_none() {
-        //     self.first_event_us = Some(event_us);
-        // }
-        if is_bounce {
-            self.key_events_dropped += 1;
-            let key_stats = self.per_key_stats.entry(key_code).or_default();
+        if (key_code as usize) < 1024 {
+            let key_stats = &mut self.per_key_stats[key_code as usize];
             let value_stats = match key_value {
                 1 => &mut key_stats.press,
                 0 => &mut key_stats.release,
                 _ => &mut key_stats.repeat,
             };
-            value_stats.count += 1;
-            if let Some(diff) = bounce_diff_us {
-                value_stats.timings_us.push(diff);
+            if is_bounce {
+                self.key_events_dropped += 1;
+                value_stats.count += 1;
+                if let Some(diff) = bounce_diff_us {
+                    value_stats.push_timing(diff);
+                }
+            } else {
+                self.key_events_passed += 1;
             }
-        } else {
-            self.key_events_passed += 1;
         }
     }
 
     pub fn record_near_miss(&mut self, key: (u16, i32), diff: u64) {
-        self.per_key_passed_near_miss_timing.entry(key).or_insert_with(|| Vec::with_capacity(128)).push(diff);
+        let (key_code, key_value) = key;
+        if (key_code as usize) < 1024 && (key_value as usize) < 3 {
+            let idx = key_code as usize * 3 + key_value as usize;
+            let vec = &mut self.per_key_passed_near_miss_timing[idx];
+            if vec.len() == vec.capacity() {
+                let new_cap = vec.capacity().max(1024) * 2;
+                vec.reserve(new_cap - vec.capacity());
+            }
+            vec.push(diff);
+        }
     }
 
     /// Print human-readable stats to stderr.
@@ -183,82 +203,82 @@ impl StatsCollector {
         //     );
         // }
 
-        if !self.per_key_stats.is_empty() {
-            eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".on_bright_black().bold().blue().underline());
-            eprintln!("{}", "Format: Key [Name] (Code):".on_bright_black().dimmed());
-            eprintln!("{}", "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)".on_bright_black().dimmed());
+        let mut any_drops = false;
+        for key_code in 0..1024 {
+            let stats = &self.per_key_stats[key_code];
+            let key_name = get_key_name(key_code as u16).on_bright_black().bright_magenta().bold();
+            let total_drops_for_key = stats.press.count + stats.release.count + stats.repeat.count;
 
-            let mut sorted_keys: Vec<_> = self.per_key_stats.keys().collect();
-            sorted_keys.sort();
-
-            for key_code in sorted_keys {
-                if let Some(stats) = self.per_key_stats.get(key_code) {
-                    let key_name = get_key_name(*key_code).on_bright_black().bright_magenta().bold();
-                    let total_drops_for_key = stats.press.count + stats.release.count + stats.repeat.count;
-
-                    if total_drops_for_key > 0 {
-                        eprintln!(
-                            "\n{}",
-                            format!("Key [{}] ({}):", key_name, key_code).on_bright_black().bold().cyan()
-                        );
-
-                        let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
-                            if value_stats.count > 0 {
-                                eprint!(
-                                    "  {:<7} ({}): {}",
-                                    value_name.on_bright_black().bold().bright_yellow(),
-                                    value_code.to_string().on_bright_black().bright_blue().bold(),
-                                    value_stats.count.to_string().on_red().white().bold()
-                                );
-                                if !value_stats.timings_us.is_empty() {
-                                    let timings = &value_stats.timings_us;
-                                    let min = timings.iter().min().unwrap_or(&0);
-                                    let max = timings.iter().max().unwrap_or(&0);
-                                    let sum: u64 = timings.iter().sum();
-                                    let avg = sum as f64 / timings.len() as f64;
-                                    eprintln!(
-                                        " ({}: {} / {} / {})",
-                                        "Bounce Time".on_bright_black().bright_red().bold(),
-                                        format_us(*min).on_bright_black().bright_red().bold(),
-                                        format_us(avg as u64).on_bright_black().bright_yellow().bold(),
-                                        format_us(*max).on_bright_black().bright_red().bold()
-                                    );
-                                } else {
-                                    eprintln!("{}", " (No timing data collected)".on_bright_black().dimmed());
-                                }
-                            }
-                        };
-
-                        print_value_stats("Press", 1, &stats.press);
-                        print_value_stats("Release", 0, &stats.release);
-                        print_value_stats("Repeat", 2, &stats.repeat);
-                    }
+            if total_drops_for_key > 0 {
+                if !any_drops {
+                    eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".on_bright_black().bold().blue().underline());
+                    eprintln!("{}", "Format: Key [Name] (Code):".on_bright_black().dimmed());
+                    eprintln!("{}", "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)".on_bright_black().dimmed());
+                    any_drops = true;
                 }
+                eprintln!(
+                    "\n{}",
+                    format!("Key [{}] ({}):", key_name, key_code).on_bright_black().bold().cyan()
+                );
+
+                let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
+                    if value_stats.count > 0 {
+                        eprint!(
+                            "  {:<7} ({}): {}",
+                            value_name.on_bright_black().bold().bright_yellow(),
+                            value_code.to_string().on_bright_black().bright_blue().bold(),
+                            value_stats.count.to_string().on_red().white().bold()
+                        );
+                        if !value_stats.timings_us.is_empty() {
+                            let timings = &value_stats.timings_us;
+                            let min = timings.iter().min().unwrap_or(&0);
+                            let max = timings.iter().max().unwrap_or(&0);
+                            let sum: u64 = timings.iter().sum();
+                            let avg = sum as f64 / timings.len() as f64;
+                            eprintln!(
+                                " ({}: {} / {} / {})",
+                                "Bounce Time".on_bright_black().bright_red().bold(),
+                                format_us(*min).on_bright_black().bright_red().bold(),
+                                format_us(avg as u64).on_bright_black().bright_yellow().bold(),
+                                format_us(*max).on_bright_black().bright_red().bold()
+                            );
+                        } else {
+                            eprintln!("{}", " (No timing data collected)".on_bright_black().dimmed());
+                        }
+                    }
+                };
+
+                print_value_stats("Press", 1, &stats.press);
+                print_value_stats("Release", 0, &stats.release);
+                print_value_stats("Repeat", 2, &stats.repeat);
             }
-        } else {
+        }
+        if !any_drops {
             eprintln!(
                 "\n{}",
                 "--- No key events dropped ---".on_bright_black().green().bold()
             );
         }
 
-        if !self.per_key_passed_near_miss_timing.is_empty() {
-            eprintln!(
-                "\n{}",
-                "--- Passed Event Near-Miss Statistics (Passed within 100ms) ---"
-                    .on_bright_black()
-                    .bold()
-                    .blue()
-                    .underline()
-            );
-            eprintln!("{}", "Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)".on_bright_black().dimmed());
-
-            let mut sorted_near_misses: Vec<_> = self.per_key_passed_near_miss_timing.iter().collect();
-            sorted_near_misses.sort_by_key(|(k, _)| *k);
-
-            for ((code, value), timings) in sorted_near_misses {
+        let mut any_near_miss = false;
+        for key_code in 0..1024 {
+            for key_value in 0..3 {
+                let idx = key_code * 3 + key_value;
+                let timings = &self.per_key_passed_near_miss_timing[idx];
                 if !timings.is_empty() {
-                    let key_name = get_key_name(*code).on_bright_black().bright_magenta().bold();
+                    if !any_near_miss {
+                        eprintln!(
+                            "\n{}",
+                            "--- Passed Event Near-Miss Statistics (Passed within 100ms) ---"
+                                .on_bright_black()
+                                .bold()
+                                .blue()
+                                .underline()
+                        );
+                        eprintln!("{}", "Format: Key [Name] (Code, Value): Count (Timings: Min / Avg / Max)".on_bright_black().dimmed());
+                        any_near_miss = true;
+                    }
+                    let key_name = get_key_name(key_code as u16).on_bright_black().bright_magenta().bold();
                     let min = timings.iter().min().unwrap_or(&0);
                     let max = timings.iter().max().unwrap_or(&0);
                     let sum: u64 = timings.iter().sum();
@@ -266,8 +286,8 @@ impl StatsCollector {
                     eprintln!(
                         "  Key [{}] ({}, {}): {} ({}: {} / {} / {})",
                         key_name,
-                        code.to_string().on_bright_black().bright_blue().bold(),
-                        value.to_string().on_bright_black().bright_yellow().bold(),
+                        key_code.to_string().on_bright_black().bright_blue().bold(),
+                        key_value.to_string().on_bright_black().bright_yellow().bold(),
                         timings.len().to_string().on_bright_black().bright_yellow().bold(),
                         "Timings".on_bright_black().bright_green().bold(),
                         format_us(*min).on_bright_black().bright_green().bold(),
@@ -276,7 +296,8 @@ impl StatsCollector {
                     );
                 }
             }
-        } else {
+        }
+        if !any_near_miss {
             eprintln!(
                 "\n{}",
                 "--- No near-miss events recorded (< 100ms) ---"
