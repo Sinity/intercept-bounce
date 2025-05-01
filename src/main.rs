@@ -220,7 +220,7 @@ fn main() -> io::Result<()> {
                         Ok(mut filter) => {
                             eprintln!("{}", "[MAIN] BounceFilter mutex locked successfully.".dimmed());
                             let result = filter.check_event(&ev, debounce_time_us);
-                            eprintln!("{}", "[MAIN] BounceFilter check_event returned: {:?}", result).dimmed();
+                            eprintln!("{}", format!("[MAIN] BounceFilter check_event returned: {:?}", result).dimmed()); // Corrected format! and dimmed()
                             result
                         },
                         Err(poisoned) => {
@@ -228,7 +228,7 @@ fn main() -> io::Result<()> {
                             // Attempt to continue with the poisoned guard, might be inconsistent
                             let mut filter = poisoned.into_inner();
                             let result = filter.check_event(&ev, debounce_time_us);
-                            eprintln!("{}", "[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed();
+                            eprintln!("{}", format!("[MAIN] BounceFilter check_event (poisoned) returned: {:?}", result).dimmed()); // Corrected format! and dimmed()
                             result
                         }
                     }
@@ -244,7 +244,12 @@ fn main() -> io::Result<()> {
                     diff_us,
                     last_passed_us,
                 };
-                eprintln!("{}", format!("[MAIN] Prepared EventInfo for logger: {:?}", event_info).dimmed());
+                // Cannot print EventInfo directly due to input_event not implementing Debug
+                // eprintln!("{}", format!("[MAIN] Prepared EventInfo for logger: {:?}", event_info).dimmed());
+                eprintln!("{}", format!(
+                    "[MAIN] Prepared EventInfo for logger: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
+                    event_info.event.type_, event_info.event.code, event_info.event.value, event_info.event_us, event_info.is_bounce, event_info.diff_us, event_info.last_passed_us
+                ).dimmed());
 
 
                 // Send event info to logger thread (non-blocking)

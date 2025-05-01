@@ -2,8 +2,9 @@
 // and accumulating/reporting statistics based on messages received
 // from the main processing thread.
 
-use crate::event::{self, get_event_type_name}; // Use event module functions
+use crate::event; // Use event module functions
 use crate::filter::keynames::get_key_name;
+use crate::filter::keynames::get_event_type_name; // Import get_event_type_name from keynames
 use crate::filter::stats::{StatsCollector, Meta}; // Import StatsCollector and Meta
 use colored::*;
 use crossbeam_channel::Receiver;
@@ -15,7 +16,7 @@ use std::time::{Duration, Instant};
 use chrono::Local; // Use chrono for wallclock time
 
 /// Represents a message sent from the main thread to the logger thread.
-#[derive(Debug)] // Add Debug derive
+// #[derive(Debug)] // input_event does not implement Debug
 pub enum LogMessage {
     /// Contains detailed information about a single processed event.
     Event(EventInfo),
@@ -23,7 +24,7 @@ pub enum LogMessage {
 }
 
 /// Detailed information about a single processed event, sent to the logger.
-#[derive(Debug)] // Add Debug derive
+// #[derive(Debug)] // input_event does not implement Debug
 pub struct EventInfo {
     /// The raw input event.
     pub event: input_event,
@@ -177,7 +178,13 @@ impl Logger {
         eprintln!("{}", "[DEBUG] Logger thread processing message.".dimmed());
         match msg {
             LogMessage::Event(data) => {
-                eprintln!("{}", format!("[DEBUG] Logger thread processing EventInfo: {:?}", data).dimmed());
+                // Cannot print EventInfo directly due to input_event not implementing Debug
+                // eprintln!("{}", format!("[DEBUG] Logger thread processing EventInfo: {:?}", data).dimmed());
+                eprintln!("{}", format!(
+                    "[DEBUG] Logger thread processing EventInfo: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
+                    data.event.type_, data.event.code, data.event.value, data.event_us, data.is_bounce, data.diff_us, data.last_passed_us
+                ).dimmed());
+
                 // Record stats for both cumulative and interval collectors.
                 self.cumulative_stats.record_event_info(&data);
                 self.interval_stats.record_event_info(&data);
@@ -204,7 +211,7 @@ impl Logger {
     }
 
     /// Dumps the current interval statistics to stderr.
-    fn dump_periodic_stats(&self) {
+    fn dump_periodic_stats(&mut self) { // Changed to &mut self
         eprintln!("{}", "[DEBUG] Logger thread dumping periodic stats.".dimmed());
         // Print header with wallclock time.
         eprintln!(
@@ -219,12 +226,12 @@ impl Logger {
         );
 
         // Create a temporary Meta struct for the dump.
-        let meta = Meta {
-            debounce_time_us: self.debounce_us,
-            log_all_events: self.log_all_events,
-            log_bounces: self.log_bounces,
-            log_interval_us: self.log_interval.as_micros() as u64, // Convert Duration to u64 µs
-        };
+        // let meta = Meta { // Removed unused variable
+        //     debounce_time_us: self.debounce_us,
+        //     log_all_events: self.log_all_events,
+        //     log_bounces: self.log_bounces,
+        //     log_interval_us: self.log_interval.as_micros() as u64, // Convert Duration to u64 µs
+        // };
 
         // Note: Runtime is not included in periodic dumps as it's a cumulative value.
         // Pass None for runtime_us.
