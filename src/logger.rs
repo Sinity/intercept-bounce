@@ -187,14 +187,14 @@ impl Logger {
         if self.config.stats_json {
             if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in JSON format.".dimmed()); }
             interval_stats_clone.print_stats_json(
-                &self.config,
+                &*self.config, // Dereference Arc<Config> to &Config
                 None,
                 &mut io::stderr().lock(),
             );
             if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in JSON format.".dimmed()); }
         } else {
             if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread printing periodic stats in human-readable format.".dimmed()); }
-            interval_stats_clone.print_stats_to_stderr(&self.config);
+            interval_stats_clone.print_stats_to_stderr(&*self.config); // Dereference Arc<Config> to &Config
             if self.config.verbose { eprintln!("{}", "[DEBUG] Logger thread finished printing periodic stats in human-readable format.".dimmed()); }
         }
 

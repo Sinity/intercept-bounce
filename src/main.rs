@@ -20,16 +20,17 @@ use std::time::Duration; // Added Duration for check_interval
 
 // Use modules from the library crate
 use intercept_bounce::cli;
+use intercept_bounce::config::Config; // Use Config from library
 use intercept_bounce::event;
 use intercept_bounce::filter;
-mod logger;
-mod config;
+use intercept_bounce::logger; // Use logger from library
 
-use config::Config;
-use event::{list_input_devices, read_event_raw, write_event_raw, event_microseconds};
-use filter::BounceFilter;
-use logger::{EventInfo, LogMessage, Logger};
+// Removed: mod logger;
+// Removed: mod config; - Now part of the library crate
+use event::{event_microseconds, list_input_devices, read_event_raw, write_event_raw};
 use filter::stats::StatsCollector;
+use filter::BounceFilter;
+use logger::{EventInfo, LogMessage, Logger}; // Use types via library logger module
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -386,14 +387,14 @@ fn main() -> io::Result<()> {
         if cfg.stats_json {
             if cfg.verbose { eprintln!("{}", "[MAIN] Printing final stats in JSON format.".dimmed()); }
             final_stats.print_stats_json(
-                &cfg,
+                &*cfg, // Dereference Arc<Config> to &Config
                 runtime_us,
                 &mut io::stderr().lock(),
             );
             if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing final stats in JSON format.".dimmed()); }
         } else {
             if cfg.verbose { eprintln!("{}", "[MAIN] Printing final stats in human-readable format.".dimmed()); }
-            final_stats.print_stats_to_stderr(&cfg);
+            final_stats.print_stats_to_stderr(&*cfg); // Dereference Arc<Config> to &Config
             if cfg.verbose { eprintln!("{}", "[MAIN] Finished printing main stats block.".dimmed()); }
             if let Some(rt) = runtime_us {
                 eprintln!(
