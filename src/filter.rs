@@ -11,15 +11,15 @@ use stats::StatsCollector;
 
 /// Holds the state for bounce filtering.
 pub struct BounceFilter {
-    debounce_time_us: u64, // Renamed from window_us
-    log_interval_us: u64,  // Now in microseconds (0 = disabled)
-    log_all_events: bool,
-    log_bounces: bool,
+    pub debounce_time_us: u64,
+    pub log_interval_us: u64,
+    pub log_all_events: bool,
+    pub log_bounces: bool,
     last_event_us: HashMap<(u16, i32), u64>,
     last_any_event_us: HashMap<u16, u64>,
     first_event_us: Option<u64>,
     last_event_was_syn: bool,
-    stats: StatsCollector,
+    pub stats: StatsCollector,
     last_stats_dump_time_us: Option<u64>,
 }
 
