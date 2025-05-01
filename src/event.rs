@@ -2,7 +2,6 @@ use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_RE
 use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::fs;
-// Remove unused imports: CStr, AsRawFd
 
 use std::os::unix::prelude::RawFd;
 use libc::{ioctl, c_ulong};
@@ -47,9 +46,11 @@ pub fn write_event(writer: &mut impl Write, event: &input_event) -> io::Result<(
 /// Calculates the event timestamp in microseconds from its timeval.
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
-    // Defensive: avoid negative values, but also clamp to avoid overflow
-    let sec = event.time.tv_sec.clamp(0, 86_400_000) as u64; // ~1000 days
-    let usec = event.time.tv_usec.clamp(0, 999_999) as u64;
+    // tv_sec and tv_usec are long (i64 on 64-bit systems).
+    // Timestamps since epoch are non-negative.
+    // Convert to u64 for calculations.
+    let sec = event.time.tv_sec as u64;
+    let usec = event.time.tv_usec as u64;
     sec * 1_000_000 + usec
 }
 
