@@ -11,6 +11,10 @@ use chrono;
 use keynames::{get_key_name, get_event_type_name};
 use stats::StatsCollector;
 
+// Unit tests module
+#[cfg(test)]
+mod tests;
+
 /// Holds the state for bounce filtering.
 pub struct BounceFilter {
     pub debounce_time_us: u64,
@@ -78,6 +82,8 @@ impl BounceFilter {
         let key_code = event.code;
         let key_value = event.value;
         let key = (key_code, key_value);
+        // Retrieve the timestamp of the last *passed* event for this specific key code *and* value.
+        // This ensures press (1) and release (0) events are debounced independently.
         let previous_last_passed_us = self.last_event_us.get(&key).copied();
 
         if self.log_all_events && self.last_event_was_syn {
@@ -200,7 +206,8 @@ impl BounceFilter {
             "[PASS]".on_green().black().bold()
         };
 
-        let relative_us = event_us.saturating_sub(self.first_event_us.unwrap_or(event_us));
+        // Use the overall first event timestamp for relative logging
+        let relative_us = event_us.saturating_sub(self.overall_first_event_us.unwrap_or(event_us));
         let relative_time_str = Self::format_timestamp_relative(relative_us)
             .on_bright_black()
             .bright_yellow()
