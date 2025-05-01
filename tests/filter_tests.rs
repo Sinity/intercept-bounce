@@ -46,7 +46,8 @@ fn process_sequence(filter: &mut BounceFilter, events: &[input_event]) -> Vec<bo
 
 #[test]
 fn drops_press_bounce() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
     let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A again within window (bounce)
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -55,7 +56,8 @@ fn drops_press_bounce() {
 
 #[test]
 fn drops_release_bounce() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 0); // Release A at 0ms
     let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 0); // Release A again within window (bounce)
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -64,7 +66,8 @@ fn drops_release_bounce() {
 
 #[test]
 fn passes_outside_window() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
     let e2 = key_ev(DEBOUNCE_US + 1, KEY_A, 1); // Press A again outside window
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -73,7 +76,8 @@ fn passes_outside_window() {
 
 #[test]
 fn passes_at_window_boundary() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
     let e2 = key_ev(DEBOUNCE_US, KEY_A, 1); // Press A exactly at window boundary
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -82,7 +86,8 @@ fn passes_at_window_boundary() {
 
 #[test]
 fn drops_just_below_window_boundary() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
     let e2 = key_ev(DEBOUNCE_US - 1, KEY_A, 1); // Press A just inside window
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -93,7 +98,8 @@ fn drops_just_below_window_boundary() {
 
 #[test]
 fn filters_different_keys_independently() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A (Pass)
     let e2 = key_ev(DEBOUNCE_US / 3, KEY_B, 1); // Press B (Pass) - different key
     let e3 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A (Drop) - bounce of e1
@@ -104,7 +110,8 @@ fn filters_different_keys_independently() {
 
 #[test]
 fn filters_press_release_independently() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     // Scenario: Rapid press/release passes, subsequent bounces drop
     let e1 = key_ev(0, KEY_A, 1); // Press A (Pass)
     let e2 = key_ev(DEBOUNCE_US / 4, KEY_A, 0); // Release A (Pass) - different value
@@ -116,7 +123,8 @@ fn filters_press_release_independently() {
 
  #[test]
 fn filters_release_press_independently() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     // Scenario: Start with release, then rapid press
     let e1 = key_ev(0, KEY_A, 0); // Release A (Pass) - first event
     let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A (Pass) - different value
@@ -126,7 +134,8 @@ fn filters_release_press_independently() {
 
 #[test]
 fn independent_filtering_allows_release_after_dropped_press() {
-     let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+     // Add stats_json: false argument
+     let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
      // Press A (Pass) -> Press A (Drop) -> Release A (Pass, because last *passed* release was long ago)
      let e1 = key_ev(0, KEY_A, 1); // Press A (Pass)
      let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A (Drop) - bounce of e1
@@ -140,7 +149,8 @@ fn independent_filtering_allows_release_after_dropped_press() {
 
 #[test]
 fn passes_non_key_events() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Press A (Pass)
     let e2 = non_key_ev(DEBOUNCE_US / 4); // SYN event (Pass)
     let e3 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A (Drop) - bounce of e1
@@ -151,7 +161,8 @@ fn passes_non_key_events() {
 
 #[test]
 fn passes_key_repeats() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     // Key repeats (value 2) are NOT debounced
     let e1 = key_ev(0, KEY_A, 1);     // Press A (Pass)
     let e2 = key_ev(500_000, KEY_A, 2); // Repeat A (Pass)
@@ -164,7 +175,8 @@ fn passes_key_repeats() {
 
 #[test]
 fn window_zero_passes_all_key_events() {
-    let mut filter = BounceFilter::new(0, 0, false, false); // Debounce time = 0ms
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(0, 0, false, false, false); // Debounce time = 0ms
     let e1 = key_ev(0, KEY_A, 1);     // Press A (Pass)
     let e2 = key_ev(1, KEY_A, 1); // Press A again very quickly (Pass)
     let e3 = key_ev(2, KEY_A, 0);     // Release A (Pass)
@@ -175,7 +187,8 @@ fn window_zero_passes_all_key_events() {
 
 #[test]
 fn handles_time_going_backwards() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(DEBOUNCE_US * 2, KEY_A, 1); // Press A at 20ms (Pass)
     let e2 = key_ev(DEBOUNCE_US, KEY_A, 1); // Press A "again" at 10ms (Pass) - time went back
     let results = process_sequence(&mut filter, &[e1, e2]);
@@ -184,7 +197,8 @@ fn handles_time_going_backwards() {
 
  #[test]
 fn initial_state_empty() {
-    let filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     // Check initial counts, arrays are now fixed size Box<[]>
     assert_eq!(filter.stats.key_events_processed, 0);
     assert_eq!(filter.stats.key_events_passed, 0);
@@ -196,7 +210,8 @@ fn initial_state_empty() {
 
 #[test]
 fn stats_tracking() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let e1 = key_ev(0, KEY_A, 1); // Pass
     let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Drop
     let e3 = key_ev(DEBOUNCE_US * 2, KEY_B, 1); // Pass
@@ -230,7 +245,8 @@ fn stats_tracking() {
 
  #[test]
 fn near_miss_tracking() {
-    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false);
+    // Add stats_json: false argument
+    let mut filter = BounceFilter::new(DEBOUNCE_MS, 0, false, false, false);
     let near_miss_time = DEBOUNCE_US + 500; // Just outside window, but < 100ms
     let far_time = DEBOUNCE_US + 200_000; // Way outside window
 
