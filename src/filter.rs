@@ -75,14 +75,13 @@ impl BounceFilter {
         self.overall_last_event_us = Some(event_us);
 
         let mut is_bounce = false;
-        let mut diff_us = None; // Difference if it *is* a bounce
+        let mut diff_us_if_bounce = None; // Difference if it *is* a bounce
         let mut last_passed_us_opt = None; // Timestamp of the previous passed event
 
         // --- Bounce Check Logic ---
-        // Only apply debouncing to EV_KEY events, and specifically only to
+        // Only apply debouncing logic to EV_KEY events, and specifically only to
         // press (1) and release (0) values. Key repeats (2) are never debounced.
-        // Also skip if debounce time is zero.
-        if is_key_event(event) && debounce_time_us > 0 && key_value != 2 {
+        if is_key_event(event) && key_value != 2 {
             // Ensure key code and value are within the bounds of our state array.
             let key_code_idx = key_code as usize;
             let key_value_idx = key_value as usize;
@@ -98,21 +97,24 @@ impl BounceFilter {
                     // needs it for near-miss calculations on passed events.
                     last_passed_us_opt = Some(last_us_for_key_value);
 
-                    // Calculate the time difference since the last passed event.
-                    // Use checked_sub to handle potential timestamp wrap-around or out-of-order events.
-                    if let Some(diff) = event_us.checked_sub(last_us_for_key_value) {
-                        // If the difference is less than the threshold, it's a bounce.
-                        if diff < debounce_time_us {
-                            is_bounce = true;
-                            diff_us = Some(diff); // Store the difference for stats
+                    // Only perform the actual bounce check if debounce time is > 0.
+                    if debounce_time_us > 0 {
+                        // Calculate the time difference since the last passed event.
+                        // Use checked_sub to handle potential timestamp wrap-around or out-of-order events.
+                        if let Some(diff) = event_us.checked_sub(last_us_for_key_value) {
+                            // If the difference is less than the threshold, it's a bounce.
+                            if diff < debounce_time_us {
+                                is_bounce = true;
+                                diff_us_if_bounce = Some(diff); // Store the difference for stats
+                            }
+                            // Note: Near-miss calculation (diff >= debounce && diff < threshold)
+                            // is now handled by the logger thread using last_passed_us_opt.
+                        } else {
+                            // Time appeared to go backwards (event_us < last_us_for_key_value).
+                            // Treat this as not a bounce. last_passed_us_opt still holds the previous time.
+                            is_bounce = false;
                         }
-                        // Note: Near-miss calculation (diff >= debounce && diff < threshold)
-                        // is now handled by the logger thread using last_passed_us_opt.
-                    } else {
-                        // Time appeared to go backwards (event_us < last_us_for_key_value).
-                        // Treat this as not a bounce. last_passed_us_opt still holds the previous time.
-                        is_bounce = false;
-                    }
+                    } // else: debounce_time_us is 0, so is_bounce remains false.
                 } // else: This is the first event of this type seen, so last_passed_us_opt remains None.
 
                 // --- Update State ---
@@ -132,7 +134,7 @@ impl BounceFilter {
 
         // Return the bounce decision, the difference if it was a bounce,
         // and the timestamp of the previous passed event.
-        (is_bounce, if is_bounce { diff_us } else { None }, last_passed_us_opt)
+        (is_bounce, diff_us_if_bounce, last_passed_us_opt)
     }
 
     /// Returns the total duration based on the first and last event timestamps seen.

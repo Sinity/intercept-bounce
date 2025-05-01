@@ -113,7 +113,7 @@ impl Logger {
             // This allows the logger to exit quickly even if the channel still has messages
             // or if the main thread exited without dropping the sender cleanly (e.g., panic).
             if !self.logger_running.load(Ordering::SeqCst) {
-                eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, exiting.".dimmed());
+                eprintln!("{}", "[DEBUG] Logger thread received shutdown signal via AtomicBool, exiting.".dimmed()); // RESTORED
                 break;
             }
 
@@ -167,7 +167,7 @@ impl Logger {
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
                     // Main thread dropped the sender. This is a valid shutdown signal,
                     // but the AtomicBool check is the primary mechanism now.
-                    eprintln!("{}", "[DEBUG] Logger channel disconnected.".dimmed());
+                    eprintln!("{}", "[DEBUG] Logger channel disconnected.".dimmed()); // RESTORED
                     break; // Exit the loop gracefully.
                 }
             }
