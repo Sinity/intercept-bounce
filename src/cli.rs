@@ -25,7 +25,11 @@ pub struct Args {
 
     /// List available input devices and their capabilities (requires root).
     #[arg(long, action = clap::ArgAction::SetTrue)]
-    pub list_devices: bool, // Add this flag
+    pub list_devices: bool,
+
+    /// Output statistics as JSON to stderr on exit and periodic dump.
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub stats_json: bool,
 }
 
 pub fn parse_args() -> Args {

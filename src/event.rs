@@ -7,9 +7,9 @@ use std::fs;
 use std::os::unix::prelude::RawFd;
 use libc::{ioctl, c_ulong};
 
-use nix::fcntl::{open, OFlag};
-use nix::sys::stat::Mode;
-use nix::unistd::close;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::fs::OpenOptionsExt;
+use std::fs::OpenOptions;
 
 /// Reads a single `input_event` from the reader. Returns Ok(None) on EOF.
 pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
@@ -87,11 +87,9 @@ pub fn list_input_devices() -> io::Result<()> {
 
     for (path, _) in entries {
         let path_str = path.display().to_string();
-        // Use nix::fcntl::open to open the device
-        let fd = match open(&path, OFlag::O_RDONLY | OFlag::O_NONBLOCK, Mode::empty()) {
-            Ok(fd) => fd,
+        let file = match OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(&path) {
+            Ok(f) => f,
             Err(e) => {
-                // Try to detect permission denied
                 let msg = format!("{}", e);
                 if msg.contains("Permission denied") {
                     eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
@@ -102,6 +100,7 @@ pub fn list_input_devices() -> io::Result<()> {
                 }
             }
         };
+        let fd = file.as_raw_fd();
 
         // Get device name using EVIOCGNAME ioctl
         let mut name_buf = [0u8; 256];
@@ -140,7 +139,8 @@ pub fn list_input_devices() -> io::Result<()> {
             capabilities.join(", ")
         );
 
-        let _ = close(fd);
+        // File closes automatically when dropped
+        drop(file);
     }
 
     eprintln!("-------------------------------------------------------------------");

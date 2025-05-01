@@ -42,6 +42,7 @@ fn main() -> io::Result<()> {
     )));
 
     let final_stats_printed = Arc::new(AtomicBool::new(false));
+    let stats_json = args.stats_json;
 
     // Setup signal handling in a separate thread
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
@@ -54,11 +55,30 @@ fn main() -> io::Result<()> {
                 eprintln!("\nReceived signal {}, printing final stats and exiting.", sig);
                 match filter_clone.lock() {
                     Ok(filter) => {
-                        let _ = filter.print_stats(&mut io::stderr()); // Ignore errors writing stats during signal handling
+                        if stats_json {
+                            filter.stats.print_stats_json(
+                                filter.debounce_time_us,
+                                filter.log_all_events,
+                                filter.log_bounces,
+                                filter.log_interval_us,
+                                io::stderr(),
+                            );
+                        }
+                        let _ = filter.print_stats(&mut io::stderr());
                     }
                     Err(poisoned) => {
                         eprintln!("Error: BounceFilter mutex was poisoned during signal handling!");
-                        let _ = poisoned.into_inner().print_stats(&mut io::stderr()); // Attempt recovery
+                        let filter = poisoned.into_inner();
+                        if stats_json {
+                            filter.stats.print_stats_json(
+                                filter.debounce_time_us,
+                                filter.log_all_events,
+                                filter.log_bounces,
+                                filter.log_interval_us,
+                                io::stderr(),
+                            );
+                        }
+                        let _ = filter.print_stats(&mut io::stderr());
                     }
                 }
             }

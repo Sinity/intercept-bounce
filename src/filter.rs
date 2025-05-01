@@ -100,7 +100,7 @@ impl BounceFilter {
         };
 
         if is_key {
-            self.stats.record_event(key_code, key_value, is_bounce, bounce_diff_us);
+            self.stats.record_event(key_code, key_value, is_bounce, bounce_diff_us, event_us);
             let _ = self.last_any_event_us.insert(key_code, event_us);
             if !is_bounce {
                 self.last_event_us.insert(key, event_us);
@@ -122,6 +122,15 @@ impl BounceFilter {
             };
             if dump_needed {
                 eprintln!("\n--- Periodic Stats Dump (Time: {} µs) ---", event_us);
+                if std::env::args().any(|a| a == "--stats-json") {
+                    self.stats.print_stats_json(
+                        self.debounce_time_us,
+                        self.log_all_events,
+                        self.log_bounces,
+                        self.log_interval_us,
+                        std::io::stderr(),
+                    );
+                }
                 let _ = self.print_stats(&mut io::stderr());
                 eprintln!("-------------------------------------------\n");
                 self.last_stats_dump_time_us = Some(event_us);
