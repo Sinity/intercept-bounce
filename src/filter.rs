@@ -159,19 +159,30 @@ impl BounceFilter {
                 );
                 if std::env::args().any(|a| a == "--stats-json") {
                     eprintln!("{}", "Cumulative stats:".on_bright_black().bold().bright_white());
+                    // Calculate overall runtime for cumulative stats
+                    let overall_runtime = self.overall_last_event_us.and_then(|last| {
+                        self.overall_first_event_us.map(|first| last.saturating_sub(first))
+                    });
                     self.stats.print_stats_json(
                         self.debounce_time_us,
                         self.log_all_events,
                         self.log_bounces,
                         self.log_interval_us,
+                        overall_runtime, // Pass overall runtime
                         std::io::stderr(),
                     );
                     eprintln!("{}", "Interval stats (since last dump):".on_bright_black().bold().bright_white());
+                    // Calculate interval runtime
+                    let interval_start_us = self.last_stats_dump_time_us
+                        .or(self.overall_first_event_us) // Fallback to overall start if first interval
+                        .unwrap_or(now_us); // Fallback to now if no events yet
+                    let interval_runtime = now_us.saturating_sub(interval_start_us);
                     self.interval_stats.print_stats_json(
                         self.debounce_time_us,
                         self.log_all_events,
                         self.log_bounces,
                         self.log_interval_us,
+                        Some(interval_runtime), // Pass interval runtime
                         std::io::stderr(),
                     );
                 }
