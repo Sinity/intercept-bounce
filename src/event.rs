@@ -208,6 +208,7 @@ pub fn list_input_devices() -> io::Result<()> {
 
 /// Helper function to check if a bit is set in a byte buffer
 // Returns true if the bit is set in the buffer, false otherwise.
+#[inline] // Add inline hint
 fn is_bit_set(buf: &[u8], bit: usize) -> bool {
     let byte_index = bit / 8;
     let bit_index = bit % 8;

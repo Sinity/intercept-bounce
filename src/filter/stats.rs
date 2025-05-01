@@ -22,12 +22,20 @@ pub struct KeyValueStats {
 }
 
 impl KeyValueStats {
+    #[inline] // Add inline hint
     pub fn push_timing(&mut self, value: u64) {
+        // Use reserve(1) to let the allocator handle growth efficiently
+        // when the vector is full. This avoids potentially overallocating
+        // if the capacity is often exactly met.
         if self.timings_us.len() == self.timings_us.capacity() {
-            // Double the capacity if full
-            let new_cap = self.timings_us.capacity().max(1024) * 2;
-            self.timings_us.reserve(new_cap - self.timings_us.capacity());
+             self.timings_us.reserve(1);
         }
+        // Original doubling logic - kept for reference, reserve(1) is likely better
+        // if self.timings_us.len() == self.timings_us.capacity() {
+            // Double the capacity if full
+            // let new_cap = self.timings_us.capacity().max(1024) * 2;
+            // self.timings_us.reserve(new_cap - self.timings_us.capacity());
+        // }
         self.timings_us.push(value);
     }
 }
@@ -73,10 +81,12 @@ impl Default for StatsCollector {
 
 #[allow(dead_code)]
 impl StatsCollector {
+    #[must_use] // Add must_use hint
     pub fn new() -> Self {
         StatsCollector::with_capacity()
     }
 
+    #[must_use] // Add must_use hint
     pub fn with_capacity() -> Self {
         // Pre-allocate all arrays and vectors
         let per_key_stats = Box::new([(); 1024].map(|_| KeyStats::default()));

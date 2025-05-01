@@ -31,12 +31,14 @@ pub struct BounceFilter {
 }
 
 impl BounceFilter {
-    pub fn new(debounce_time_ms: u64, log_interval_s: u64, log_all_events: bool, log_bounces: bool) -> Self {
+    #[must_use] // Add must_use hint
+    pub fn new(debounce_time_ms: u64, log_interval_s: u64, log_all_events: bool, log_bounces: bool, stats_json: bool) -> Self {
         BounceFilter {
             debounce_time_us: debounce_time_ms * 1_000,
             log_interval_us: log_interval_s * 1_000_000,
             log_all_events,
             log_bounces,
+            stats_json, // Store the flag
             // Initialize with MAX to distinguish from timestamp 0
             last_event_us: Box::new([[u64::MAX; 3]; 1024]),
             last_any_event_us: Box::new([u64::MAX; 1024]),
