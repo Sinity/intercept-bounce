@@ -1,54 +1,82 @@
-use std::io; // Removed unused Write import
+// Main application entry point.
+// Orchestrates command-line parsing, thread setup, the main event loop,
+// signal handling, and final shutdown/stats reporting.
+
+use colored::*;
+use crossbeam_channel::{bounded, Sender, TrySendError}; // For channel communication
+use signal_hook::consts::signal::*;
+use signal_hook::iterator::Signals;
+use std::io::{self, ErrorKind, Write}; // Need ErrorKind, Write
+use std::os::unix::io::AsRawFd; // To get raw file descriptors
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
+use std::thread; // For spawning logger thread
+use std::time::Duration; // For logger config
 
-use signal_hook::consts::signal::*;
-use signal_hook::iterator::Signals;
-use colored::*;
-
+// Application modules
 mod cli;
 mod event;
 mod filter;
+mod logger; // Include the new logger module
 
-use event::{read_event, write_event, list_input_devices};
+// Specific imports
+use cli::Args;
+use event::{list_input_devices, read_event_raw, write_event_raw}; // Use raw I/O functions
+use filter::stats; // Need stats::format_us
 use filter::BounceFilter;
+use logger::{EventInfo, LogMessage, Logger}; // Use logger types
 
-/// Set process niceness to -20 if possible (warn if not permitted).
+/// Attempts to set the process priority to the highest level (-20 niceness).
+/// Prints a warning if it fails (e.g., due to insufficient permissions).
 fn set_high_priority() {
+    // Niceness is primarily a Unix concept.
     #[cfg(target_os = "linux")]
     {
         use libc::{setpriority, PRIO_PROCESS};
         unsafe {
-            let res = setpriority(PRIO_PROCESS, 0, -20);
+            // Use libc to call the setpriority system call.
+            let res = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, -20) };
             if res != 0 {
+                // Failed to set priority. Print a warning to stderr.
                 eprintln!(
                     "{}",
-                    "Warning: Unable to set process niceness to -20 (try running as root or with CAP_SYS_NICE)."
+                    "[WARN] Unable to set process niceness to -20 (requires root or CAP_SYS_NICE)."
                         .yellow()
                 );
             } else {
-                eprintln!("{}", "Process priority set to -20 (highest)".green());
+                // Successfully set priority. Print an info message.
+                eprintln!("{}", "[INFO] Process priority set to -20 (highest).".dimmed());
             }
         }
     }
+    #[cfg(not(target_os = "linux"))]
+    {
+        // No-op on non-Linux platforms.
+    }
+}
+
+/// Holds state specific to the main processing thread, primarily for managing
+/// communication with the logger thread and handling log drop warnings.
+struct MainState {
+    log_sender: Sender<LogMessage>,
+    warned_about_dropping: bool, // Have we warned about drops *this session*?
+    currently_dropping: bool,    // Are we *currently* dropping messages?
+                                 // total_dropped_log_messages: u64, // Optional: Track total drops
 }
 
 fn main() -> io::Result<()> {
+    // Parse command-line arguments using clap.
     let args = cli::parse_args();
 
-    // --- Normal Filtering Mode ---
-
-    // Set high priority for the process (if possible)
-    set_high_priority();
-
-    // Check for the list_devices flag first
+    // --- Device Listing Mode ---
+    // Handle the --list-devices flag separately and exit.
     if args.list_devices {
         eprintln!(
             "{}",
-            "Scanning input devices (requires root)..."
+            "Scanning input devices (requires read access to /dev/input/event*)..."
                 .on_bright_black()
                 .bold()
                 .bright_cyan()

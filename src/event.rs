@@ -1,49 +1,165 @@
+use colored::*; // Keep colored for list_input_devices
 use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN};
-use std::io::{self, Read, Write};
+use libc::{self, ioctl, c_ulong}; // Added libc
+use std::fs::{self, OpenOptions};
+use std::io::{self, ErrorKind}; // Removed Read, Write
 use std::mem::size_of;
-use std::fs;
-
-use std::os::unix::prelude::RawFd;
-use libc::{ioctl, c_ulong};
-
-use std::os::unix::io::AsRawFd;
 use std::os::unix::fs::OpenOptionsExt;
-use std::fs::OpenOptions;
+use std::os::unix::io::{AsRawFd, RawFd}; // Added RawFd
 
-/// Reads a single `input_event` from the reader. Returns Ok(None) on EOF.
-pub fn read_event(reader: &mut impl Read) -> io::Result<Option<input_event>> {
+/// Reads exactly one `input_event` directly from a raw file descriptor using `libc::read`.
+///
+/// Handles partial reads and EINTR signals by retrying.
+/// Returns `Ok(None)` if EOF is reached cleanly *before* starting to read an event.
+/// Returns `Err` on I/O errors or if EOF is hit *during* the read of an event.
+pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
     let mut buf = vec![0u8; size_of::<input_event>()];
-    match reader.read_exact(&mut buf) {
-        Ok(()) => {
-            // SAFETY: We check length and alignment, and input_event is #[repr(C)].
-            if buf.len() != size_of::<input_event>() {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "input_event size mismatch"));
+    let mut bytes_read = 0;
+    let total_bytes = buf.len();
+
+    // Loop until the entire event structure is read.
+    while bytes_read < total_bytes {
+        // SAFETY: Calling libc::read is unsafe. We provide a valid pointer
+        // derived from a mutable slice, the correct fd, and the remaining length.
+        // The file descriptor is assumed to be valid and opened for reading.
+        let result = unsafe {
+            libc::read(
+                fd,
+                // Pointer to the next position in the buffer to write to.
+                buf.as_mut_ptr().add(bytes_read) as *mut libc::c_void,
+                // Number of bytes remaining to fill the buffer.
+                total_bytes - bytes_read,
+            )
+        };
+
+        match result {
+            -1 => {
+                // Error occurred during read.
+                let err = io::Error::last_os_error();
+                // If the error is EINTR (Interrupted system call), just retry the read.
+                if err.kind() != ErrorKind::Interrupted {
+                    return Err(err);
+                }
+                // If interrupted, the loop continues, retrying the read.
             }
-            let ptr = buf.as_ptr();
-            if ptr.align_offset(std::mem::align_of::<input_event>()) != 0 {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "input_event alignment error"));
+            0 => {
+                // EOF (End Of File) reached.
+                if bytes_read == 0 {
+                    // EOF reached cleanly before reading any part of the current event.
+                    return Ok(None);
+                } else {
+                    // EOF reached unexpectedly after reading *part* of an event.
+                    // This indicates a corrupted input stream.
+                    return Err(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "EOF reached mid-event",
+                    ));
+                }
             }
-            let event: input_event = unsafe { std::ptr::read_unaligned(ptr as *const _) };
-            Ok(Some(event))
+            n if n > 0 => {
+                // Successfully read 'n' bytes.
+                bytes_read += n as usize;
+            }
+            _ => {
+                 // Should not happen (e.g. negative result other than -1)
+                 return Err(io::Error::new(
+                     ErrorKind::Other,
+                     "libc::read returned unexpected value",
+                 ));
+            }
         }
-        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
-        Err(e) => Err(e),
     }
+
+    // If we reach here, we have read total_bytes successfully.
+    // Now, convert the byte buffer to an input_event struct.
+
+    // SAFETY: We ensure the buffer has the exact size of input_event.
+    // We trust that input_event (from input-linux-sys) has the correct C representation.
+    // read_unaligned is used because the alignment of the raw file descriptor
+    // stream cannot be guaranteed.
+    let ptr = buf.as_ptr();
+    // Optional: Check alignment, though read_unaligned handles it.
+    // if ptr.align_offset(std::mem::align_of::<input_event>()) != 0 {
+    //     return Err(io::Error::new(io::ErrorKind::InvalidData, "input_event alignment error"));
+    // }
+    let event: input_event = unsafe { std::ptr::read_unaligned(ptr as *const _) };
+    Ok(Some(event))
 }
 
-/// Writes a single input_event to the writer.
-pub fn write_event(writer: &mut impl Write, event: &input_event) -> io::Result<()> {
-    // SAFETY: Assumes `event` is a valid input_event. Creates a byte slice representation.
+
+/// Writes a single `input_event` directly to a raw file descriptor using `libc::write`.
+///
+/// Handles partial writes and EINTR signals by retrying.
+/// Returns `Err` on I/O errors.
+pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
+    let total_bytes = size_of::<input_event>();
+    let mut bytes_written = 0;
+
+    // SAFETY: Creates a byte slice representation of the input_event struct.
+    // Assumes input_event has a stable C representation.
     let buf: &[u8] = unsafe {
         std::slice::from_raw_parts(
             event as *const _ as *const u8,
-            size_of::<input_event>(),
+            total_bytes,
         )
     };
-    writer.write_all(buf)
+
+    // Loop until the entire event structure is written.
+    while bytes_written < total_bytes {
+        // SAFETY: Calling libc::write is unsafe. We provide a valid pointer
+        // derived from the slice, the correct fd, and the remaining length.
+        // The file descriptor is assumed to be valid and opened for writing.
+        let result = unsafe {
+            libc::write(
+                fd,
+                // Pointer to the start of the remaining data to write.
+                buf.as_ptr().add(bytes_written) as *const libc::c_void,
+                // Number of bytes remaining to write.
+                total_bytes - bytes_written,
+            )
+        };
+
+        match result {
+            -1 => {
+                // Error occurred during write.
+                let err = io::Error::last_os_error();
+                // If the error is EINTR (Interrupted system call), just retry the write.
+                if err.kind() != ErrorKind::Interrupted {
+                    // Check for BrokenPipe specifically, common when downstream closes.
+                    if err.kind() == ErrorKind::BrokenPipe {
+                         eprintln!("{}", "[DEBUG] write_event_raw detected BrokenPipe".dimmed());
+                    }
+                    return Err(err);
+                }
+                 // If interrupted, the loop continues, retrying the write.
+            }
+             0 => {
+                 // Write returning 0 is unusual for blocking I/O but possible (e.g., fd closed).
+                 // Treat it as an error indicating nothing could be written.
+                 return Err(io::Error::new(
+                     ErrorKind::WriteZero,
+                     "libc::write returned 0",
+                 ));
+             }
+            n if n > 0 => {
+                // Successfully wrote 'n' bytes.
+                bytes_written += n as usize;
+            }
+             _ => {
+                 // Should not happen (e.g. negative result other than -1)
+                 return Err(io::Error::new(
+                     ErrorKind::Other,
+                     "libc::write returned unexpected value",
+                 ));
+             }
+        }
+    }
+    // If we reach here, all bytes were written successfully.
+    Ok(())
 }
 
-/// Calculates the event timestamp in microseconds from its timeval.
+
+/// Calculates the event timestamp in microseconds from its timeval struct.
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
     // tv_sec and tv_usec are long (i64 on 64-bit systems).

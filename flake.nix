@@ -16,10 +16,12 @@
     in {
       packages.default = pkgs.rustPlatform.buildRustPackage {
         pname = "intercept-bounce";
-        version = "0.5.0";
+        version = "0.6.0"; # Updated version
 
         src = ./.;
-        # cargoHash is already correct
+        # cargoHash needs update after Cargo.lock changes
+        # Run: nix run .# -- update-cargo-lock
+        # Or manually get hash: nix build .#intercept-bounce.cargoDeps --print-out-paths | xargs nix-hash --type sha256 --base32
         cargoHash = "sha256-CujsfmtAl54/qiMz1X+gpBcHokkd3irkE2J6eD4ktEw=";
 
         meta = {

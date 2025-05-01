@@ -1,5 +1,8 @@
-pub mod event;
-pub mod filter;
-// Re-export statistics so integration tests (and external crates) can import
-// `intercept_bounce::stats::*` directly.
+// Module declarations for the library crate.
+
+pub mod event; // Handles reading/writing input_event structs.
+pub mod filter; // Defines BounceFilter state and core logic.
+pub mod logger; // Implements the logger thread for stats and stderr output.
+
+// Re-export statistics types for convenience, e.g., for tests or potential external users.
 pub use filter::stats;
