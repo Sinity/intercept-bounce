@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use criterion::{criterion_group, criterion_main, Criterion};
+// Removed duplicate criterion import line
 use intercept_bounce::config::Config; // Import Config
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
