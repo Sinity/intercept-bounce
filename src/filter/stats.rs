@@ -114,7 +114,13 @@ impl StatsCollector {
         eprintln!(
             "{} {}",
             "Log Bounces (--log-bounces):".on_bright_black().bold().bright_red(),
-            if log_bounces { "Active".on_red().white().bold() } else { "Inactive".on_bright_black().dimmed() }
+            if log_all_events {
+                "Overridden by --log-all-events".on_bright_black().bright_yellow().bold()
+            } else if log_bounces {
+                "Active".on_red().white().bold()
+            } else {
+                "Inactive".on_bright_black().dimmed()
+            }
         );
         eprintln!(
             "{} {}",
