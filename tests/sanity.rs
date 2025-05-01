@@ -174,29 +174,26 @@ fn filters_key_release() {
 
 #[test]
 fn filters_key_repeat() {
-    // Note: Key repeats (value 2) often follow a press (value 1) after a delay.
-    // Bouncing usually happens on the initial press or release edge.
-    // However, if a repeat signal itself bounces (e.g., faulty hardware sends two repeats too close),
-    // we should filter the second one.
+    // Key repeats (value 2) are NOT debounced: all repeat events should pass, regardless of timing.
     let e1 = key_ev(0, KEY_A, 1);     // Press A at 0ms
     let e2 = key_ev(500_000, KEY_A, 2); // Repeat A at 500ms (normal repeat)
-    let e3 = key_ev(502_000, KEY_A, 2); // Repeat A again at 502ms (bounce of e2)
+    let e3 = key_ev(502_000, KEY_A, 2); // Repeat A again at 502ms (would be "bounce" if we debounced repeats)
     let input_events = vec![e1, e2, e3];
-    let expected_events = vec![e1, e2]; // Bounce e3 dropped
+    let expected_events = vec![e1, e2, e3]; // All repeats should pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--debounce-time") // Use renamed flag
-        .arg("5") // 5ms window
+    cmd.arg("--debounce-time")
+        .arg("5")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
     let actual_stdout_bytes = output.stdout;
     assert_eq!(
         actual_stdout_bytes, expected_output_bytes,
-        "Key repeat bounce was not filtered"
+        "Key repeat events should not be debounced"
     );
 }
 
