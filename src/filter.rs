@@ -19,7 +19,9 @@ pub struct BounceFilter {
     pub log_bounces: bool,
     last_event_us: HashMap<(u16, i32), u64>,
     last_any_event_us: HashMap<u16, u64>,
-    first_event_us: Option<u64>,
+    // first_event_us: Option<u64>, // Removed, use overall_first_event_us
+    overall_first_event_us: Option<u64>, // Timestamp of the very first event processed
+    overall_last_event_us: Option<u64>,  // Timestamp of the very last event processed
     last_event_was_syn: bool,
     pub stats: StatsCollector, // cumulative
     interval_stats: StatsCollector, // reset after each interval dump
@@ -36,7 +38,9 @@ impl BounceFilter {
             log_bounces,
             last_event_us: HashMap::with_capacity(4096),
             last_any_event_us: HashMap::with_capacity(4096),
-            first_event_us: None,
+            // first_event_us: None, // Removed
+            overall_first_event_us: None,
+            overall_last_event_us: None,
             last_event_was_syn: true,
             stats: StatsCollector::with_capacity(4096),
             interval_stats: StatsCollector::with_capacity(4096),
@@ -60,9 +64,15 @@ impl BounceFilter {
     pub fn process_event(&mut self, event: &input_event) -> bool {
         let event_us = event_microseconds(event);
 
-        if self.first_event_us.is_none() {
-            self.first_event_us = Some(event_us);
+        // Track overall start and end times
+        if self.overall_first_event_us.is_none() {
+            self.overall_first_event_us = Some(event_us);
         }
+        self.overall_last_event_us = Some(event_us);
+
+        // if self.first_event_us.is_none() { // Removed
+        //     self.first_event_us = Some(event_us);
+        // }
 
         let is_key = is_key_event(event);
         let key_code = event.code;
@@ -318,6 +328,24 @@ impl BounceFilter {
     }
 
     pub fn print_stats(&self, _writer: &mut impl Write) -> io::Result<()> {
+        // Calculate and print total runtime using overall timestamps
+        if let (Some(first), Some(last)) = (self.overall_first_event_us, self.overall_last_event_us) {
+            let duration = last.saturating_sub(first);
+            // Print runtime before the rest of the stats for better structure
+             eprintln!(
+                 "{} {}",
+                 "Total runtime:".on_bright_black().bold().bright_yellow(),
+                 stats::format_us(duration).on_bright_black().bright_yellow().bold()
+             );
+        } else {
+             eprintln!(
+                 "{} {}",
+                 "Total runtime:".on_bright_black().bold().bright_yellow(),
+                 "No events processed".on_bright_black().dimmed()
+             );
+        }
+
+        // Now print the rest of the stats (which no longer includes runtime)
         self.stats.print_stats_to_stderr(
             self.debounce_time_us,
             self.log_all_events,

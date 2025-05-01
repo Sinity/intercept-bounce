@@ -36,8 +36,9 @@ pub struct StatsCollector {
     pub key_events_dropped: u64,
     pub per_key_stats: HashMap<u16, KeyStats>,
     pub per_key_passed_near_miss_timing: HashMap<(u16, i32), Vec<u64>>,
-    pub first_event_us: Option<u64>,
-    pub last_event_us: Option<u64>,
+    // Removed: These are now tracked in BounceFilter for overall duration
+    // pub first_event_us: Option<u64>,
+    // pub last_event_us: Option<u64>,
 }
 
 impl Default for StatsCollector {
@@ -59,17 +60,18 @@ impl StatsCollector {
             key_events_dropped: 0,
             per_key_stats: HashMap::with_capacity(cap),
             per_key_passed_near_miss_timing: HashMap::with_capacity(cap),
-            first_event_us: None,
-            last_event_us: None,
+            // first_event_us: None, // Removed
+            // last_event_us: None, // Removed
         }
     }
 
-    pub fn record_event(&mut self, key_code: u16, key_value: i32, is_bounce: bool, bounce_diff_us: Option<u64>, event_us: u64) {
+    pub fn record_event(&mut self, key_code: u16, key_value: i32, is_bounce: bool, bounce_diff_us: Option<u64>, _event_us: u64) {
         self.key_events_processed += 1;
-        self.last_event_us = Some(event_us);
-        if self.first_event_us.is_none() {
-            self.first_event_us = Some(event_us);
-        }
+        // Removed timestamp tracking from StatsCollector
+        // self.last_event_us = Some(event_us);
+        // if self.first_event_us.is_none() {
+        //     self.first_event_us = Some(event_us);
+        // }
         if is_bounce {
             self.key_events_dropped += 1;
             let key_stats = self.per_key_stats.entry(key_code).or_default();
@@ -159,14 +161,16 @@ impl StatsCollector {
             percentage
         );
 
-        if let (Some(first), Some(last)) = (self.first_event_us, self.last_event_us) {
-            let duration = last.saturating_sub(first);
-            eprintln!(
-                "{} {}",
-                "Total runtime:".on_bright_black().bold().bright_yellow(),
-                format_us(duration).on_bright_black().bright_yellow().bold()
-            );
-        }
+        // Removed runtime calculation from here. It's now calculated and printed
+        // in BounceFilter::print_stats using overall timestamps.
+        // if let (Some(first), Some(last)) = (self.first_event_us, self.last_event_us) {
+        //     let duration = last.saturating_sub(first);
+        //     eprintln!(
+        //         "{} {}",
+        //         "Total runtime:".on_bright_black().bold().bright_yellow(),
+        //         format_us(duration).on_bright_black().bright_yellow().bold()
+        //     );
+        // }
 
         if !self.per_key_stats.is_empty() {
             eprintln!("\n{}", "--- Dropped Event Statistics Per Key ---".on_bright_black().bold().blue().underline());
@@ -277,24 +281,47 @@ impl StatsCollector {
     /// Print JSON stats to the given writer (e.g. stderr).
     pub fn print_stats_json(&self, debounce_time_us: u64, log_all_events: bool, log_bounces: bool, log_interval_us: u64, mut writer: impl std::io::Write) {
         #[derive(Serialize)]
-        struct Meta {
-            debounce_time_us: u64,
-            log_all_events: bool,
+        pub struct Meta { // Made public for use in main.rs signal handler
+            pub debounce_time_us: u64,
+            pub log_all_events: bool,
             log_bounces: bool,
             log_interval_us: u64,
         }
+        // Removed first_event_us and last_event_us from JSON output as well
+        #[derive(Serialize)]
+        struct FilteredStats<'a> {
+            key_events_processed: u64,
+            key_events_passed: u64,
+            key_events_dropped: u64,
+            per_key_stats: &'a HashMap<u16, KeyStats>,
+            per_key_passed_near_miss_timing: &'a HashMap<(u16, i32), Vec<u64>>,
+        }
+
         #[derive(Serialize)]
         struct Output<'a> {
             meta: Meta,
-            stats: &'a StatsCollector,
+            stats: FilteredStats<'a>,
+            // Add runtime here if needed, passed from BounceFilter
+            // runtime_us: Option<u64>,
         }
+
+        let filtered_stats = FilteredStats {
+            key_events_processed: self.key_events_processed,
+            key_events_passed: self.key_events_passed,
+            key_events_dropped: self.key_events_dropped,
+            per_key_stats: &self.per_key_stats,
+            per_key_passed_near_miss_timing: &self.per_key_passed_near_miss_timing,
+        };
+
         let meta = Meta {
             debounce_time_us,
             log_all_events,
             log_bounces,
             log_interval_us,
         };
-        let output = Output { meta, stats: self };
+        // TODO: If JSON output is desired, the caller (BounceFilter or main)
+        // should calculate the runtime and potentially add it to the Output struct here.
+        let output = Output { meta, stats: filtered_stats };
         let _ = serde_json::to_writer_pretty(&mut writer, &output);
         let _ = writeln!(writer);
     }
