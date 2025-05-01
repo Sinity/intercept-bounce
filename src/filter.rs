@@ -182,7 +182,7 @@ impl BounceFilter {
         }
 
         let padded_details = format!("{:<30}", event_details);
-        let indentation = if event.type_ == EV_SYN as u16 { "" } else { "  " };
+        let indentation = "  ";
 
         eprintln!(
             "{}{}{} {} ({}) {}{}",
