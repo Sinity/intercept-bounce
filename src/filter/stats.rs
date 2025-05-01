@@ -124,7 +124,7 @@ impl StatsCollector {
             if log_interval_us > 0 {
                 format!("Every {} seconds", log_interval_us / 1_000_000).yellow()
             } else {
-                "Disabled".dimmed().to_string()
+                "Disabled".dimmed()
             }
         );
 
