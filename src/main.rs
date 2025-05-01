@@ -6,8 +6,8 @@ use colored::*;
 use crossbeam_channel::{bounded, Sender, TrySendError, Receiver}; // Added Receiver
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
-use std::io::{self, Write, ErrorKind}; // Added Write trait explicitly and ErrorKind
-use std::os::unix::io::{AsRawFd, RawFd}; // Added RawFd
+use std::io::{self, ErrorKind}; // Removed Write
+use std::os::unix::io::AsRawFd; // Removed RawFd
 use std::process::exit;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

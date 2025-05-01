@@ -3,7 +3,7 @@ use clap::Parser;
 /// An Interception Tools filter to eliminate keyboard chatter (switch bounce).
 /// Reads Linux input events from stdin, filters rapid duplicate key events,
 /// and writes the filtered events to stdout. Statistics are printed to stderr on exit.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)] // Added Clone derive
 #[command(
     author,
     version,
