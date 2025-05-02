@@ -64,9 +64,26 @@ fn drops_bounce() {
         .arg("5") // 5ms window
         .write_stdin(input_bytes);
 
-    // Execute the command and get the owned Output struct
-    let output: Output = cmd.output().unwrap();
+    // Execute the command and capture output
+    let output_result = cmd.output();
 
+    // Check if the command execution itself failed
+    let output = match output_result {
+        Ok(out) => out,
+        Err(e) => {
+            panic!("Failed to execute command: {}", e);
+        }
+    };
+
+    // Print stderr for debugging, regardless of success
+    // Use String::from_utf8_lossy to handle potential non-UTF8 bytes
+    eprintln!("--- Captured Stderr ---:\n{}", String::from_utf8_lossy(&output.stderr));
+    eprintln!("--- End Captured Stderr ---");
+
+    // Assert that the command exited successfully
+    assert!(output.status.success(), "Command exited with non-zero status: {:?}", output.status);
+
+    // Now assert the stdout content
     let actual_stdout_bytes = output.stdout;
     assert_eq!(
         actual_stdout_bytes, expected_output_bytes,
