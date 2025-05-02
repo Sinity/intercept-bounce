@@ -147,6 +147,7 @@ impl StatsCollector {
     pub fn print_stats_to_stderr(
         &self,
         config: &crate::config::Config,
+        report_type: &str, // Ensure report_type parameter is present
     ) {
         let log_all_events = config.log_all_events;
         let log_bounces = config.log_bounces;

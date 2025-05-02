@@ -319,85 +319,86 @@ fn main() -> io::Result<()> {
         }
     }
 
-    info!("Main event loop finished.");
+    info!("Main event loop finished");
 
-    debug!("Starting shutdown process.");
+    debug!("Starting shutdown process");
     drop(main_state.log_sender); // Drop sender to signal logger
-    debug!("log_sender dropped.");
+    debug!("log_sender dropped");
 
     debug!("Waiting for logger thread to join...");
     let final_stats = match logger_handle.join() {
         Ok(stats) => {
-            debug!("Logger thread joined successfully.");
+            debug!("Logger thread joined successfully");
             stats
         }
         Err(e) => {
             // Error level for thread panic
             error!(panic_info = ?e, "Logger thread panicked");
-            debug!("Logger thread panicked. Returning default stats.");
+            debug!("Logger thread panicked. Returning default stats");
             StatsCollector::with_capacity() // Return empty stats
         }
     };
-    debug!("Logger thread joined. Final stats collected.");
+    debug!("Logger thread joined. Final stats collected");
 
-    debug!("Checking final_stats_printed flag before printing.");
+    debug!("Checking final_stats_printed flag before printing");
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
-        debug!("Final stats flag was not set. Proceeding to print final stats.");
+        debug!("Final stats flag was not set. Proceeding to print final stats");
         let runtime_us = {
             match bounce_filter.lock() {
                 Ok(filter) => {
-                    trace!("BounceFilter mutex locked for runtime calculation.");
+                    trace!("BounceFilter mutex locked for runtime calculation");
                     let rt = filter.get_runtime_us();
                     trace!(?rt, "BounceFilter runtime_us");
                     rt
                 },
                 Err(_) => {
                     // Warn level for poisoned mutex during final calculation
-                    warn!("BounceFilter mutex poisoned during final runtime calculation.");
-                    trace!("BounceFilter mutex poisoned. Cannot get runtime.");
+                    warn!("BounceFilter mutex poisoned during final runtime calculation");
+                    trace!("BounceFilter mutex poisoned. Cannot get runtime");
                     None
                 }
             }
         };
-        trace!("BounceFilter mutex unlocked after runtime calculation.");
+        trace!("BounceFilter mutex unlocked after runtime calculation");
 
         if cfg.stats_json {
-            debug!("Printing final stats in JSON format.");
+            debug!("Printing final stats in JSON format");
             // Use a dedicated tracing event for stats output
             info!(target: "stats", stats_kind = "cumulative", format = "json", "Emitting final statistics");
             final_stats.print_stats_json(
                 &*cfg,
                 runtime_us,
+                "Cumulative", // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
             );
-            debug!("Finished printing final stats in JSON format.");
+            debug!("Finished printing final stats in JSON format");
         } else {
-            debug!("Printing final stats in human-readable format.");
+            debug!("Printing final stats in human-readable format");
             // Use a dedicated tracing event for stats output
             info!(target: "stats", stats_kind = "cumulative", format = "human", "Emitting final statistics");
             final_stats.print_stats_to_stderr(&*cfg, "Cumulative"); // Pass config and type
-            debug!("Finished printing main stats block.");
+            debug!("Finished printing main stats block");
             if let Some(rt) = runtime_us {
-                // Use info level for final runtime print
-                info!(runtime = %util::format_us(rt), "Total Runtime");
+                // Use info level for final runtime print, format as duration
+                info!(runtime = %util::format_duration(Duration::from_micros(rt)), "Total Runtime");
                 eprintln!("----------------------------------------------------------"); // Keep separator for readability
-                debug!("Finished printing runtime.");
+                debug!("Finished printing runtime");
             } else {
-                debug!("Runtime not available.");
+                debug!("Runtime not available");
             }
         }
         if main_state.total_dropped_log_messages > 0 {
             // Warn level for dropped log messages
             warn!(count = main_state.total_dropped_log_messages,
                   "Total log messages dropped due to logger backpressure");
-            debug!("Finished printing dropped log message count.");
+            debug!("Finished printing dropped log message count");
         } else {
-            debug!("No log messages were dropped.");
+            debug!("No log messages were dropped");
         }
     } else {
-        debug!("Final statistics flag was already set (expected on signal). Skipping final stats print in main.");
+        debug!("Final statistics flag was already set (expected on signal). Skipping final stats print in main");
     }
 
-    info!("Application exiting successfully.");
+    info!("Application exiting successfully");
     Ok(())
 }
