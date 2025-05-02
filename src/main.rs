@@ -33,10 +33,10 @@ fn set_high_priority(verbose: bool) {
     {
         let res = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, -20) };
         if res != 0 {
-                eprintln!("[WARN] Unable to set process niceness to -20 (requires root or CAP_SYS_NICE).");
-            } else {
-                if verbose { eprintln!("[INFO] Process priority set to -20 (highest)."); }
-            }
+            eprintln!("[WARN] Unable to set process niceness to -20 (requires root or CAP_SYS_NICE).");
+        } else {
+            if verbose { eprintln!("[INFO] Process priority set to -20 (highest)."); }
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -72,19 +72,19 @@ fn init_tracing(cfg: &Config) {
         .init();
 
     info!(version = env!("CARGO_PKG_VERSION"),
-          git_sha = env!("VERGEN_GIT_SHA_SHORT"),
-          build_ts = env!("VERGEN_BUILD_TIMESTAMP"),
-          "intercept-bounce starting");
+        git_sha = env!("VERGEN_GIT_SHA_SHORT"),
+        build_ts = env!("VERGEN_BUILD_TIMESTAMP"),
+        "intercept-bounce starting");
 
     info!(debounce = %util::format_duration(cfg.debounce_time()),
-          near_miss = %util::format_duration(cfg.near_miss_threshold()),
-          log_interval = %util::format_duration(cfg.log_interval()),
-          log_all = cfg.log_all_events,
-          log_bounces = cfg.log_bounces,
-          stats_json = cfg.stats_json,
-          verbose = cfg.verbose,
-          log_filter = %cfg.log_filter,
-          "Configuration loaded");
+        near_miss = %util::format_duration(cfg.near_miss_threshold()),
+        log_interval = %util::format_duration(cfg.log_interval()),
+        log_all = cfg.log_all_events,
+        log_bounces = cfg.log_bounces,
+        stats_json = cfg.stats_json,
+        verbose = cfg.verbose,
+        log_filter = %cfg.log_filter,
+        "Configuration loaded");
 }
 
 
@@ -222,13 +222,13 @@ fn main() -> io::Result<()> {
                 };
                 // Log EventInfo fields individually at trace level
                 trace!(event_type = event_info.event.type_,
-                       event_code = event_info.event.code,
-                       event_value = event_info.event.value,
-                       event_us = event_info.event_us,
-                       is_bounce = event_info.is_bounce,
-                       diff_us = ?event_info.diff_us, // Use ? for Option<Debug>
-                       last_passed_us = ?event_info.last_passed_us,
-                       "Prepared EventInfo for logger");
+                    event_code = event_info.event.code,
+                    event_value = event_info.event.value,
+                    event_us = event_info.event_us,
+                    is_bounce = event_info.is_bounce,
+                    diff_us = ?event_info.diff_us, // Use ? for Option<Debug>
+                    last_passed_us = ?event_info.last_passed_us,
+                    "Prepared EventInfo for logger");
 
 
                 trace!("Attempting to send EventInfo to logger channel...");
@@ -250,7 +250,7 @@ fn main() -> io::Result<()> {
                             main_state.currently_dropping = true;
                         }
                         trace!(total_dropped = main_state.total_dropped_log_messages,
-                               "Logger channel full. Dropped log message");
+                            "Logger channel full. Dropped log message");
                     }
                     Err(TrySendError::Disconnected(_)) => {
                         // Use error level for unexpected disconnect
@@ -390,7 +390,7 @@ fn main() -> io::Result<()> {
         if main_state.total_dropped_log_messages > 0 {
             // Warn level for dropped log messages
             warn!(count = main_state.total_dropped_log_messages,
-                  "Total log messages dropped due to logger backpressure");
+                "Total log messages dropped due to logger backpressure");
             debug!("Finished printing dropped log message count");
         } else {
             debug!("No log messages were dropped");
