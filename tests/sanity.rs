@@ -61,7 +61,7 @@ fn drops_bounce() {
     let expected_output_bytes = events_to_bytes(&expected_events);
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     // Execute the command and capture output
@@ -103,7 +103,7 @@ fn passes_outside_window() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -128,7 +128,7 @@ fn passes_non_key_events() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -154,7 +154,7 @@ fn filters_different_keys_independently() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -178,7 +178,7 @@ fn filters_key_release() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -203,7 +203,7 @@ fn filters_key_repeat() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5")
+        .arg("5ms") // ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -226,7 +226,7 @@ fn window_zero_passes_all() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("0") // 0ms window
+        .arg("0ms") // 0ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -250,7 +250,7 @@ fn handles_time_going_backwards() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5") // 5ms window
+        .arg("5ms") // 5ms window - ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -275,7 +275,7 @@ fn filters_just_below_window_boundary() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(WINDOW_MS.to_string())
+        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -300,7 +300,7 @@ fn passes_at_window_boundary() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(WINDOW_MS.to_string())
+        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -351,7 +351,7 @@ fn test_complex_sequence() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(WINDOW_MS.to_string())
+        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
