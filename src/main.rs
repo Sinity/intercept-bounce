@@ -90,6 +90,8 @@ fn init_tracing(cfg: &Config) {
 
 
 fn main() -> io::Result<()> {
+    eprintln!("[DEBUG] Starting main function"); // Add debug print
+
     // Early parse to get config for tracing setup
     let args = cli::parse_args();
     let cfg = Arc::new(Config::from(&args));
