@@ -28,7 +28,12 @@
           version = "0.6.0";
 
           src = ./.;
-          cargoHash = "sha256-zKBJ8fomOlqWY3o1ss84bGxusk6HEmqPTjZkzOv5h10="; # Placeholder - UPDATE THIS HASH
+          # The cargoHash below will need to be updated after these changes.
+          # Run `nix build .` and it will tell you the correct hash.
+          cargoHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # Placeholder - UPDATE THIS HASH
+
+          nativeBuildInputs = [ pkgs.pkg-config ]; # Add pkg-config if needed by dependencies
+          buildInputs = [ pkgs.openssl ]; # Example: Add openssl if needed
 
           meta = {
             description = "Interception Tools bounce filter with statistics";

@@ -169,28 +169,28 @@ impl Logger {
 
     /// Dumps the current interval statistics to stderr.
     fn dump_periodic_stats(&mut self) {
-        eprintln!("\n--- Periodic Stats Dump (Wallclock: {}) ---",
-            Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string()
-        );
+        let wallclock = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+        tracing::info!(target: "stats", kind = "periodic", wallclock = %wallclock, "Periodic stats dump");
 
         let interval_stats_clone = self.interval_stats.clone();
         if self.config.stats_json {
-            if self.config.verbose { eprintln!("[DEBUG] Logger thread printing periodic stats in JSON format."); }
+            tracing::debug!("Logger thread printing periodic stats in JSON format.");
             interval_stats_clone.print_stats_json(
                 &*self.config,
-                None,
-                &mut io::stderr().lock(),
+                None, // Runtime is only for cumulative
+                "Periodic", // Report type
+                &mut io::stderr().lock(), // Write directly to stderr
             );
-            if self.config.verbose { eprintln!("[DEBUG] Logger thread finished printing periodic stats in JSON format."); }
+            tracing::debug!("Logger thread finished printing periodic stats in JSON format.");
         } else {
-            if self.config.verbose { eprintln!("[DEBUG] Logger thread printing periodic stats in human-readable format."); }
-            interval_stats_clone.print_stats_to_stderr(&*self.config);
-            if self.config.verbose { eprintln!("[DEBUG] Logger thread finished printing periodic stats in human-readable format."); }
+            tracing::debug!("Logger thread printing periodic stats in human-readable format.");
+            interval_stats_clone.print_stats_to_stderr(&*self.config, "Periodic"); // Pass config and type
+            tracing::debug!("Logger thread finished printing periodic stats in human-readable format.");
         }
 
-        if self.config.verbose { eprintln!("[DEBUG] Logger thread resetting interval stats."); }
+        tracing::debug!("Logger thread resetting interval stats.");
         self.interval_stats = StatsCollector::with_capacity();
-        if self.config.verbose { eprintln!("[DEBUG] Logger thread interval stats reset."); }
+        tracing::debug!("Logger thread interval stats reset.");
     }
 
     /// Adapts logic from the old BounceFilter::log_event.

@@ -240,17 +240,18 @@ fn stats_json_output_structure() {
         near_miss_threshold: Duration::from_millis(100), // Include near-miss threshold in config
         log_all_events: true,
         log_bounces: false,
-        log_interval_us: 0,
+        log_interval: Duration::ZERO,
         stats_json: true, // Assume JSON is enabled for this test
         verbose: false,
+        log_filter: "info".to_string(),
     };
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev2, 1500, 500, Some(1000)), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev3, DEBOUNCE_US + 2000, Some(1000)), &config); // Near miss relative to ev1
+    stats.record_event_info_with_config(&passed_event_info(ev3, DEBOUNCE_TIME.as_micros() as u64 + 2000, Some(1000)), &config); // Near miss relative to ev1
 
     let mut buf = Vec::new();
-    stats.print_stats_json(&config, Some(DEBOUNCE_US + 1000), &mut buf);
+    stats.print_stats_json(&config, Some(DEBOUNCE_TIME.as_micros() as u64 + 1000), "Cumulative", &mut buf); // Pass report_type
     let s = String::from_utf8(buf).unwrap();
     println!("JSON Output:\n{}", s); // Print JSON for debugging if test fails
 

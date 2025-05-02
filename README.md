@@ -75,10 +75,10 @@ This is particularly useful for mechanical keyboards which can sometimes registe
     ```
 
 4.  **Periodic Stats Dump:**
-    Filter with the default 10ms threshold and print full stats to stderr every 60 seconds (in addition to the final stats on exit).
+    Filter with the default 25ms threshold and print full stats to stderr every 60 seconds (in addition to the final stats on exit).
 
     ```bash
-    sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60 | uinput -d ...'
+    sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60s | uinput -d ...'
     ```
 
 5.  **Verbose Debugging:**
