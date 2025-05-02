@@ -263,7 +263,7 @@ impl StatsCollector {
             }
         }
          if !any_near_miss {
-            eprintln!("\n--- No near-miss events recorded (< {}) ---", format_us(config.near_miss_threshold_us));
+            eprintln!("\n--- No near-miss events recorded (< {}) ---", util::format_duration(config.near_miss_threshold()));
         }
 
         eprintln!("----------------------------------------------------------");
