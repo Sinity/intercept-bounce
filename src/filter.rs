@@ -3,7 +3,6 @@
 // focusing only on the information needed for the immediate bounce decision.
 
 pub mod keynames;
-pub mod keynames;
 pub mod stats;
 
 use crate::event::{self, is_key_event};
