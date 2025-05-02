@@ -237,5 +237,3 @@ fn initial_state_empty() {
     // We could expose last_event_us for testing if needed, but maybe not necessary
 }
 
-// Removed stats_tracking and near_miss_tracking tests as BounceFilter no longer handles stats.
-// Those tests should be adapted for StatsCollector in tests/unit_stats.rs.
