@@ -1,10 +1,12 @@
 // This module defines the StatsCollector struct and related types
 // used by the logger thread to accumulate and report statistics.
 
-use crate::filter::keynames::get_key_name;
+use crate::filter::keynames::get_key_name; // Keep keynames import
+use crate::util; // Import the new util module
 use crate::logger::EventInfo; // Use EventInfo from logger module
 use serde::Serialize;
 use std::collections::HashMap;
+use std::time::Duration; // Import Duration
 use std::io::Write; // Need Write for print_stats_json
 
 /// Metadata included in JSON statistics output, providing context.
@@ -273,13 +275,15 @@ impl StatsCollector {
         &self,
         config: &crate::config::Config,
         runtime_us: Option<u64>,
+        report_type: &str, // Add report_type parameter back
         mut writer: impl Write,
     ) {
-        let debounce_time_us = config.debounce_us;
-        let near_miss_threshold_us = config.near_miss_threshold_us;
+        // Use accessor methods for consistency
+        let debounce_time_us = config.debounce_us();
+        let near_miss_threshold_us = config.near_miss_threshold_us();
         let log_all_events = config.log_all_events;
         let log_bounces = config.log_bounces;
-        let log_interval_us = config.log_interval_us;
+        let log_interval_us = config.log_interval_us();
 
         let mut per_key_stats_map = HashMap::new();
         for (key_code, stats) in self.per_key_stats.iter().enumerate() {
@@ -299,44 +303,36 @@ impl StatsCollector {
         }
 
         #[derive(Serialize)]
-        struct FilteredStatsData<'a> {
+        struct ReportData<'a> {
+            report_type: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")] // Only include runtime for cumulative
+            runtime_us: Option<u64>,
+            #[serde(skip_serializing_if = "Option::is_none")] // Add human-readable runtime
+            runtime_human: Option<String>,
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            per_key_stats: &'a HashMap<u16, &'a KeyStats>,
-            per_key_passed_near_miss_timing: &'a HashMap<String, &'a Vec<u64>>,
+            per_key_stats: HashMap<u16, &'a KeyStats>,
+            per_key_passed_near_miss_timing: HashMap<String, &'a Vec<u64>>,
         }
 
-        #[derive(Serialize)]
-        struct JsonOutput<'a> {
-            meta: Meta,
-            runtime_us: Option<u64>,
-            stats: FilteredStatsData<'a>,
-        }
+        let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
 
-        let filtered_stats_data = FilteredStatsData {
+        let report = ReportData {
+            report_type,
+            runtime_us, // Will be None for periodic reports
+            runtime_human,
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
-            per_key_stats: &per_key_stats_map,
-            per_key_passed_near_miss_timing: &near_miss_map,
+            per_key_stats: per_key_stats_map,
+            per_key_passed_near_miss_timing: near_miss_map,
         };
 
-        let meta = Meta {
-            debounce_time_us,
-            near_miss_threshold_us,
-            log_all_events,
-            log_bounces,
-            log_interval_us,
-        };
-
-        let output = JsonOutput {
-            meta,
-            runtime_us,
-            stats: filtered_stats_data,
-        };
-
-        let _ = serde_json::to_writer_pretty(&mut writer, &output);
+        // We are printing individual reports (cumulative or periodic) as separate JSON objects
+        // to stderr. The logger thread handles the overall structure (e.g., a list of periodic
+        // reports).
+        let _ = serde_json::to_writer_pretty(&mut writer, &report);
         let _ = writeln!(writer);
     }
 }

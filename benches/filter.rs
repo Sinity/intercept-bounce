@@ -99,9 +99,6 @@ fn dummy_config(
     stats_json: bool,
     verbose: bool,
 ) -> Arc<Config> {
-    // Construct Config directly, assuming a constructor or public fields
-    // This needs adjustment based on the actual Config struct definition
-    // For now, assuming direct construction is possible for the example:
      Arc::new(Config {
          debounce_time,
          near_miss_threshold,

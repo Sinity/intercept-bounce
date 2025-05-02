@@ -14,7 +14,7 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use intercept_bounce::{cli, config::Config, util}; // Add util
+use intercept_bounce::{cli, config::Config, util};
 use intercept_bounce::event;
 use intercept_bounce::filter;
 use intercept_bounce::logger;
@@ -22,8 +22,8 @@ use event::{event_microseconds, list_input_devices, read_event_raw, write_event_
 use filter::stats::StatsCollector;
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
-use tracing::{debug, error, info, warn}; // Import tracing macros
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter}; // Import subscriber components
+use tracing::{debug, error, info, trace, warn}; // Add trace
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, filter::LevelFilter, filter::TargetFilter}; // Add more subscriber components
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -97,7 +97,8 @@ fn main() -> io::Result<()> {
     init_tracing(&cfg);
 
     // Now use tracing for subsequent messages
-    debug!("Arguments parsed and config created: {:?}", cfg);
+    // Don't log the whole config struct at debug, use the info log below
+    // debug!("Arguments parsed and config created: {:?}", cfg);
 
 
     if args.list_devices {
@@ -126,7 +127,7 @@ fn main() -> io::Result<()> {
     debug!("Shared state initialized.");
 
     debug!("Creating bounded channel for logger communication...");
-    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1024);
+    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1024); // Keep bounded for now
     debug!(capacity = 1024, "Channel created.");
 
     debug!("Spawning logger thread...");
@@ -169,7 +170,8 @@ fn main() -> io::Result<()> {
     let stdin_fd = io::stdin().as_raw_fd();
     info!(stdin_fd, "Reading from standard input.");
     let stdout_fd = io::stdout().as_raw_fd();
-    debug!(stdout_fd, debounce_us = cfg.debounce_us(), "Using stdout FD and debounce time.");
+    // Log Duration directly using Display impl via humantime
+    debug!(stdout_fd, debounce = %util::format_duration(cfg.debounce_time()), "Using stdout FD and debounce time.");
 
     let mut main_state = MainState {
         log_sender,

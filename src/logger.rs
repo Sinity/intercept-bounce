@@ -8,7 +8,7 @@ use crate::filter::keynames::{get_key_name, get_event_type_name};
 use crate::filter::stats::StatsCollector;
 use crate::config::Config;
 use crate::util; // Import util
-use crossbeam_channel::Receiver;
+use crossbeam_channel::Receiver; // Keep for now, replace later
 use input_linux_sys::{input_event, EV_SYN, EV_MSC};
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -80,56 +80,53 @@ impl Logger {
     ///
     /// Returns the final cumulative statistics upon exit.
     pub fn run(&mut self) -> StatsCollector {
-        if self.config.verbose { eprintln!("[LOGGER] Logger thread started."); }
-        let log_interval = if self.config.log_interval_us > 0 {
-            Duration::from_micros(self.config.log_interval_us)
-        } else {
-            Duration::MAX
-        };
+        // Use tracing for logger thread startup message
+        tracing::debug!("Logger thread started.");
+        let log_interval = self.config.log_interval(); // Get Duration directly
         let check_interval = Duration::from_millis(100);
 
         loop {
             if !self.logger_running.load(Ordering::SeqCst) {
-                if self.config.verbose { eprintln!("[LOGGER] Received shutdown signal via AtomicBool, attempting to drain channel."); }
+                tracing::debug!("Received shutdown signal via AtomicBool, attempting to drain channel.");
                 while let Ok(msg) = self.receiver.try_recv() {
-                    if self.config.verbose { eprintln!("[LOGGER] Draining channel: Processing message after shutdown signal."); }
+                    tracing::trace!("Draining channel: Processing message after shutdown signal.");
                     self.process_message(msg);
                 }
-                if self.config.verbose { eprintln!("[LOGGER] Finished draining channel. Exiting run loop."); }
+                tracing::debug!("Finished draining channel. Exiting run loop.");
                 break;
             }
 
-            if log_interval != Duration::MAX && self.last_dump_time.elapsed() >= log_interval {
-                if self.config.verbose { eprintln!("[LOGGER] Triggering periodic stats dump."); }
+            if log_interval > Duration::ZERO && self.last_dump_time.elapsed() >= log_interval {
+                tracing::debug!("Triggering periodic stats dump.");
                 self.dump_periodic_stats();
                 self.last_dump_time = Instant::now();
-                if self.config.verbose { eprintln!("[LOGGER] Periodic stats dump complete. Timer reset."); }
+                tracing::debug!("Periodic stats dump complete. Timer reset.");
             }
 
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
-                    if self.config.verbose { eprintln!("[DEBUG] Logger thread received message from channel."); }
+                    tracing::trace!("Logger thread received message from channel.");
                     self.process_message(msg);
-                    if self.config.verbose { eprintln!("[DEBUG] Logger thread finished processing message."); }
+                    tracing::trace!("Logger thread finished processing message.");
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    if self.config.verbose { eprintln!("[LOGGER] Logger thread receive timed out. Re-checking flags."); }
+                    tracing::trace!("Logger thread receive timed out. Re-checking flags.");
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    eprintln!("[LOGGER] Detected channel disconnected. Attempting to drain channel.");
+                    tracing::warn!("Detected channel disconnected. Attempting to drain channel.");
                     while let Ok(msg) = self.receiver.try_recv() {
-                        if self.config.verbose { eprintln!("[DEBUG] Logger thread draining channel: Processing message after disconnect."); }
+                        tracing::trace!("Logger thread draining channel: Processing message after disconnect.");
                         self.process_message(msg);
                     }
-                    eprintln!("[LOGGER] Finished draining channel. Exiting run loop.");
+                    tracing::warn!("Finished draining channel. Exiting run loop.");
                     break;
                 }
             }
         }
 
-        if self.config.verbose { eprintln!("[LOGGER] Run loop exited. Preparing final stats."); }
-        if self.config.verbose { eprintln!("[LOGGER] Taking cumulative_stats for return."); }
+        tracing::debug!("Run loop exited. Preparing final stats.");
+        tracing::debug!("Taking cumulative_stats for return.");
         std::mem::take(&mut self.cumulative_stats)
     }
 
@@ -138,30 +135,32 @@ impl Logger {
     pub fn process_message(&mut self, msg: LogMessage) { // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
-                // Cannot print EventInfo directly due to input_event not implementing Debug.
-                if self.config.verbose {
-                    eprintln!(
-                        "[DEBUG] Logger thread processing EventInfo: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
-                        data.event.type_, data.event.code, data.event.value, data.event_us, data.is_bounce, data.diff_us, data.last_passed_us
-                    );
-                }
+                // Log EventInfo fields individually at trace level
+                tracing::trace!(event_type = data.event.type_,
+                       event_code = data.event.code,
+                       event_value = data.event.value,
+                       event_us = data.event_us,
+                       is_bounce = data.is_bounce,
+                       diff_us = ?data.diff_us,
+                       last_passed_us = ?data.last_passed_us,
+                       "Logger processing EventInfo");
 
                 self.cumulative_stats.record_event_info_with_config(&data, &self.config);
                 self.interval_stats.record_event_info_with_config(&data, &self.config);
 
                 if self.first_event_us.is_none() {
                     self.first_event_us = Some(data.event_us);
-                    if self.config.verbose { eprintln!("[DEBUG] Logger thread recorded first event timestamp: {}", data.event_us); }
+                    tracing::trace!(ts = data.event_us, "Logger recorded first event timestamp");
                 }
 
                 if self.config.log_all_events {
                     if data.event.type_ == EV_SYN as u16 || data.event.type_ == EV_MSC as u16 {
-                        return;
+                        return; // Skip logging SYN/MSC events even in log-all mode
                     }
-                    if self.config.verbose { eprintln!("[DEBUG] Logger thread logging all events."); }
+                    tracing::trace!("Logger logging all events.");
                     self.log_event_detailed(&data);
                 } else if self.config.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
-                    if self.config.verbose { eprintln!("[DEBUG] Logger thread logging bounce event."); }
+                    tracing::trace!("Logger logging bounce event.");
                     self.log_simple_bounce_detailed(&data);
                 }
             }
@@ -235,7 +234,7 @@ impl Logger {
         let near_miss_info = if !data.is_bounce && event::is_key_event(&data.event) {
             if let Some(last_us) = data.last_passed_us {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
-                     // Check against Duration directly
+                     // Check against Duration directly, use accessor
                      if Duration::from_micros(diff) >= self.config.debounce_time() {
                          format!(" (Diff since last passed: {})", util::format_us(diff))
                      } else {

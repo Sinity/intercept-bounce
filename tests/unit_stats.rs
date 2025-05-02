@@ -8,7 +8,7 @@ use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::logger::EventInfo;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
-use std::time::Duration; // Import Duration
+use std::time::Duration;
 
 // --- Test Constants ---
 const KEY_A: u16 = 30;
@@ -98,7 +98,7 @@ fn stats_basic_counts() {
     let ev4 = key_ev(4000, KEY_A, 0); // Bounce of ev3 (diff 1000)
     let ev5 = key_ev(5000, KEY_B, 1); // First B press (pass)
 
-    let config = dummy_config(DEBOUNCE_US, 100_000); // Use default near-miss threshold for this test
+    let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100)); // Use default near-miss threshold for this test
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev2, 2000, 1000, Some(1000)), &config);
@@ -128,11 +128,12 @@ fn stats_basic_counts() {
 #[test]
 fn stats_near_miss_default_threshold() {
     let mut stats = StatsCollector::with_capacity();
+    let near_miss_threshold = Duration::from_millis(100);
     // Near miss threshold is 100ms (100_000 us)
-    let near_miss_time1 = DEBOUNCE_US + 500; // 10.5ms (near miss relative to event at 0)
-    let near_miss_time2 = DEBOUNCE_US + 90_000; // 100ms (near miss relative to previous)
-    let far_time = DEBOUNCE_US + 100_001; // 110.001ms (not near miss relative to previous)
-    let bounce_time = DEBOUNCE_US - 1; // 9.999ms (bounce)
+    let near_miss_time1 = DEBOUNCE_TIME.as_micros() as u64 + 500; // 10.5ms (near miss relative to event at 0)
+    let near_miss_time2 = DEBOUNCE_TIME.as_micros() as u64 + 90_000; // 100ms (near miss relative to previous)
+    let far_time = DEBOUNCE_TIME.as_micros() as u64 + 100_001; // 110.001ms (not near miss relative to previous)
+    let bounce_time = DEBOUNCE_TIME.as_micros() as u64 - 1; // 9.999ms (bounce)
 
     let ev1_ts = 0;
     let ev2_ts = ev1_ts + near_miss_time1;
@@ -146,7 +147,7 @@ fn stats_near_miss_default_threshold() {
     let ev4 = key_ev(ev4_ts, KEY_A, 1); // Far
     let ev5 = key_ev(ev5_ts, KEY_A, 1); // Bounce
 
-    let config = dummy_config(DEBOUNCE_US, 100_000); // Use 100ms threshold
+    let config = dummy_config(DEBOUNCE_TIME, near_miss_threshold); // Use 100ms threshold
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev2, ev2_ts, Some(ev1_ts)), &config); // last_passed = ev1_ts
@@ -176,10 +177,10 @@ fn stats_near_miss_default_threshold() {
 #[test]
 fn stats_near_miss_custom_threshold() {
     let mut stats = StatsCollector::with_capacity();
-    let custom_threshold_us = 50_000; // 50ms
+    let custom_threshold = Duration::from_millis(50); // 50ms
 
     let ev1_ts = 0;
-    let ev2_ts = ev1_ts + DEBOUNCE_US + 1000; // 11ms (within 50ms threshold)
+    let ev2_ts = ev1_ts + DEBOUNCE_TIME.as_micros() as u64 + 1000; // 11ms (within 50ms threshold)
     let ev3_ts = ev2_ts + 40_000; // 40ms after ev2 (within 50ms threshold)
     let ev4_ts = ev3_ts + 60_000; // 60ms after ev3 (outside 50ms threshold)
 
@@ -188,7 +189,7 @@ fn stats_near_miss_custom_threshold() {
     let ev3 = key_ev(ev3_ts, KEY_A, 1); // Near miss
     let ev4 = key_ev(ev4_ts, KEY_A, 1); // Far
 
-    let config = dummy_config(DEBOUNCE_US, custom_threshold_us); // Use custom 50ms threshold
+    let config = dummy_config(DEBOUNCE_TIME, custom_threshold); // Use custom 50ms threshold
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev2, ev2_ts, Some(ev1_ts)), &config); // last_passed = ev1_ts
@@ -214,7 +215,7 @@ fn stats_ignores_non_key_events() {
      let ev2 = syn_ev(2000); // SYN event
      let syn_info = EventInfo { event: ev2, event_us: 2000, is_bounce: false, diff_us: None, last_passed_us: None };
 
-     let config = dummy_config(DEBOUNCE_US, 100_000);
+     let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100));
 
      stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
      stats.record_event_info_with_config(&syn_info, &config); // Process the SYN event info
@@ -232,11 +233,11 @@ fn stats_json_output_structure() {
     let mut stats = StatsCollector::with_capacity();
     let ev1 = key_ev(1000, KEY_A, 1);
     let ev2 = key_ev(1500, KEY_A, 1); // Bounce (diff 500)
-    let ev3 = key_ev(DEBOUNCE_US + 2000, KEY_A, 1); // Near miss (diff DEBOUNCE_US+1000)
+    let ev3 = key_ev(DEBOUNCE_TIME.as_micros() as u64 + 2000, KEY_A, 1); // Near miss
 
     let config = Config {
-        debounce_us: DEBOUNCE_US,
-        near_miss_threshold_us: 100_000, // Include near-miss threshold in config
+        debounce_time: DEBOUNCE_TIME,
+        near_miss_threshold: Duration::from_millis(100), // Include near-miss threshold in config
         log_all_events: true,
         log_bounces: false,
         log_interval_us: 0,
@@ -272,7 +273,7 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"per_key_passed_near_miss_timing\":"));
     // Check if near miss for KEY_A, value 1 is present
     assert!(s.contains("\"[30,1]\": ["));
-    assert!(s.contains(&format!("{}", DEBOUNCE_US + 1000))); // Check near miss timing value
+    assert!(s.contains(&format!("{}", DEBOUNCE_TIME.as_micros() as u64 + 1000))); // Check near miss timing value
 
     // Ensure keys with no drops/near-misses are NOT present (e.g., key B=48)
     assert!(!s.contains("\"48\":"));
@@ -282,15 +283,16 @@ fn stats_json_output_structure() {
 #[test]
 fn stats_only_passed() {
     let mut stats = StatsCollector::with_capacity();
+    let t = DEBOUNCE_TIME.as_micros() as u64;
     let ev1 = key_ev(0, KEY_C, 1);
-    let ev2 = key_ev(DEBOUNCE_US + 1, KEY_C, 0);
-    let ev3 = key_ev((DEBOUNCE_US + 1) * 2, KEY_C, 1);
+    let ev2 = key_ev(t + 1, KEY_C, 0);
+    let ev3 = key_ev((t + 1) * 2, KEY_C, 1);
 
-    let config = dummy_config(DEBOUNCE_US, 100_000); // Use default near-miss threshold
+    let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100)); // Use default near-miss threshold
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 0, None), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev2, DEBOUNCE_US + 1, None), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev3, (DEBOUNCE_US + 1) * 2, Some(0)), &config); // Pass relative to ev1
+    stats.record_event_info_with_config(&passed_event_info(ev2, t + 1, None), &config);
+    stats.record_event_info_with_config(&passed_event_info(ev3, (t + 1) * 2, Some(0)), &config); // Pass relative to ev1
 
     assert_eq!(stats.key_events_processed, 3);
     assert_eq!(stats.key_events_passed, 3);
@@ -302,11 +304,11 @@ fn stats_only_passed() {
     assert_eq!(key_c_stats.release.count, 0);
     assert_eq!(key_c_stats.repeat.count, 0);
 
-    // Check near miss (ev3 relative to ev1) - diff should be > DEBOUNCE_US
+    // Check near miss (ev3 relative to ev1) - diff should be > DEBOUNCE_TIME
     let near_miss_idx = KEY_C as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
-    let expected_diff = (DEBOUNCE_US + 1) * 2; // Diff between ev3 and ev1
-    if expected_diff < 100_000 { // Only record if < 100ms
+    let expected_diff = (t + 1) * 2; // Diff between ev3 and ev1
+    if Duration::from_micros(expected_diff) < Duration::from_millis(100) { // Only record if < 100ms
         assert_eq!(near_misses.len(), 1);
         assert_eq!(near_misses[0], expected_diff);
     } else {
@@ -321,7 +323,7 @@ fn stats_only_dropped() {
     let ev2 = key_ev(100, KEY_B, 1); // Drop (diff 100)
     let ev3 = key_ev(200, KEY_B, 1); // Drop (diff 200 relative to ev1)
 
-    let config = dummy_config(DEBOUNCE_US, 100_000); // Near-miss threshold doesn't matter for dropped events
+    let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100)); // Near-miss threshold doesn't matter for dropped events
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 0, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev2, 100, 100, Some(0)), &config);
