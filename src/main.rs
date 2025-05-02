@@ -22,8 +22,8 @@ use event::{event_microseconds, list_input_devices, read_event_raw, write_event_
 use filter::stats::StatsCollector;
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
-use tracing::{debug, error, info, trace, warn}; // Add trace
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, filter::{LevelFilter, TargetFilter}}; // Add more subscriber components
+use tracing::{debug, error, info, trace, warn};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter}; // Remove LevelFilter, TargetFilter
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -72,7 +72,8 @@ fn init_tracing(cfg: &Config) {
         .init();
 
     info!(version = env!("CARGO_PKG_VERSION"),
-        git_sha = env!("VERGEN_GIT_SHA_SHORT"),
+        // Use option_env! for git sha to avoid build errors outside git repo
+        git_sha = option_env!("VERGEN_GIT_SHA_SHORT").unwrap_or("unknown"),
         build_ts = env!("VERGEN_BUILD_TIMESTAMP"),
         "intercept-bounce starting");
 
