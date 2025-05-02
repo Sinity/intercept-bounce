@@ -151,36 +151,10 @@ impl StatsCollector {
     ) {
         let log_all_events = config.log_all_events;
         let log_bounces = config.log_bounces;
-        let log_interval = config.log_interval(); // Get Duration
-
-        // Config parameters are now logged at startup via tracing
-        // eprintln!("--- intercept-bounce status ---");
-        // eprintln!("Debounce Threshold: {}", util::format_duration(config.debounce_time()));
-        // eprintln!("Near-Miss Threshold: {}", util::format_duration(config.near_miss_threshold()));
-        // eprintln!("Log All Events (--log-all-events): {}", if log_all_events { "Active" } else { "Inactive" });
-        // eprintln!("Log Bounces (--log-bounces): {}",
-        //     if log_all_events { "Overridden by --log-all-events" }
-        //     else if log_bounces { "Active" }
-        //     else { "Inactive" }
-        // );
-        // eprintln!("Periodic Log Interval (--log-interval): {}",
-        //     if log_interval > Duration::ZERO { format!("Every {}", util::format_duration(log_interval)) }
-        //     else { "Disabled".to_string() }
-        // );
-
+        // Config parameters are logged at startup via tracing.
+        // This section is kept for context but the eprint lines are removed.
 
         eprintln!("\n--- Overall Statistics ({}) ---", report_type); // Label report type
-        eprintln!("Key Events Processed: {}", self.key_events_processed);
-            if log_all_events { "Overridden by --log-all-events" }
-            else if log_bounces { "Active" }
-            else { "Inactive" }
-        );
-        eprintln!("Periodic Log Interval (--log-interval): {}",
-            if log_interval_us > 0 { format!("Every {} seconds", log_interval_us / 1_000_000) }
-            else { "Disabled".to_string() } // Ensure String type
-        );
-
-        eprintln!("\n--- Overall Statistics ---");
         eprintln!("Key Events Processed: {}", self.key_events_processed);
         eprintln!("Key Events Passed:   {}", self.key_events_passed);
         eprintln!("Key Events Dropped:  {}", self.key_events_dropped);
