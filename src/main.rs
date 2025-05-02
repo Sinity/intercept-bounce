@@ -28,19 +28,19 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
 fn set_high_priority(verbose: bool) {
-    if verbose { eprintln!("[MAIN] Attempting to set high process priority..."); }
     #[cfg(target_os = "linux")]
     {
+        debug!("Attempting to set high process priority (niceness -20)...");
         let res = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, -20) };
         if res != 0 {
-            eprintln!("[WARN] Unable to set process niceness to -20 (requires root or CAP_SYS_NICE).");
+            warn!("Unable to set process niceness to -20 (requires root or CAP_SYS_NICE). Error: {}", io::Error::last_os_error());
         } else {
-            if verbose { eprintln!("[INFO] Process priority set to -20 (highest)."); }
+            info!("Process priority set to -20 (highest).");
         }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        if verbose { eprintln!("[INFO] set_high_priority is only implemented for Linux."); }
+        info!("set_high_priority is only implemented for Linux.");
     }
 }
 
@@ -57,7 +57,8 @@ struct MainState {
 fn init_tracing(cfg: &Config) {
     // TODO: Add JSON and OTLP layers later
     let fmt_layer = fmt::layer()
-        .with_target(cfg.verbose) // Show module path only if verbose
+        .with_writer(std::io::stderr) // Explicitly write to stderr
+        .with_target(cfg.verbose)     // Show module path only if verbose
         .with_level(true);
 
     let filter = EnvFilter::try_new(&cfg.log_filter)
@@ -110,7 +111,6 @@ fn main() -> io::Result<()> {
             }
             Err(e) => {
                 error!("Error listing devices: {}", e);
-                eprintln!("Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges."); // Keep this eprintln for user visibility
                 info!("Exiting due to device listing error.");
                 exit(2);
             }
@@ -118,7 +118,7 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    set_high_priority(cfg.verbose); // Pass verbose flag
+    set_high_priority(cfg.verbose);
 
     debug!("Setting up shared state...");
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));
@@ -383,7 +383,6 @@ fn main() -> io::Result<()> {
             if let Some(rt) = runtime_us {
                 // Use info level for final runtime print, format as duration
                 info!(runtime = %util::format_duration(Duration::from_micros(rt)), "Total Runtime");
-                eprintln!("----------------------------------------------------------"); // Keep separator for readability
                 debug!("Finished printing runtime");
             } else {
                 debug!("Runtime not available");

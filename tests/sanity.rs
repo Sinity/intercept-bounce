@@ -75,11 +75,6 @@ fn drops_bounce() {
         }
     };
 
-    // Print stderr for debugging, regardless of success
-    // Use String::from_utf8_lossy to handle potential non-UTF8 bytes
-    eprintln!("--- Captured Stderr ---:\n{}", String::from_utf8_lossy(&output.stderr));
-    eprintln!("--- End Captured Stderr ---");
-
     // Assert that the command exited successfully
     assert!(output.status.success(), "Command exited with non-zero status: {:?}", output.status);
 

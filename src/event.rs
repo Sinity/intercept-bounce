@@ -5,6 +5,7 @@ use std::io::{self, ErrorKind};
 use std::mem::size_of;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
+use tracing::warn; // Import warn
 
 /// Reads exactly one `input_event` directly from a raw file descriptor using `libc::read`.
 ///
@@ -87,9 +88,6 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
             -1 => {
                 let err = io::Error::last_os_error();
                 if err.kind() != ErrorKind::Interrupted {
-                    if err.kind() == ErrorKind::BrokenPipe {
-                         eprintln!("[DEBUG] write_event_raw detected BrokenPipe");
-                    }
                     return Err(err);
                 }
             }
@@ -174,10 +172,10 @@ pub fn list_input_devices() -> io::Result<()> {
         let device_name = match eviocgname(fd, &mut name_buf) {
             Ok(name) => name,
             Err(e) => {
-                eprintln!("Warning: Could not get name for {}: {}", path_str, e);
+                warn!(device=%path_str, error=%e, "Could not get device name via EVIOCGNAME ioctl");
                 "<Unknown Name>".to_string()
             }
-        };
+        }; // Semicolon was missing here
 
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];
@@ -198,7 +196,7 @@ pub fn list_input_devices() -> io::Result<()> {
                 if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
             }
             Err(e) => {
-                eprintln!("Warning: Could not get capabilities for {}: {}", path_str, e);
+                warn!(device=%path_str, error=%e, "Could not get device capabilities via EVIOCGBIT ioctl");
                 capabilities.push("Error getting capabilities");
             }
         }
