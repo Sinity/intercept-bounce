@@ -118,7 +118,7 @@ impl StatsCollector {
                     // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
                     // The filter ensures diff >= debounce_time for passed events.
                     // Here, we check against the near-miss threshold.
-                    if diff <= config.near_miss_threshold_us {
+                    if diff <= config.near_miss_threshold_us() { // Add parentheses
                         self.record_near_miss((info.event.code, info.event.value), diff);
                     }
                 }
@@ -149,10 +149,10 @@ impl StatsCollector {
         config: &crate::config::Config,
         report_type: &str, // Ensure report_type parameter is present
     ) {
-        let log_all_events = config.log_all_events;
-        let log_bounces = config.log_bounces;
         // Config parameters are logged at startup via tracing.
-        // This section is kept for context but the eprint lines are removed.
+        // These variables are no longer needed here.
+        // let log_all_events = config.log_all_events;
+        // let log_bounces = config.log_bounces;
 
         eprintln!("\n--- Overall Statistics ({}) ---", report_type); // Label report type
         eprintln!("Key Events Processed: {}", self.key_events_processed);
