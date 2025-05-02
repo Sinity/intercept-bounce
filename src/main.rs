@@ -223,13 +223,13 @@ fn main() -> io::Result<()> {
                 };
                 // Log EventInfo fields individually at trace level
                 trace!(event_type = event_info.event.type_,
-                    event_code = event_info.event.code,
-                    event_value = event_info.event.value,
-                    event_us = event_info.event_us,
-                    is_bounce = event_info.is_bounce,
-                    diff_us = ?event_info.diff_us, // Use ? for Option<Debug>
-                    last_passed_us = ?event_info.last_passed_us,
-                    "Prepared EventInfo for logger");
+                       event_code = event_info.event.code,
+                       event_value = event_info.event.value,
+                       event_us = event_info.event_us,
+                       is_bounce = event_info.is_bounce,
+                       diff_us = ?event_info.diff_us, // Use ? for Option<Debug>
+                       last_passed_us = ?event_info.last_passed_us,
+                       "Prepared EventInfo for logger");
 
 
                 trace!("Attempting to send EventInfo to logger channel...");
@@ -265,6 +265,7 @@ fn main() -> io::Result<()> {
 
                 if !is_bounce {
                     trace!("Event passed filter. Attempting to write to stdout...");
+                    eprintln!("[DEBUG] Writing event: type={}, code={}, value={}", ev.type_, ev.code, ev.value); // Add debug print
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         if e.kind() == ErrorKind::BrokenPipe {
                             // Info level for broken pipe is appropriate
