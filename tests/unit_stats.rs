@@ -274,7 +274,8 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"per_key_passed_near_miss_timing\":"));
     // Check if near miss for KEY_A, value 1 is present
     assert!(s.contains("\"[30,1]\": ["));
-    assert!(s.contains(&format!("{}", DEBOUNCE_TIME.as_micros() as u64 + 2000))); // Check near miss timing value
+    // Check near miss timing value (difference between ev3 and ev1)
+    assert!(s.contains("11000")); // 12000 (ev3_ts) - 1000 (ev1_ts) = 11000
 
     // Ensure keys with no drops/near-misses are NOT present (e.g., key B=48)
     assert!(!s.contains("\"48\":"));
