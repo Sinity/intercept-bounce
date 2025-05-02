@@ -17,6 +17,8 @@ pub struct Meta {
     pub log_interval_us: u64,
 }
 
+use crate::util; // Import the new util module
+
 /// Statistics for a specific key value state (press/release/repeat).
 /// Holds the count of dropped events and the timing differences for those drops.
 #[derive(Debug, Serialize, Clone, Default)]
@@ -339,14 +341,4 @@ impl StatsCollector {
     }
 }
 
-/// Formats a duration in microseconds into a human-readable string (µs or ms).
-#[inline]
-pub fn format_us(us: u64) -> String {
-    if us < 1000 {
-        format!("{} µs", us)
-    } else if us < 1_000_000 {
-        format!("{:.1} ms", us as f64 / 1000.0)
-    } else {
-        format!("{:.3} s", us as f64 / 1_000_000.0)
-    }
-}
+// format_us moved to src/util.rs

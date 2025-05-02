@@ -56,11 +56,11 @@ fn create_syn_info(ts_us: u64) -> EventInfo {
 
 
 fn bench_filter_check_event(c: &mut Criterion) {
-    let debounce_us = 10_000; // 10ms debounce
+    let debounce_time = Duration::from_millis(10); // 10ms debounce
 
     // Pre-create events for reuse in the closures
     let event_pass = key_ev(0, 30, 1); // First event
-    let event_bounce = key_ev(debounce_us / 2, 30, 1); // Bounce event
+    let event_bounce = key_ev(debounce_time.as_micros() as u64 / 2, 30, 1); // Bounce event
     let event_non_key = input_event { time: timeval { tv_sec: 0, tv_usec: 0 }, type_: EV_SYN as u16, code: 0, value: 0 };
 
     // Benchmark a passing scenario (first event or outside window)
@@ -119,13 +119,14 @@ fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
     let (_sender, receiver) = bounded::<LogMessage>(1); // Channel not used in process_message directly
     let running = Arc::new(AtomicBool::new(true));
-    let debounce_us = 10_000; // 10ms
-    let near_miss_threshold_us = 100_000; // 100ms
+    let debounce_time = Duration::from_millis(10); // 10ms
+    let near_miss_threshold = Duration::from_millis(100); // 100ms
+    let log_interval = Duration::ZERO;
 
     // Create sample EventInfo messages
-    let passed_info = create_event_info(debounce_us, 30, 1, false, None, Some(0)); // Passed event
-    let bounced_info = create_event_info(15_000, 30, 1, true, Some(5_000), Some(10_000)); // Bounced event
-    let near_miss_info = create_event_info(25_000, 30, 1, false, None, Some(10_000)); // Near miss passed event (diff 15000)
+    let passed_info = create_event_info(debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)); // Passed event
+    let bounced_info = create_event_info(15_000, 30, 1, true, Some(5_000), Some(10_000)); // Bounced event (adjust ts if needed)
+    let near_miss_info = create_event_info(25_000, 30, 1, false, None, Some(10_000)); // Near miss passed event (adjust ts if needed)
     let syn_info = create_syn_info(30_000); // SYN event
 
     // Benchmark processing messages with different logging configurations
