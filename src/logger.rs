@@ -81,52 +81,52 @@ impl Logger {
     /// Returns the final cumulative statistics upon exit.
     pub fn run(&mut self) -> StatsCollector {
         // Use tracing for logger thread startup message
-        tracing::debug!("Logger thread started.");
+        tracing::debug!("Logger thread started");
         let log_interval = self.config.log_interval(); // Get Duration directly
         let check_interval = Duration::from_millis(100);
 
         loop {
             if !self.logger_running.load(Ordering::SeqCst) {
-                tracing::debug!("Received shutdown signal via AtomicBool, attempting to drain channel.");
+                tracing::debug!("Received shutdown signal via AtomicBool, attempting to drain channel");
                 while let Ok(msg) = self.receiver.try_recv() {
-                    tracing::trace!("Draining channel: Processing message after shutdown signal.");
+                    tracing::trace!("Draining channel: Processing message after shutdown signal");
                     self.process_message(msg);
                 }
-                tracing::debug!("Finished draining channel. Exiting run loop.");
+                tracing::debug!("Finished draining channel. Exiting run loop");
                 break;
             }
 
             if log_interval > Duration::ZERO && self.last_dump_time.elapsed() >= log_interval {
-                tracing::debug!("Triggering periodic stats dump.");
+                tracing::debug!("Triggering periodic stats dump");
                 self.dump_periodic_stats();
                 self.last_dump_time = Instant::now();
-                tracing::debug!("Periodic stats dump complete. Timer reset.");
+                tracing::debug!("Periodic stats dump complete. Timer reset");
             }
 
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
-                    tracing::trace!("Logger thread received message from channel.");
+                    tracing::trace!("Logger thread received message from channel");
                     self.process_message(msg);
-                    tracing::trace!("Logger thread finished processing message.");
+                    tracing::trace!("Logger thread finished processing message");
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    tracing::trace!("Logger thread receive timed out. Re-checking flags.");
+                    tracing::trace!("Logger thread receive timed out. Re-checking flags");
                     continue;
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    tracing::warn!("Detected channel disconnected. Attempting to drain channel.");
+                    tracing::warn!("Detected channel disconnected. Attempting to drain channel");
                     while let Ok(msg) = self.receiver.try_recv() {
-                        tracing::trace!("Logger thread draining channel: Processing message after disconnect.");
+                        tracing::trace!("Logger thread draining channel: Processing message after disconnect");
                         self.process_message(msg);
                     }
-                    tracing::warn!("Finished draining channel. Exiting run loop.");
+                    tracing::warn!("Finished draining channel. Exiting run loop");
                     break;
                 }
             }
         }
 
-        tracing::debug!("Run loop exited. Preparing final stats.");
-        tracing::debug!("Taking cumulative_stats for return.");
+        tracing::debug!("Run loop exited. Preparing final stats");
+        tracing::debug!("Taking cumulative_stats for return");
         std::mem::take(&mut self.cumulative_stats)
     }
 
@@ -157,10 +157,10 @@ impl Logger {
                     if data.event.type_ == EV_SYN as u16 || data.event.type_ == EV_MSC as u16 {
                         return; // Skip logging SYN/MSC events even in log-all mode
                     }
-                    tracing::trace!("Logger logging all events.");
+                    tracing::trace!("Logger logging all events");
                     self.log_event_detailed(&data);
                 } else if self.config.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
-                    tracing::trace!("Logger logging bounce event.");
+                    tracing::trace!("Logger logging bounce event");
                     self.log_simple_bounce_detailed(&data);
                 }
             }
@@ -174,23 +174,23 @@ impl Logger {
 
         let interval_stats_clone = self.interval_stats.clone();
         if self.config.stats_json {
-            tracing::debug!("Logger thread printing periodic stats in JSON format.");
+            tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
                 &*self.config,
                 None, // Runtime is only for cumulative
                 "Periodic", // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
             );
-            tracing::debug!("Logger thread finished printing periodic stats in JSON format.");
+            tracing::debug!("Logger thread finished printing periodic stats in JSON format");
         } else {
-            tracing::debug!("Logger thread printing periodic stats in human-readable format.");
+            tracing::debug!("Logger thread printing periodic stats in human-readable format");
             interval_stats_clone.print_stats_to_stderr(&*self.config, "Periodic"); // Pass config and type
-            tracing::debug!("Logger thread finished printing periodic stats in human-readable format.");
+            tracing::debug!("Logger thread finished printing periodic stats in human-readable format");
         }
 
-        tracing::debug!("Logger thread resetting interval stats.");
+        tracing::debug!("Logger thread resetting interval stats");
         self.interval_stats = StatsCollector::with_capacity();
-        tracing::debug!("Logger thread interval stats reset.");
+        tracing::debug!("Logger thread interval stats reset");
     }
 
     /// Adapts logic from the old BounceFilter::log_event.

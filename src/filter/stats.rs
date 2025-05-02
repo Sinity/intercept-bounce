@@ -275,7 +275,7 @@ impl StatsCollector {
         &self,
         config: &crate::config::Config,
         runtime_us: Option<u64>,
-        report_type: &str, // Add report_type parameter back
+        report_type: &str, // Ensure report_type parameter is present
         mut writer: impl Write,
     ) {
         // Use accessor methods for consistency
@@ -305,10 +305,14 @@ impl StatsCollector {
         #[derive(Serialize)]
         struct ReportData<'a> {
             report_type: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")] // Only include runtime for cumulative
+            #[serde(skip_serializing_if = "Option::is_none")]
             runtime_us: Option<u64>,
-            #[serde(skip_serializing_if = "Option::is_none")] // Add human-readable runtime
+            #[serde(skip_serializing_if = "Option::is_none")]
             runtime_human: Option<String>,
+            // Add human-readable config values to JSON output
+            debounce_time_human: String,
+            near_miss_threshold_human: String,
+            log_interval_human: String,
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
@@ -317,11 +321,18 @@ impl StatsCollector {
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
+        let debounce_human = util::format_duration(config.debounce_time());
+        let near_miss_human = util::format_duration(config.near_miss_threshold());
+        let log_interval_human = util::format_duration(config.log_interval());
+
 
         let report = ReportData {
             report_type,
             runtime_us, // Will be None for periodic reports
             runtime_human,
+            debounce_time_human: debounce_human,
+            near_miss_threshold_human: near_miss_human,
+            log_interval_human: log_interval_human,
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,

@@ -119,16 +119,16 @@ fn main() -> io::Result<()> {
 
     set_high_priority(cfg.verbose); // Pass verbose flag
 
-    debug!("Setting up shared state (BounceFilter, AtomicBools)...");
+    debug!("Setting up shared state...");
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));
     let final_stats_printed = Arc::new(AtomicBool::new(false));
     let main_running = Arc::new(AtomicBool::new(true));
     let logger_running = Arc::new(AtomicBool::new(true));
-    debug!("Shared state initialized.");
+    debug!("Shared state initialized");
 
     debug!("Creating bounded channel for logger communication...");
     let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1024); // Keep bounded for now
-    debug!(capacity = 1024, "Channel created.");
+    debug!(capacity = 1024, "Channel created");
 
     debug!("Spawning logger thread...");
     let logger_cfg = Arc::clone(&cfg);
@@ -141,7 +141,7 @@ fn main() -> io::Result<()> {
         );
         logger.run()
     });
-    debug!("Logger thread spawned.");
+    debug!("Logger thread spawned");
 
     debug!("Setting up signal handling thread...");
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
@@ -161,14 +161,14 @@ fn main() -> io::Result<()> {
             logger_running_clone_for_signal.store(false, Ordering::SeqCst);
             debug!(target: "signal_handler", "Setting final_stats_printed flag to true.");
             final_stats_printed_clone.store(true, Ordering::SeqCst);
-            debug!(target: "signal_handler", "Signal handling complete. Thread exiting.");
+            debug!(target: "signal_handler", "Signal handling complete. Thread exiting");
         }
     });
-    debug!("Signal handling thread spawned.");
+    debug!("Signal handling thread spawned");
 
-    info!("Entering main event loop.");
+    info!("Entering main event loop");
     let stdin_fd = io::stdin().as_raw_fd();
-    info!(stdin_fd, "Reading from standard input.");
+    info!(stdin_fd, "Reading from standard input");
     let stdout_fd = io::stdout().as_raw_fd();
     // Log Duration directly using Display impl via humantime
     debug!(stdout_fd, debounce = %util::format_duration(cfg.debounce_time()), "Using stdout FD and debounce time.");
@@ -179,13 +179,13 @@ fn main() -> io::Result<()> {
         currently_dropping: false,
         total_dropped_log_messages: 0,
     };
-    debug!("MainState initialized.");
+    debug!("MainState initialized");
 
     let check_interval = Duration::from_millis(100); // Used for sleep on EINTR
-    debug!(?check_interval, "Using check interval for EINTR sleep.");
+    debug!(?check_interval, "Using check interval for EINTR sleep");
 
     while main_running.load(Ordering::SeqCst) {
-        trace!("Main loop iteration: checking running flag (true).");
+        trace!("Main loop iteration: checking running flag (true)");
         trace!("Attempting to read event from stdin...");
         match read_event_raw(stdin_fd) {
             Ok(Some(ev)) => {
@@ -211,7 +211,7 @@ fn main() -> io::Result<()> {
                         }
                     }
                 };
-                trace!("BounceFilter mutex unlocked.");
+                trace!("BounceFilter mutex unlocked");
 
                 let event_info = EventInfo {
                     event: ev, // Cannot log event directly as it doesn't impl Debug
@@ -234,10 +234,10 @@ fn main() -> io::Result<()> {
                 trace!("Attempting to send EventInfo to logger channel...");
                 match main_state.log_sender.try_send(LogMessage::Event(event_info)) {
                     Ok(_) => {
-                        trace!("Successfully sent EventInfo to logger.");
+                        trace!("Successfully sent EventInfo to logger");
                         if main_state.currently_dropping {
                             // Use info level when resuming logging
-                            info!("Logger channel caught up, resuming logging.");
+                            info!("Logger channel caught up, resuming logging");
                             main_state.currently_dropping = false;
                         }
                     }
@@ -245,19 +245,19 @@ fn main() -> io::Result<()> {
                         main_state.total_dropped_log_messages += 1;
                         if !main_state.warned_about_dropping {
                             // Use warn level for dropping logs
-                            warn!("Logger channel full, dropping log messages to maintain performance.");
+                            warn!("Logger channel full, dropping log messages to maintain performance");
                             main_state.warned_about_dropping = true;
                             main_state.currently_dropping = true;
                         }
                         trace!(total_dropped = main_state.total_dropped_log_messages,
-                               "Logger channel full. Dropped log message.");
+                               "Logger channel full. Dropped log message");
                     }
                     Err(TrySendError::Disconnected(_)) => {
                         // Use error level for unexpected disconnect
-                        error!("Logger channel disconnected unexpectedly.");
-                        debug!("Setting main_running flag to false due to logger channel disconnect.");
+                        error!("Logger channel disconnected unexpectedly");
+                        debug!("Setting main_running flag to false due to logger channel disconnect");
                         main_running.store(false, Ordering::SeqCst);
-                        debug!("Breaking main loop due to logger channel disconnect.");
+                        debug!("Breaking main loop due to logger channel disconnect");
                         break;
                     }
                 }
@@ -267,53 +267,53 @@ fn main() -> io::Result<()> {
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         if e.kind() == ErrorKind::BrokenPipe {
                             // Info level for broken pipe is appropriate
-                            info!("Output pipe broken, exiting.");
-                            debug!("Setting main_running flag to false due to BrokenPipe.");
+                            info!("Output pipe broken, exiting");
+                            debug!("Setting main_running flag to false due to BrokenPipe");
                             main_running.store(false, Ordering::SeqCst);
-                            debug!("Breaking main loop due to BrokenPipe.");
+                            debug!("Breaking main loop due to BrokenPipe");
                             break;
                         } else {
                             // Error level for other write errors
                             error!(error = %e, "Error writing output event");
-                            debug!("Setting main_running flag to false due to write error.");
+                            debug!("Setting main_running flag to false due to write error");
                             main_running.store(false, Ordering::SeqCst);
-                            debug!("Breaking main loop due to write error.");
+                            debug!("Breaking main loop due to write error");
                             break;
                         }
                     } else {
-                        trace!("Successfully wrote event to stdout.");
+                        trace!("Successfully wrote event to stdout");
                     }
                 } else {
-                    trace!("Event dropped by filter. Not writing to stdout.");
+                    trace!("Event dropped by filter. Not writing to stdout");
                 }
             }
             Ok(None) => {
                 // Info level for clean EOF
-                info!("Received clean EOF on stdin.");
-                debug!("Setting main_running flag to false due to EOF.");
+                info!("Received clean EOF on stdin");
+                debug!("Setting main_running flag to false due to EOF");
                 main_running.store(false, Ordering::SeqCst);
-                debug!("Breaking main loop due to EOF.");
+                debug!("Breaking main loop due to EOF");
                 break;
             }
             Err(e) => {
                 if e.kind() == ErrorKind::Interrupted {
                     // Debug level for EINTR is fine
-                    debug!("Read interrupted by signal (EINTR).");
+                    debug!("Read interrupted by signal (EINTR)");
                     trace!("Sleeping for {:?} before re-checking running flag.", check_interval);
                     thread::sleep(check_interval);
                     trace!("Checking main_running flag after EINTR sleep...");
                     if !main_running.load(Ordering::SeqCst) {
-                        debug!("main_running is false after EINTR. Breaking loop.");
+                        debug!("main_running is false after EINTR. Breaking loop");
                         break;
                     }
-                    trace!("main_running is still true after EINTR. Continuing read loop.");
+                    trace!("main_running is still true after EINTR. Continuing read loop");
                     continue; // Continue loop after EINTR
                 }
                 // Error level for other read errors
                 error!(error = %e, "Error reading input event");
-                debug!("Setting main_running flag to false due to read error.");
+                debug!("Setting main_running flag to false due to read error");
                 main_running.store(false, Ordering::SeqCst);
-                debug!("Breaking main loop due to read error.");
+                debug!("Breaking main loop due to read error");
                 break;
             }
         }
