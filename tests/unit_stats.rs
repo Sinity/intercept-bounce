@@ -4,8 +4,7 @@
 
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
-use intercept_bounce::config::Config;
-use intercept_bounce::filter::stats::StatsCollector;
+// Remove duplicate imports below
 use intercept_bounce::logger::EventInfo;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use std::time::Duration;
