@@ -186,12 +186,16 @@ fn main() -> io::Result<()> {
     debug!(?check_interval, "Using check interval for EINTR sleep");
 
     while main_running.load(Ordering::SeqCst) {
+        eprintln!("[DEBUG] Main loop: Top"); // Add debug print
         trace!("Main loop iteration: checking running flag (true)");
         trace!("Attempting to read event from stdin...");
+
         match read_event_raw(stdin_fd) {
             Ok(Some(ev)) => {
                 let event_us = event_microseconds(&ev);
                 trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
+
+                eprintln!("[DEBUG] Main loop: Read successful: type={}, code={}, value={}", ev.type_, ev.code, ev.value); // Add debug print
 
                 trace!("Locking BounceFilter mutex...");
                 let (is_bounce, diff_us, last_passed_us) = {
@@ -265,7 +269,7 @@ fn main() -> io::Result<()> {
 
                 if !is_bounce {
                     trace!("Event passed filter. Attempting to write to stdout...");
-                    eprintln!("[DEBUG] Writing event: type={}, code={}, value={}", ev.type_, ev.code, ev.value); // Add debug print
+                    eprintln!("[DEBUG] Main loop: Writing event: type={}, code={}, value={}", ev.type_, ev.code, ev.value); // Add debug print
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         if e.kind() == ErrorKind::BrokenPipe {
                             // Info level for broken pipe is appropriate
@@ -286,10 +290,12 @@ fn main() -> io::Result<()> {
                         trace!("Successfully wrote event to stdout");
                     }
                 } else {
+                    eprintln!("[DEBUG] Main loop: Event dropped: type={}, code={}, value={}", ev.type_, ev.code, ev.value); // Add debug print
                     trace!("Event dropped by filter. Not writing to stdout");
                 }
             }
             Ok(None) => {
+                eprintln!("[DEBUG] Main loop: Read EOF"); // Add debug print
                 // Info level for clean EOF
                 info!("Received clean EOF on stdin");
                 debug!("Setting main_running flag to false due to EOF");
@@ -298,6 +304,7 @@ fn main() -> io::Result<()> {
                 break;
             }
             Err(e) => {
+                eprintln!("[DEBUG] Main loop: Read Error: {}", e); // Add debug print
                 if e.kind() == ErrorKind::Interrupted {
                     // Debug level for EINTR is fine
                     debug!("Read interrupted by signal (EINTR)");
