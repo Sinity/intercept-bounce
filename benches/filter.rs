@@ -1,8 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::config::Config;
-use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use std::sync::atomic::AtomicBool;

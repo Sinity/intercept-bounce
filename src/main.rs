@@ -27,7 +27,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
-fn set_high_priority(verbose: bool) {
+fn set_high_priority() {
     #[cfg(target_os = "linux")]
     {
         debug!("Attempting to set high process priority (niceness -20)...");
@@ -118,7 +118,7 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    set_high_priority(cfg.verbose);
+    set_high_priority();
 
     debug!("Setting up shared state...");
     let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));

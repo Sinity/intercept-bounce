@@ -255,9 +255,10 @@ fn stats_json_output_structure() {
     println!("JSON Output:\n{}", s); // Print JSON for debugging if test fails
 
     // Basic structural checks
-    assert!(s.contains("\"meta\":"));
-    assert!(s.contains("\"near_miss_threshold_us\":")); // Check for new field
-    assert!(s.contains("\"debounce_time_us\":"));
+    assert!(!s.contains("\"meta\":")); // Meta block removed
+    assert!(s.contains("\"debounce_time_human\":")); // Check for new fields
+    assert!(s.contains("\"near_miss_threshold_human\":"));
+    assert!(s.contains("\"log_interval_human\":"));
     assert!(s.contains("\"runtime_us\":"));
     assert!(s.contains("\"stats\":"));
     assert!(s.contains("\"key_events_processed\":"));
@@ -273,7 +274,7 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"per_key_passed_near_miss_timing\":"));
     // Check if near miss for KEY_A, value 1 is present
     assert!(s.contains("\"[30,1]\": ["));
-    assert!(s.contains(&format!("{}", DEBOUNCE_TIME.as_micros() as u64 + 1000))); // Check near miss timing value
+    assert!(s.contains(&format!("{}", DEBOUNCE_TIME.as_micros() as u64 + 2000))); // Check near miss timing value
 
     // Ensure keys with no drops/near-misses are NOT present (e.g., key B=48)
     assert!(!s.contains("\"48\":"));
