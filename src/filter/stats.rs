@@ -19,8 +19,6 @@ pub struct Meta {
     pub log_interval_us: u64,
 }
 
-use crate::util; // Import the new util module
-
 /// Statistics for a specific key value state (press/release/repeat).
 /// Holds the count of dropped events and the timing differences for those drops.
 #[derive(Debug, Serialize, Clone, Default)]
@@ -253,12 +251,13 @@ impl StatsCollector {
         report_type: &str, // Ensure report_type parameter is present
         mut writer: impl Write,
     ) {
-        // Use accessor methods for consistency
-        let debounce_time_us = config.debounce_us();
-        let near_miss_threshold_us = config.near_miss_threshold_us();
-        let log_all_events = config.log_all_events;
-        let log_bounces = config.log_bounces;
-        let log_interval_us = config.log_interval_us();
+        // Config parameters are used directly in ReportData construction below
+        // or accessed via config methods, so these local bindings are unused.
+        // let debounce_time_us = config.debounce_us();
+        // let near_miss_threshold_us = config.near_miss_threshold_us();
+        // let log_all_events = config.log_all_events;
+        // let log_bounces = config.log_bounces;
+        // let log_interval_us = config.log_interval_us();
 
         let mut per_key_stats_map = HashMap::new();
         for (key_code, stats) in self.per_key_stats.iter().enumerate() {

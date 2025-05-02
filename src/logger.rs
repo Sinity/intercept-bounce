@@ -3,7 +3,6 @@
 // from the main processing thread.
 
 use crate::event;
-use crate::event;
 use crate::filter::keynames::{get_key_name, get_event_type_name};
 use crate::filter::stats::StatsCollector;
 use crate::config::Config;
