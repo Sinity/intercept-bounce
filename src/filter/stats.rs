@@ -146,13 +146,26 @@ impl StatsCollector {
     ) {
         let log_all_events = config.log_all_events;
         let log_bounces = config.log_bounces;
-        let log_interval_us = config.log_interval_us;
+        let log_interval = config.log_interval(); // Get Duration
 
-        eprintln!("--- intercept-bounce status ---");
-        eprintln!("Debounce Threshold: {}", format_us(config.debounce_us));
-        eprintln!("Near-Miss Threshold: {}", format_us(config.near_miss_threshold_us));
-        eprintln!("Log All Events (--log-all-events): {}", if log_all_events { "Active" } else { "Inactive" });
-        eprintln!("Log Bounces (--log-bounces): {}",
+        // Config parameters are now logged at startup via tracing
+        // eprintln!("--- intercept-bounce status ---");
+        // eprintln!("Debounce Threshold: {}", util::format_duration(config.debounce_time()));
+        // eprintln!("Near-Miss Threshold: {}", util::format_duration(config.near_miss_threshold()));
+        // eprintln!("Log All Events (--log-all-events): {}", if log_all_events { "Active" } else { "Inactive" });
+        // eprintln!("Log Bounces (--log-bounces): {}",
+        //     if log_all_events { "Overridden by --log-all-events" }
+        //     else if log_bounces { "Active" }
+        //     else { "Inactive" }
+        // );
+        // eprintln!("Periodic Log Interval (--log-interval): {}",
+        //     if log_interval > Duration::ZERO { format!("Every {}", util::format_duration(log_interval)) }
+        //     else { "Disabled".to_string() }
+        // );
+
+
+        eprintln!("\n--- Overall Statistics ({}) ---", report_type); // Label report type
+        eprintln!("Key Events Processed: {}", self.key_events_processed);
             if log_all_events { "Overridden by --log-all-events" }
             else if log_bounces { "Active" }
             else { "Inactive" }
@@ -198,7 +211,7 @@ impl StatsCollector {
                             let max = timings.iter().max().copied().unwrap_or(0);
                             let sum: u64 = timings.iter().sum();
                             let avg = if !timings.is_empty() { sum as f64 / timings.len() as f64 } else { 0.0 };
-                            eprintln!(" (Bounce Time: {} / {} / {})", format_us(min), format_us(avg as u64), format_us(max));
+                            eprintln!(" (Bounce Time: {} / {} / {})", util::format_us(min), util::format_us(avg as u64), util::format_us(max));
                         } else {
                             eprintln!(" (No timing data)");
                         }
@@ -219,7 +232,7 @@ impl StatsCollector {
             let timings = &self.per_key_passed_near_miss_timing[idx];
             if !timings.is_empty() {
                  if !any_near_miss {
-                    eprintln!("\n--- Passed Event Near-Miss Statistics (Passed within {}) ---", format_us(config.near_miss_threshold_us));
+                    eprintln!("\n--- Passed Event Near-Miss Statistics (Passed within {}) ---", util::format_duration(config.near_miss_threshold()));
                     eprintln!("Format: Key [Name] (Code, Value): Count (Near-Miss Time: Min / Avg / Max)");
                     any_near_miss = true;
                 }
@@ -239,9 +252,9 @@ impl StatsCollector {
                     key_code,
                     key_value,
                     timings.len(),
-                    format_us(min),
-                    format_us(avg as u64),
-                    format_us(max)
+                    util::format_us(min),
+                    util::format_us(avg as u64),
+                    util::format_us(max)
                 );
             }
         }

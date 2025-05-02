@@ -3,10 +3,12 @@
 // focusing only on the information needed for the immediate bounce decision.
 
 pub mod keynames;
+pub mod keynames;
 pub mod stats;
 
 use crate::event::{self, is_key_event};
 use input_linux_sys::input_event;
+use std::time::Duration; // Import Duration
 
 /// Holds the minimal state required for bounce filtering decisions.
 ///
@@ -45,7 +47,7 @@ impl BounceFilter {
     ///
     /// # Arguments
     /// * `event`: The input event to check.
-    /// * `debounce_time_us`: The debounce threshold in microseconds.
+    /// * `debounce_time`: The debounce threshold as a `Duration`.
     ///
     /// # Returns
     /// A tuple: `(is_bounce, diff_us_if_bounce, last_passed_us_before_this)`
@@ -59,7 +61,7 @@ impl BounceFilter {
     pub fn check_event(
         &mut self,
         event: &input_event,
-        debounce_time_us: u64,
+        debounce_time: Duration, // Use Duration
     ) -> (bool, Option<u64>, Option<u64>) {
         let event_us = event::event_microseconds(event);
         let key_code = event.code;
@@ -84,9 +86,10 @@ impl BounceFilter {
                 if last_us_for_key_value != u64::MAX {
                     last_passed_us_opt = Some(last_us_for_key_value);
 
-                    if debounce_time_us > 0 {
+                    // Check against Duration directly
+                    if debounce_time > Duration::ZERO {
                         if let Some(diff) = event_us.checked_sub(last_us_for_key_value) {
-                            if diff < debounce_time_us {
+                            if Duration::from_micros(diff) < debounce_time {
                                 is_bounce = true;
                                 diff_us_if_bounce = Some(diff);
                             }

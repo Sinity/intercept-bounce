@@ -4,14 +4,17 @@
 
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
+use intercept_bounce::config::Config;
+use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::logger::EventInfo;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
+use std::time::Duration; // Import Duration
 
 // --- Test Constants ---
 const KEY_A: u16 = 30;
 const KEY_B: u16 = 48;
 const KEY_C: u16 = 46;
-const DEBOUNCE_US: u64 = 10_000; // 10ms
+const DEBOUNCE_TIME: Duration = Duration::from_millis(10); // 10ms
 
 // --- Test Helpers ---
 
@@ -69,11 +72,16 @@ fn bounced_event_info(
 }
 
 // Helper to create a dummy Config for tests
-fn dummy_config(debounce_us: u64, near_miss_threshold_us: u64) -> Config {
+fn dummy_config(debounce_time: Duration, near_miss_threshold: Duration) -> Config {
     Config {
-        debounce_us,
-        near_miss_threshold_us,
-        log_interval_us: 0, log_all_events: false, log_bounces: false, stats_json: false, verbose: false,
+        debounce_time,
+        near_miss_threshold,
+        log_interval: Duration::ZERO,
+        log_all_events: false,
+        log_bounces: false,
+        stats_json: false,
+        verbose: false,
+        log_filter: "info".to_string(), // Add default log_filter
     }
 }
 

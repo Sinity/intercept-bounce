@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::time::Duration; // Import Duration
 
 /// An Interception Tools filter to eliminate keyboard chatter (switch bounce).
 /// Reads Linux input events from stdin, filters rapid duplicate key events,

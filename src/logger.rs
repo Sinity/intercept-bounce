@@ -3,9 +3,11 @@
 // from the main processing thread.
 
 use crate::event;
+use crate::event;
 use crate::filter::keynames::{get_key_name, get_event_type_name};
 use crate::filter::stats::StatsCollector;
 use crate::config::Config;
+use crate::util; // Import util
 use crossbeam_channel::Receiver;
 use input_linux_sys::{input_event, EV_SYN, EV_MSC};
 use std::io;
@@ -222,7 +224,7 @@ impl Logger {
 
         let bounce_info = if data.is_bounce && event::is_key_event(&data.event) {
             if let Some(diff) = data.diff_us {
-                format!(" (Bounce Time: {})", format_us(diff))
+                format!(" (Bounce Time: {})", util::format_us(diff))
             } else {
                 " (Bounce Time: N/A)".to_string()
             }
@@ -233,8 +235,9 @@ impl Logger {
         let near_miss_info = if !data.is_bounce && event::is_key_event(&data.event) {
             if let Some(last_us) = data.last_passed_us {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
-                     if diff >= self.config.debounce_us {
-                         format!(" (Diff since last passed: {})", format_us(diff))
+                     // Check against Duration directly
+                     if Duration::from_micros(diff) >= self.config.debounce_time() {
+                         format!(" (Diff since last passed: {})", util::format_us(diff))
                      } else {
                          "".to_string()
                      }
@@ -284,7 +287,7 @@ impl Logger {
             .unwrap_or(0);
 
         let bounce_info = if let Some(diff) = data.diff_us {
-            format!(" (Bounce Time: {})", format_us(diff))
+            format!(" (Bounce Time: {})", util::format_us(diff))
         } else {
             " (Bounce Time: N/A)".to_string()
         };
@@ -316,15 +319,4 @@ fn format_relative_us(relative_us: u64) -> String {
     format!("{:<10}", s)
 }
 
-/// Helper to format a duration in microseconds into a human-readable string (µs or ms).
-// This is duplicated from stats.rs, but kept here for logger's internal formatting.
-#[inline]
-fn format_us(us: u64) -> String {
-    if us < 1000 {
-        format!("{} µs", us)
-    } else if us < 1_000_000 {
-        format!("{:.1} ms", us as f64 / 1000.0)
-    } else {
-        format!("{:.3} s", us as f64 / 1_000_000.0)
-    }
-}
+// format_us moved to src/util.rs

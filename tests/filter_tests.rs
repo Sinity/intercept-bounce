@@ -4,12 +4,12 @@
 
 use intercept_bounce::filter::BounceFilter; // Import the filter
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN}; // Import event types
+use std::time::Duration; // Import Duration
 
 // --- Test Constants ---
 const KEY_A: u16 = 30; // Example key code
 const KEY_B: u16 = 48; // Another key code
-const DEBOUNCE_MS: u64 = 10; // Standard debounce time for tests
-const DEBOUNCE_US: u64 = DEBOUNCE_MS * 1_000; // Debounce time in microseconds
+const DEBOUNCE_TIME: Duration = Duration::from_millis(10); // Standard debounce time for tests
 
 // --- Test Helpers ---
 
@@ -44,11 +44,11 @@ fn non_key_ev(ts_us: u64) -> input_event {
 fn check_sequence(
     filter: &mut BounceFilter,
     events: &[input_event],
-    debounce_us: u64,
+    debounce_time: Duration, // Use Duration
 ) -> Vec<(bool, Option<u64>, Option<u64>)> {
     events
         .iter()
-        .map(|ev| filter.check_event(ev, debounce_us))
+        .map(|ev| filter.check_event(ev, debounce_time)) // Pass Duration
         .collect()
 }
 
@@ -58,11 +58,11 @@ fn check_sequence(
 fn drops_press_bounce() {
     let mut filter = BounceFilter::new();
     let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(DEBOUNCE_US / 2, KEY_A, 1); // Press A again within window (bounce)
-    let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_US);
+    let e2 = key_ev(DEBOUNCE_TIME.as_micros() as u64 / 2, KEY_A, 1); // Press A again within window (bounce)
+    let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes, no previous
-    assert_eq!(results[1], (true, Some(DEBOUNCE_US / 2), Some(0))); // e2 bounces, diff=5ms, prev=0
+    assert_eq!(results[1], (true, Some(DEBOUNCE_TIME.as_micros() as u64 / 2), Some(0))); // e2 bounces, diff=5ms, prev=0
 }
 
 #[test]

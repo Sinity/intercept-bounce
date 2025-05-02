@@ -14,7 +14,7 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use intercept_bounce::{cli, config::Config};
+use intercept_bounce::{cli, config::Config, util}; // Add util
 use intercept_bounce::event;
 use intercept_bounce::filter;
 use intercept_bounce::logger;
@@ -22,6 +22,8 @@ use event::{event_microseconds, list_input_devices, read_event_raw, write_event_
 use filter::stats::StatsCollector;
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
+use tracing::{debug, error, info, warn}; // Import tracing macros
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter}; // Import subscriber components
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -61,12 +63,12 @@ fn main() -> io::Result<()> {
         eprintln!("Scanning input devices (requires read access to /dev/input/event*)...");
         match list_input_devices() {
             Ok(_) => {
-                if verbose { eprintln!("[MAIN] Device listing complete. Exiting."); }
+                info!("Device listing complete. Exiting.");
             }
             Err(e) => {
-                eprintln!("Error listing devices: {}", e);
-                eprintln!("Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges.");
-                if verbose { eprintln!("[MAIN] Exiting due to device listing error."); }
+                error!("Error listing devices: {}", e);
+                eprintln!("Note: Listing devices requires read access to /dev/input/event*, typically requiring root privileges."); // Keep this eprintln for user visibility
+                info!("Exiting due to device listing error.");
                 exit(2);
             }
         }
@@ -165,143 +167,160 @@ fn main() -> io::Result<()> {
                         }
                     }
                 };
-                if cfg.verbose { eprintln!("[MAIN] BounceFilter mutex unlocked."); }
+                trace!("BounceFilter mutex unlocked.");
 
                 let event_info = EventInfo {
-                    event: ev,
+                    event: ev, // Cannot log event directly as it doesn't impl Debug
                     event_us,
                     is_bounce,
                     diff_us,
                     last_passed_us,
                 };
-                if cfg.verbose {
-                    eprintln!(
-                        "[MAIN] Prepared EventInfo for logger: type={}, code={}, value={}, event_us={}, is_bounce={}, diff_us={:?}, last_passed_us={:?}",
-                        event_info.event.type_, event_info.event.code, event_info.event.value, event_info.event_us, event_info.is_bounce, event_info.diff_us, event_info.last_passed_us
-                    );
-                }
+                // Log EventInfo fields individually at trace level
+                trace!(event_type = event_info.event.type_,
+                       event_code = event_info.event.code,
+                       event_value = event_info.event.value,
+                       event_us = event_info.event_us,
+                       is_bounce = event_info.is_bounce,
+                       diff_us = ?event_info.diff_us, // Use ? for Option<Debug>
+                       last_passed_us = ?event_info.last_passed_us,
+                       "Prepared EventInfo for logger");
 
-                if cfg.verbose { eprintln!("[MAIN] Attempting to send EventInfo to logger channel..."); }
+
+                trace!("Attempting to send EventInfo to logger channel...");
                 match main_state.log_sender.try_send(LogMessage::Event(event_info)) {
                     Ok(_) => {
-                        if cfg.verbose { eprintln!("[MAIN] Successfully sent EventInfo to logger."); }
+                        trace!("Successfully sent EventInfo to logger.");
                         if main_state.currently_dropping {
-                            eprintln!("[INFO] Logger channel caught up, resuming logging.");
+                            // Use info level when resuming logging
+                            info!("Logger channel caught up, resuming logging.");
                             main_state.currently_dropping = false;
                         }
                     }
                     Err(TrySendError::Full(_)) => {
                         main_state.total_dropped_log_messages += 1;
                         if !main_state.warned_about_dropping {
-                            eprintln!("[WARN] Logger channel full, dropping log messages to maintain performance.");
+                            // Use warn level for dropping logs
+                            warn!("Logger channel full, dropping log messages to maintain performance.");
                             main_state.warned_about_dropping = true;
                             main_state.currently_dropping = true;
                         }
-                        if cfg.verbose { eprintln!("[MAIN] Logger channel full. Dropped log message. Total dropped: {}", main_state.total_dropped_log_messages); }
+                        trace!(total_dropped = main_state.total_dropped_log_messages,
+                               "Logger channel full. Dropped log message.");
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        eprintln!("[ERROR] Logger channel disconnected unexpectedly.");
-                        if cfg.verbose { eprintln!("[MAIN] Setting main_running flag to false due to logger channel disconnect."); }
+                        // Use error level for unexpected disconnect
+                        error!("Logger channel disconnected unexpectedly.");
+                        debug!("Setting main_running flag to false due to logger channel disconnect.");
                         main_running.store(false, Ordering::SeqCst);
-                        if cfg.verbose { eprintln!("[MAIN] Breaking main loop due to logger channel disconnect."); }
+                        debug!("Breaking main loop due to logger channel disconnect.");
                         break;
                     }
                 }
 
                 if !is_bounce {
-                    if cfg.verbose { eprintln!("[MAIN] Event passed filter. Attempting to write to stdout..."); }
+                    trace!("Event passed filter. Attempting to write to stdout...");
                     if let Err(e) = write_event_raw(stdout_fd, &ev) {
                         if e.kind() == ErrorKind::BrokenPipe {
-                            eprintln!("[INFO] Output pipe broken, exiting.");
-                            if cfg.verbose { eprintln!("[MAIN] Setting main_running flag to false due to BrokenPipe."); }
+                            // Info level for broken pipe is appropriate
+                            info!("Output pipe broken, exiting.");
+                            debug!("Setting main_running flag to false due to BrokenPipe.");
                             main_running.store(false, Ordering::SeqCst);
-                            if cfg.verbose { eprintln!("[MAIN] Breaking main loop due to BrokenPipe."); }
+                            debug!("Breaking main loop due to BrokenPipe.");
                             break;
                         } else {
-                            eprintln!("Error writing output event: {}", e);
-                            if cfg.verbose { eprintln!("[MAIN] Setting main_running flag to false due to write error."); }
+                            // Error level for other write errors
+                            error!(error = %e, "Error writing output event");
+                            debug!("Setting main_running flag to false due to write error.");
                             main_running.store(false, Ordering::SeqCst);
-                            if cfg.verbose { eprintln!("[MAIN] Breaking main loop due to write error."); }
+                            debug!("Breaking main loop due to write error.");
                             break;
                         }
                     } else {
-                        if cfg.verbose { eprintln!("[MAIN] Successfully wrote event to stdout."); }
+                        trace!("Successfully wrote event to stdout.");
                     }
                 } else {
-                    if cfg.verbose { eprintln!("[MAIN] Event dropped by filter. Not writing to stdout."); }
+                    trace!("Event dropped by filter. Not writing to stdout.");
                 }
             }
             Ok(None) => {
-                eprintln!("[MAIN] Received clean EOF on stdin.");
-                if verbose { eprintln!("[MAIN] Setting main_running flag to false due to EOF."); }
+                // Info level for clean EOF
+                info!("Received clean EOF on stdin.");
+                debug!("Setting main_running flag to false due to EOF.");
                 main_running.store(false, Ordering::SeqCst);
-                if verbose { eprintln!("[MAIN] Breaking main loop due to EOF."); }
+                debug!("Breaking main loop due to EOF.");
                 break;
             }
             Err(e) => {
                 if e.kind() == ErrorKind::Interrupted {
-                    if verbose { eprintln!("[MAIN] Read interrupted by signal (EINTR)."); }
-                    if verbose { eprintln!("[MAIN] Sleeping for {:?} before re-checking running flag.", check_interval); }
+                    // Debug level for EINTR is fine
+                    debug!("Read interrupted by signal (EINTR).");
+                    trace!("Sleeping for {:?} before re-checking running flag.", check_interval);
                     thread::sleep(check_interval);
-                    if verbose { eprintln!("[MAIN] Checking main_running flag after EINTR sleep..."); }
+                    trace!("Checking main_running flag after EINTR sleep...");
                     if !main_running.load(Ordering::SeqCst) {
-                        if verbose { eprintln!("[MAIN] main_running is false after EINTR. Breaking loop."); }
+                        debug!("main_running is false after EINTR. Breaking loop.");
                         break;
                     }
-                    if verbose { eprintln!("[MAIN] main_running is still true after EINTR. Continuing read loop."); }
-                    continue;
+                    trace!("main_running is still true after EINTR. Continuing read loop.");
+                    continue; // Continue loop after EINTR
                 }
-                eprintln!("Error reading input event: {}", e);
-                if verbose { eprintln!("[MAIN] Setting main_running flag to false due to read error."); }
+                // Error level for other read errors
+                error!(error = %e, "Error reading input event");
+                debug!("Setting main_running flag to false due to read error.");
                 main_running.store(false, Ordering::SeqCst);
-                if verbose { eprintln!("[MAIN] Breaking main loop due to read error."); }
+                debug!("Breaking main loop due to read error.");
                 break;
             }
         }
     }
 
-    if cfg.verbose { eprintln!("[MAIN] Main event loop finished."); }
+    info!("Main event loop finished.");
 
-    if cfg.verbose { eprintln!("[MAIN] Starting shutdown process."); }
-    drop(main_state.log_sender);
-    if cfg.verbose { eprintln!("[MAIN] log_sender dropped."); }
+    debug!("Starting shutdown process.");
+    drop(main_state.log_sender); // Drop sender to signal logger
+    debug!("log_sender dropped.");
 
-    if cfg.verbose { eprintln!("[MAIN] Waiting for logger thread to join..."); }
+    debug!("Waiting for logger thread to join...");
     let final_stats = match logger_handle.join() {
         Ok(stats) => {
-            if cfg.verbose { eprintln!("[MAIN] Logger thread joined successfully."); }
+            debug!("Logger thread joined successfully.");
             stats
         }
         Err(e) => {
-            eprintln!("[ERROR] Logger thread panicked: {:?}", e);
-            if cfg.verbose { eprintln!("[MAIN] Logger thread panicked. Returning default stats."); }
-            StatsCollector::with_capacity()
+            // Error level for thread panic
+            error!(panic_info = ?e, "Logger thread panicked");
+            debug!("Logger thread panicked. Returning default stats.");
+            StatsCollector::with_capacity() // Return empty stats
         }
     };
-    if cfg.verbose { eprintln!("[MAIN] Logger thread joined. Final stats collected."); }
+    debug!("Logger thread joined. Final stats collected.");
 
-    if cfg.verbose { eprintln!("[MAIN] Checking final_stats_printed flag before printing."); }
+    debug!("Checking final_stats_printed flag before printing.");
     if !final_stats_printed.swap(true, Ordering::SeqCst) {
-        if cfg.verbose { eprintln!("[MAIN] Final stats flag was not set. Proceeding to print final stats."); }
+        debug!("Final stats flag was not set. Proceeding to print final stats.");
         let runtime_us = {
             match bounce_filter.lock() {
                 Ok(filter) => {
-                    if cfg.verbose { eprintln!("[MAIN] BounceFilter mutex locked for runtime calculation."); }
+                    trace!("BounceFilter mutex locked for runtime calculation.");
                     let rt = filter.get_runtime_us();
-                    if cfg.verbose { eprintln!("[MAIN] BounceFilter runtime_us: {:?}", rt); }
+                    trace!(?rt, "BounceFilter runtime_us");
                     rt
                 },
                 Err(_) => {
-                    eprintln!("[WARN] BounceFilter mutex poisoned during final runtime calculation.");
-                    if cfg.verbose { eprintln!("[MAIN] BounceFilter mutex poisoned. Cannot get runtime."); }
+                    // Warn level for poisoned mutex during final calculation
+                    warn!("BounceFilter mutex poisoned during final runtime calculation.");
+                    trace!("BounceFilter mutex poisoned. Cannot get runtime.");
                     None
                 }
             }
         };
-        if cfg.verbose { eprintln!("[MAIN] BounceFilter mutex unlocked after runtime calculation."); }
+        trace!("BounceFilter mutex unlocked after runtime calculation.");
 
         if cfg.stats_json {
-            if cfg.verbose { eprintln!("[MAIN] Printing final stats in JSON format."); }
+            debug!("Printing final stats in JSON format.");
+            // Use a dedicated tracing event for stats output
+            info!(target: "stats", stats_kind = "cumulative", format = "json", "Emitting final statistics");
             final_stats.print_stats_json(
                 &*cfg,
                 runtime_us,
