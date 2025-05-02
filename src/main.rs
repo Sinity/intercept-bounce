@@ -23,7 +23,7 @@ use filter::stats::StatsCollector;
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
 use tracing::{debug, error, info, trace, warn}; // Add trace
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, filter::LevelFilter, filter::TargetFilter}; // Add more subscriber components
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, filter::{LevelFilter, TargetFilter}}; // Add more subscriber components
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
@@ -253,7 +253,7 @@ fn main() -> io::Result<()> {
                             "Logger channel full. Dropped log message");
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        // Use error level for unexpected disconnect
+                        // Error level for unexpected disconnect
                         error!("Logger channel disconnected unexpectedly");
                         debug!("Setting main_running flag to false due to logger channel disconnect");
                         main_running.store(false, Ordering::SeqCst);
@@ -337,7 +337,7 @@ fn main() -> io::Result<()> {
             debug!("Logger thread panicked. Returning default stats");
             StatsCollector::with_capacity() // Return empty stats
         }
-    };
+    } ;
     debug!("Logger thread joined. Final stats collected");
 
     debug!("Checking final_stats_printed flag before printing");
