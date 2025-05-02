@@ -28,18 +28,19 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 > intercept-bounce [OPTIONS]
 >
-> * `-t, --debounce-time <MS>`:
->   * Sets the time threshold for bounce filtering in milliseconds (default: `10`).
->   * Events for the *same key code* and *same value* (press/release/repeat) occurring faster than this threshold are dropped.
->   * Setting `--debounce-time 0` effectively disables filtering.
->* `--near-miss-threshold-time <MS>`:
->   * Sets the time threshold in milliseconds for identifying "near-miss" events (default: `100`).
->   * Passed key events occurring within this time of the previous passed event for the same key/value are counted and reported in the statistics as near-misses. This helps identify keys that might be *almost* bouncing or have inconsistent timing just outside the debounce window.
->   * Setting this to `0` effectively disables near-miss tracking.
-> * `--log-interval <SECONDS>`:
->   * Periodically dump statistics to stderr every `SECONDS` seconds (default: `0` = disabled). Statistics are always printed on exit.
-> * `--log-all-events`:
->   * Log details of *every* incoming event to stderr ([PASS] or [DROP]). Note: `EV_SYN` and `EV_MSC` events are skipped for cleaner output.
+> *   `-t, --debounce-time <DURATION>`:
+>    *   Sets the time threshold for bounce filtering (default: `25ms`). Accepts values like `10ms`, `0.5s`.
+>    *   Events for the *same key code* and *same value* occurring faster than this threshold are discarded.
+>    *   The "value" refers to the state of the key: `1` for press, `0` for release, `2` for repeat. Only press and release events are debounced.
+> *   `--near-miss-threshold-time <DURATION>`:
+>    *   Sets the time threshold for identifying "near-miss" events (default: `100ms`). Accepts values like `100ms`, `0.1s`.
+>    *   Passed key events occurring within this time of the previous passed event for the same key/value are counted and reported in the statistics as near-misses. This helps identify keys that might be *almost* bouncing or have inconsistent timing just outside the debounce window.
+>    *   Setting this to `0` effectively disables near-miss tracking.
+>
+> *   `--log-interval <DURATION>`:
+>    *   Periodically dump statistics to stderr (default: `15m`). Accepts values like `60s`, `15m`, `1h`. Set to `0` to disable periodic dumps. Statistics are always printed on exit.
+> *   `--log-all-events`:
+>    *   Log details of *every* incoming event to stderr ([PASS] or [DROP]). Note: `EV_SYN` and `EV_MSC` events are skipped for cleaner output.
 > * `--log-bounces`:
 >   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
 > * `--stats-json`:
