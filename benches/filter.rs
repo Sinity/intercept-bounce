@@ -99,16 +99,16 @@ fn dummy_config(
     stats_json: bool,
     verbose: bool,
 ) -> Arc<Config> {
-     Arc::new(Config {
+     Arc::new(Config::new( // Use the new constructor
          debounce_time,
          near_miss_threshold,
          log_interval,
-         log_all_events: log_all,
+         log_all, // log_all_events
          log_bounces,
          stats_json,
          verbose,
-         log_filter: "info".to_string(), // Add default log_filter
-     })
+         "info".to_string(), // log_filter
+     ))
 }
 
 

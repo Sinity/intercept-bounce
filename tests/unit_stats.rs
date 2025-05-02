@@ -72,16 +72,16 @@ fn bounced_event_info(
 
 // Helper to create a dummy Config for tests
 fn dummy_config(debounce_time: Duration, near_miss_threshold: Duration) -> Config {
-    Config {
+    Config::new( // Use the new constructor
         debounce_time,
         near_miss_threshold,
-        log_interval: Duration::ZERO,
-        log_all_events: false,
-        log_bounces: false,
-        stats_json: false,
-        verbose: false,
-        log_filter: "info".to_string(), // Add default log_filter
-    }
+        Duration::ZERO, // log_interval
+        false,          // log_all_events
+        false,          // log_bounces
+        false,          // stats_json
+        false,          // verbose
+        "info".to_string(), // log_filter
+    )
 }
 
 
@@ -234,16 +234,16 @@ fn stats_json_output_structure() {
     let ev2 = key_ev(1500, KEY_A, 1); // Bounce (diff 500)
     let ev3 = key_ev(DEBOUNCE_TIME.as_micros() as u64 + 2000, KEY_A, 1); // Near miss
 
-    let config = Config {
-        debounce_time: DEBOUNCE_TIME,
-        near_miss_threshold: Duration::from_millis(100), // Include near-miss threshold in config
-        log_all_events: true,
-        log_bounces: false,
-        log_interval: Duration::ZERO,
-        stats_json: true, // Assume JSON is enabled for this test
-        verbose: false,
-        log_filter: "info".to_string(),
-    };
+    let config = Config::new( // Use the new constructor
+        DEBOUNCE_TIME,
+        Duration::from_millis(100), // Include near-miss threshold in config
+        Duration::ZERO,
+        true,
+        false,
+        true, // Assume JSON is enabled for this test
+        false,
+        "info".to_string(),
+    );
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev2, 1500, 500, Some(1000)), &config);

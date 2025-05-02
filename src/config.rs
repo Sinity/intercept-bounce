@@ -14,6 +14,24 @@ pub struct Config {
 }
 
 impl Config {
+    /// Creates a new Config instance (primarily for testing/benchmarking).
+    pub fn new(
+        debounce_time: Duration,
+        near_miss_threshold: Duration,
+        log_interval: Duration,
+        log_all_events: bool,
+        log_bounces: bool,
+        stats_json: bool,
+        verbose: bool,
+        log_filter: String,
+    ) -> Self {
+        Self {
+            debounce_time, near_miss_threshold, log_interval,
+            log_all_events, log_bounces, stats_json, verbose, log_filter
+        }
+    }
+
+
     // Provide accessor methods that return Duration
     pub fn debounce_time(&self) -> Duration {
         self.debounce_time
