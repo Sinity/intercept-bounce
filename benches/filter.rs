@@ -388,18 +388,16 @@ fn bench_stats_collector_print(c: &mut Criterion) {
         })
     });
 
-    // TODO: make it not output lots of text onto my terminal when running cargo bench
-    // c.bench_function("stats::print_human", |b| {
-    //     b.iter(|| {
-    //         let writer = std::io::sink(); // Discard output
-    //                                       // Note: print_stats_to_stderr writes directly to stderr,
-    //                                       // but the core formatting logic is still exercised.
-    //                                       // We can't easily redirect stderr in a benchmark closure.
-    //                                       // This benchmark primarily measures the formatting/calculation overhead, not I/O.
-    //         stats.print_stats_to_stderr(&config, "Benchmark");
-    //         criterion::black_box(writer); // Prevent optimization
-    //     })
-    // });
+    // Benchmark human-readable formatting, writing to sink() to discard output
+    c.bench_function("stats::print_human", |b| {
+        b.iter(|| {
+            let mut writer = std::io::sink(); // Discard output
+            // Call the new formatting function directly, passing the sink writer
+            stats.format_stats_human_readable(&config, "Benchmark", &mut writer)
+                 .expect("Formatting human-readable stats failed"); // Handle potential error
+            criterion::black_box(writer); // Prevent optimization
+        })
+    });
 }
 
 criterion_group!(

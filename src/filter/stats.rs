@@ -228,16 +228,16 @@ impl StatsCollector {
                             writeln!(writer, " (No timing data)")?;
                         }
                     }
-                    Ok(())
+                    Ok(()) // Return Ok from the closure
                 };
 
-                print_value_stats("Press", 1, &stats.press);
-                print_value_stats("Release", 0, &stats.release);
-                print_value_stats("Repeat", 2, &stats.repeat);
+                print_value_stats("Press", 1, &stats.press)?;
+                print_value_stats("Release", 0, &stats.release)?;
+                print_value_stats("Repeat", 2, &stats.repeat)?;
             }
         }
         if !any_drops {
-            eprintln!("\n--- No key events dropped ---");
+            writeln!(writer, "\n--- No key events dropped ---")?;
         }
 
         let mut any_near_miss = false;
