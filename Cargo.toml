@@ -42,6 +42,7 @@ criterion = "0.5"
 proptest = "1.0" # Added for property testing
 arbitrary = { version = "1.0", features = ["derive"] } # Added for fuzzing
 libfuzzer-sys = "0.4" # Added for fuzzing
+fastrand = "2.0" # Added for property testing strategy
 
 [[bench]]
 name     = "filter"
