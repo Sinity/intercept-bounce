@@ -165,27 +165,29 @@ impl StatsCollector {
         }
     }
 
-    /// Prints human-readable statistics summary to stderr.
-    pub fn print_stats_to_stderr(
+    /// Formats human-readable statistics summary and writes it to the provided writer.
+    /// Returns an io::Result to handle potential write errors.
+    pub fn format_stats_human_readable(
         &self,
         config: &crate::config::Config,
-        report_type: &str, // Ensure report_type parameter is present
-    ) {
+        report_type: &str,
+        mut writer: impl Write, // Accept a generic writer
+    ) -> std::io::Result<()> {
         // Config parameters are logged at startup via tracing.
         // These variables are no longer needed here.
         // let log_all_events = config.log_all_events;
         // let log_bounces = config.log_bounces;
 
-        eprintln!("\n--- Overall Statistics ({}) ---", report_type); // Label report type
-        eprintln!("Key Events Processed: {}", self.key_events_processed);
-        eprintln!("Key Events Passed:   {}", self.key_events_passed);
-        eprintln!("Key Events Dropped:  {}", self.key_events_dropped);
+        writeln!(writer, "\n--- Overall Statistics ({}) ---", report_type)?; // Use writeln!
+        writeln!(writer, "Key Events Processed: {}", self.key_events_processed)?;
+        writeln!(writer, "Key Events Passed:   {}", self.key_events_passed)?;
+        writeln!(writer, "Key Events Dropped:  {}", self.key_events_dropped)?;
         let percentage = if self.key_events_processed > 0 {
             (self.key_events_dropped as f64 / self.key_events_processed as f64) * 100.0
         } else {
             0.0
         };
-        eprintln!("Percentage Dropped:  {:.2}%", percentage);
+        writeln!(writer, "Percentage Dropped:  {:.2}%", percentage)?;
 
         let mut any_drops = false;
         for key_code in 0..self.per_key_stats.len() {
@@ -194,14 +196,14 @@ impl StatsCollector {
 
             if total_drops_for_key > 0 {
                 if !any_drops {
-                    eprintln!("\n--- Dropped Event Statistics Per Key ---");
-                    eprintln!("Format: Key [Name] (Code):");
-                    eprintln!("  State (Value): Drop Count (Bounce Time: Min / Avg / Max)");
+                    writeln!(writer, "\n--- Dropped Event Statistics Per Key ---")?;
+                    writeln!(writer, "Format: Key [Name] (Code):")?;
+                    writeln!(writer, "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)")?;
                     any_drops = true;
                 }
 
                 let key_name = get_key_name(key_code as u16);
-                 eprintln!("\nKey [{}] ({}):", key_name, key_code);
+                 writeln!(writer, "\nKey [{}] ({}):", key_name, key_code)?;
                 // Calculate total processed for this key
                 let total_processed_for_key = stats.press.total_processed + stats.release.total_processed + stats.repeat.total_processed;
                 let key_drop_percentage = if total_processed_for_key > 0 {
@@ -209,22 +211,24 @@ impl StatsCollector {
                 } else {
                     0.0
                 };
-                eprintln!("  Total Processed: {}, Dropped: {} ({:.2}%)", total_processed_for_key, total_drops_for_key, key_drop_percentage);
+                writeln!(writer, "  Total Processed: {}, Dropped: {} ({:.2}%)", total_processed_for_key, total_drops_for_key, key_drop_percentage)?;
 
-                let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
+                // Use a closure that captures writer mutably
+                let mut print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| -> std::io::Result<()> {
                     if value_stats.count > 0 {
-                        eprint!("  {:<7} ({}): {} drops", value_name, value_code, value_stats.count); // Clarify "drops"
+                        write!(writer, "  {:<7} ({}): {} drops", value_name, value_code, value_stats.count)?; // Clarify "drops"
                         if !value_stats.timings_us.is_empty() {
                             let timings = &value_stats.timings_us;
                             let min = timings.iter().min().copied().unwrap_or(0);
                             let max = timings.iter().max().copied().unwrap_or(0);
                             let sum: u64 = timings.iter().sum();
                             let avg = if !timings.is_empty() { sum as f64 / timings.len() as f64 } else { 0.0 };
-                            eprintln!(" (Bounce Time: {} / {} / {})", util::format_us(min), util::format_us(avg as u64), util::format_us(max));
+                            writeln!(writer, " (Bounce Time: {} / {} / {})", util::format_us(min), util::format_us(avg as u64), util::format_us(max))?;
                         } else {
-                            eprintln!(" (No timing data)");
+                            writeln!(writer, " (No timing data)")?;
                         }
                     }
+                    Ok(())
                 };
 
                 print_value_stats("Press", 1, &stats.press);
@@ -241,8 +245,8 @@ impl StatsCollector {
             let timings = &self.per_key_passed_near_miss_timing[idx];
             if !timings.is_empty() {
                  if !any_near_miss {
-                    eprintln!("\n--- Passed Event Near-Miss Statistics (Passed within {}) ---", util::format_duration(config.near_miss_threshold()));
-                    eprintln!("Format: Key [Name] (Code, Value): Count (Near-Miss Time: Min / Avg / Max)");
+                    writeln!(writer, "\n--- Passed Event Near-Miss Statistics (Passed within {}) ---", util::format_duration(config.near_miss_threshold()))?;
+                    writeln!(writer, "Format: Key [Name] (Code, Value): Count (Near-Miss Time: Min / Avg / Max)")?;
                     any_near_miss = true;
                 }
 
@@ -255,7 +259,8 @@ impl StatsCollector {
                 let sum: u64 = timings.iter().sum();
                 let avg = if !timings.is_empty() { sum as f64 / timings.len() as f64 } else { 0.0 };
 
-                eprintln!(
+                writeln!(
+                    writer,
                     "  Key [{}] ({}, {}): {} (Near-Miss Time: {} / {} / {})",
                     key_name,
                     key_code,
@@ -268,11 +273,23 @@ impl StatsCollector {
             }
         }
          if !any_near_miss {
-            eprintln!("\n--- No near-miss events recorded (< {}) ---", util::format_duration(config.near_miss_threshold()));
+            writeln!(writer, "\n--- No near-miss events recorded (< {}) ---", util::format_duration(config.near_miss_threshold()))?;
         }
 
-        eprintln!("----------------------------------------------------------");
+        writeln!(writer, "----------------------------------------------------------")?;
+        Ok(()) // Return Ok(()) at the end of the function
     }
+
+    /// Prints human-readable statistics summary to stderr by calling format_stats_human_readable.
+    pub fn print_stats_to_stderr(
+        &self,
+        config: &crate::config::Config,
+        report_type: &str,
+    ) {
+        // Ignore potential write errors when writing to stderr, as there's not much we can do.
+        let _ = self.format_stats_human_readable(config, report_type, &mut std::io::stderr().lock());
+    }
+
 
     /// Prints statistics in JSON format to the given writer.
     /// Includes runtime provided externally (calculated in main thread).
