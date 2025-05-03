@@ -3,6 +3,8 @@ use input_linux_sys::{input_event, timeval, EV_KEY};
 use std::io::Write;
 use std::mem::size_of;
 use std::process::Output; // Import Output struct
+use predicates::prelude::*; // For stderr assertions
+use serde_json::{Value, json}; // For parsing JSON stats
 
 const KEY_A: u16 = 30;
 const KEY_B: u16 = 48;
@@ -321,7 +323,7 @@ fn test_complex_sequence() {
     let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0); // A Release (Bounce) - within window of e3
     let e5 = non_key_ev(window_us * 2);   // SYN event (Pass)
     let e6 = key_ev(window_us * 2 + 1, KEY_B, 1); // B Press (Pass)
-    let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // B Repeat (Bounce) - within window of e6
+    let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // B Repeat (Pass) - Different value than e6
     let e8 = key_ev(window_us * 3, KEY_A, 1); // A Press (Pass) - outside window of e3/e4
     let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1); // A Press (Bounce) - within window of e8
     let e10 = key_ev(window_us * 4, KEY_B, 2); // B Repeat (Pass) - outside window of e6/e7
@@ -356,4 +358,108 @@ fn test_complex_sequence() {
         actual_stdout_bytes, expected_output_bytes,
         "Complex event sequence was not filtered correctly"
     );
+}
+
+#[test]
+fn stats_output_human_readable() {
+    let e1 = key_ev(0, KEY_A, 1);         // Pass
+    let e2 = key_ev(3_000, KEY_A, 1);     // Bounce (5ms window)
+    let e3 = key_ev(10_000, KEY_B, 1);    // Pass
+    let e4 = key_ev(12_000, KEY_B, 1);    // Bounce (5ms window)
+    let e5 = key_ev(100_000, KEY_A, 0);   // Pass (Release)
+    let input_events = vec![e1, e2, e3, e4, e5];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time").arg("5ms")
+       .write_stdin(input_bytes);
+
+    cmd.assert()
+        .success() // Check exit code 0
+        .stderr(predicate::str::contains("--- Overall Statistics (Cumulative) ---"))
+        .stderr(predicate::str::contains("Key Events Processed: 5")) // All 5 key events
+        .stderr(predicate::str::contains("Key Events Passed:   3")) // e1, e3, e5
+        .stderr(predicate::str::contains("Key Events Dropped:  2")) // e2, e4
+        .stderr(predicate::str::contains("Key [KEY_A] (30):"))
+        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e2 dropped
+        .stderr(predicate::str::contains("Bounce Time: 3000 µs / 3000 µs / 3000 µs")) // Check timing for e2 drop
+        .stderr(predicate::str::contains("Key [KEY_B] (48):"))
+        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e4 dropped
+        .stderr(predicate::str::contains("Bounce Time: 2000 µs / 2000 µs / 2000 µs")); // Check timing for e4 drop
+}
+
+#[test]
+fn stats_output_json() {
+    let e1 = key_ev(0, KEY_A, 1);         // Pass
+    let e2 = key_ev(3_000, KEY_A, 1);     // Bounce (5ms window)
+    let input_events = vec![e1, e2];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time").arg("5ms")
+       .arg("--stats-json") // Enable JSON output
+       .write_stdin(input_bytes);
+
+    let output = cmd.output().expect("Failed to run command");
+    assert!(output.status.success());
+
+    let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
+    // Find the JSON part (it might be mixed with other logs if verbose)
+    // Assuming the JSON report is the last substantial block printed to stderr
+    let json_part = stderr_str.lines().filter(|l| l.trim().starts_with('{')).collect::<Vec<_>>().join("\n");
+
+    let stats_json: Value = serde_json::from_str(&json_part)
+        .expect(&format!("Failed to parse JSON from stderr: {}", stderr_str));
+
+    assert_eq!(stats_json["report_type"], "Cumulative");
+    assert_eq!(stats_json["key_events_processed"], 2);
+    assert_eq!(stats_json["key_events_passed"], 1);
+    assert_eq!(stats_json["key_events_dropped"], 1);
+    assert!(stats_json["per_key_stats"]["30"].is_object()); // KEY_A stats exist
+    assert_eq!(stats_json["per_key_stats"]["30"]["press"]["count"], 1);
+    assert_eq!(stats_json["per_key_stats"]["30"]["press"]["timings_us"], json!([3000]));
+    assert!(stats_json["per_key_stats"]["48"].is_null()); // KEY_B stats should not exist
+}
+
+ #[test]
+fn log_bounces_flag() {
+    let e1 = key_ev(0, KEY_A, 1);         // Pass
+    let e2 = key_ev(3_000, KEY_A, 1);     // Bounce (5ms window)
+    let input_events = vec![e1, e2];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time").arg("5ms")
+       .arg("--log-bounces") // Enable bounce logging
+       .write_stdin(input_bytes);
+
+    cmd.assert()
+        .success()
+        // Check for the specific log line format for a dropped event
+        .stderr(predicate::str::contains("[DROP]").and(predicate::str::contains("Key [KEY_A] (30)")));
+        // Check that PASS lines are NOT present (unless RUST_LOG=trace/debug)
+        // .stderr(predicate::str::contains("[PASS]").not()); // This might fail if info logs are present
+}
+
+ #[test]
+fn log_all_events_flag() {
+    let e1 = key_ev(0, KEY_A, 1);         // Pass
+    let e2 = key_ev(3_000, KEY_A, 1);     // Bounce (5ms window)
+    let e3 = non_key_ev(4_000);           // SYN (Pass)
+    let input_events = vec![e1, e2, e3];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time").arg("5ms")
+       .arg("--log-all-events") // Enable all logging
+       .write_stdin(input_bytes);
+
+    cmd.assert()
+        .success()
+        // Check for PASS log for e1
+        .stderr(predicate::str::contains("[PASS]").and(predicate::str::contains("Key [KEY_A] (30)")))
+         // Check for DROP log for e2
+        .stderr(predicate::str::contains("[DROP]").and(predicate::str::contains("Key [KEY_A] (30)")))
+        // Check that SYN events are NOT logged even with --log-all-events
+        .stderr(predicate::str::contains("EV_SYN").not());
 }

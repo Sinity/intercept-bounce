@@ -2,12 +2,13 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
+use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration; // Import Duration
 use crossbeam_channel::bounded;
-
+use std::io::Write; // For sink()
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -109,6 +110,23 @@ fn dummy_config(
      ))
 }
 
+// Helper to create a populated StatsCollector (example)
+fn create_populated_stats() -> StatsCollector {
+    let mut stats = StatsCollector::with_capacity();
+    let config = dummy_config(Duration::from_millis(10), Duration::from_millis(100), false, false, Duration::ZERO, false, false);
+    // Add some events using stats.record_event_info_with_config(...)
+    // Example: Add a passed event, a bounced event, a near-miss event for KEY_A=30
+    let ev1 = create_event_info(0, 30, 1, false, None, None);
+    let ev2 = create_event_info(5_000, 30, 1, true, Some(5_000), Some(0));
+    let ev3 = create_event_info(15_000, 30, 1, false, None, Some(0)); // Near miss relative to ev1
+    let ev4 = create_event_info(20_000, 48, 1, false, None, None); // KEY_B
+    stats.record_event_info_with_config(&ev1, &config);
+    stats.record_event_info_with_config(&ev2, &config);
+    stats.record_event_info_with_config(&ev3, &config);
+    stats.record_event_info_with_config(&ev4, &config);
+    stats
+}
+
 
 fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
@@ -199,6 +217,66 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 }
 
+fn bench_stats_collector_record(c: &mut Criterion) {
+    let debounce_time = Duration::from_millis(10);
+    let near_miss_threshold = Duration::from_millis(100);
+    let config_base = dummy_config(debounce_time, near_miss_threshold, false, false, Duration::ZERO, false, false);
+    let config_near_miss_short = dummy_config(debounce_time, Duration::from_millis(20), false, false, Duration::ZERO, false, false);
 
-criterion_group!(benches, bench_filter_check_event, bench_logger_process_message);
+    let passed_info = create_event_info(20_000, 30, 1, false, None, Some(0));
+    let bounced_info = create_event_info(5_000, 30, 1, true, Some(5_000), Some(0));
+    let near_miss_info = create_event_info(15_000, 30, 1, false, None, Some(0)); // Near miss for 100ms threshold
+    let syn_info = create_syn_info(25_000);
+
+    c.bench_function("stats::record_passed", |b| {
+        let mut stats = StatsCollector::with_capacity();
+        b.iter(|| stats.record_event_info_with_config(&passed_info, &config_base))
+    });
+    c.bench_function("stats::record_bounced", |b| {
+        let mut stats = StatsCollector::with_capacity();
+        b.iter(|| stats.record_event_info_with_config(&bounced_info, &config_base))
+    });
+    c.bench_function("stats::record_near_miss", |b| {
+        let mut stats = StatsCollector::with_capacity();
+        b.iter(|| stats.record_event_info_with_config(&near_miss_info, &config_base))
+    });
+     c.bench_function("stats::record_near_miss_short_thresh", |b| {
+        let mut stats = StatsCollector::with_capacity();
+        // This should *not* record as near miss with the short threshold config
+        b.iter(|| stats.record_event_info_with_config(&near_miss_info, &config_near_miss_short))
+    });
+    c.bench_function("stats::record_syn", |b| {
+        let mut stats = StatsCollector::with_capacity();
+        b.iter(|| stats.record_event_info_with_config(&syn_info, &config_base))
+    });
+}
+
+fn bench_stats_collector_print(c: &mut Criterion) {
+    let stats = create_populated_stats();
+    let config = dummy_config(Duration::from_millis(10), Duration::from_millis(100), false, false, Duration::from_secs(900), false, false);
+    let runtime = Some(123_456_789); // Example runtime
+
+    c.bench_function("stats::print_json", |b| {
+        b.iter(|| {
+            let mut writer = Vec::new(); // Write to buffer
+            stats.print_stats_json(&config, runtime, "Benchmark", &mut writer);
+            criterion::black_box(writer); // Prevent optimization
+        })
+    });
+
+    c.bench_function("stats::print_human", |b| {
+        b.iter(|| {
+            let mut writer = std::io::sink(); // Discard output
+            // Note: print_stats_to_stderr writes directly to stderr,
+            // but the core formatting logic is still exercised.
+            // We can't easily redirect stderr in a benchmark closure.
+            // This benchmark primarily measures the formatting/calculation overhead, not I/O.
+            stats.print_stats_to_stderr(&config, "Benchmark");
+            criterion::black_box(writer); // Prevent optimization
+        })
+    });
+}
+
+
+criterion_group!(benches, bench_filter_check_event, bench_logger_process_message, bench_stats_collector_record, bench_stats_collector_print);
 criterion_main!(benches);

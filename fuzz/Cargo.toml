@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 input-linux-sys = "0.1"
+arbitrary = { version = "1.0", features = ["derive"] } # Added for fuzzing
 
 [dependencies.intercept-bounce]
 path = ".."
@@ -17,6 +18,13 @@ path = ".."
 [[bin]]
 name = "fuzz_target_1"
 path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_target_stats"
+path = "fuzz_targets/fuzz_target_stats.rs"
 test = false
 doc = false
 bench = false
