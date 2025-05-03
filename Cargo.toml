@@ -37,6 +37,9 @@ clap_mangen = "0.2"
 assert_cmd = "2.0"
 predicates = "3.0"
 criterion = "0.5"
+proptest = "1.0" # Added for property testing
+arbitrary = { version = "1.0", features = ["derive"] } # Added for fuzzing
+libfuzzer-sys = "0.4" # Added for fuzzing
 
 [[bench]]
 name     = "filter"
@@ -47,3 +50,9 @@ harness  = false
 name = "generate-cli-files"
 path = "src/bin/generate_cli_files.rs"
 required-features = [] # Does not require any special features
+
+# Fuzz target definition
+[[fuzz]]
+name = "filter_raw_input"
+path = "fuzz/fuzz_targets/filter_raw_input.rs"
+# No required-features needed unless the fuzz target uses optional features

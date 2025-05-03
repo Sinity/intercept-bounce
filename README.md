@@ -14,6 +14,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 * Optional per-event logging for debugging (`--log-all-events`, `--log-bounces`).
 * Optional verbose logging for internal state and thread activity (`--verbose`).
 * Handles termination signals (`SIGINT`, `SIGTERM`, `SIGQUIT`) gracefully to ensure final statistics are reported.
+* Includes unit tests, integration tests, property tests, and fuzzing for robustness.
 
 ## Prerequisites
 
@@ -114,77 +115,26 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
     > More examples and up-to-date usage can be found in the README or at [https://github.com/sinity/intercept-bounce](https://github.com/sinity/intercept-bounce).
 
-## How it Works
+## Testing
 
-`intercept-bounce` employs a multi-threaded architecture optimized for low latency.
+The project includes various testing methods to ensure correctness and robustness.
 
-### Main Thread: Event Pipeline
+*   **Unit Tests:** Located in `tests/unit_*.rs`, these test individual modules and logic components in isolation. Run with `cargo test`.
+*   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. Run with `cargo test`.
+*   **Property Tests:** Located in `tests/property_tests.rs`, these use `proptest` to generate a wide range of inputs and verify that the filter behaves according to defined properties (e.g., output events are a subset of input, timestamps are non-decreasing for passed events). Run with `cargo test`.
+*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
 
-1.  **Raw I/O:** Reads binary `input_event` data directly from the standard input file descriptor using raw `libc::read` calls, bypassing standard library buffering for minimal input latency.
-2.  **Minimal State:** Maintains a small internal state tracking only the timestamp (in microseconds) of the last *passed* event for each unique combination of `(key_code, key_value)`. `key_value` is `1` for press, `0` for release, `2` for repeat.
-3.  **Bounce Check:** When a new **key event** arrives (press or release only; repeats are ignored):
-    *   Its timestamp is compared to the timestamp of the last *passed* event with the **exact same key code AND key value**.
-    *   If the time difference is *less than* the configured `--debounce-time` threshold, the event is considered a chatter and is **dropped**.
-    *   If the time difference is *greater than or equal to* the threshold, or if it's the first event seen for that specific `(key_code, key_value)` pair, the event is **passed**. Its timestamp is recorded as the new "last passed" time for that pair.
-    *   Events with timestamps earlier than the last passed event (time going backwards) are always passed.
-    *   A `--debounce-time` of `0` effectively disables filtering.
-4.  **Non-Key Events:** Events that are not key events (e.g., `EV_SYN`, `EV_MSC`, `EV_REL`) are **always passed through** unmodified.
-5.  **Raw Output:** Passed events are written directly to the standard output file descriptor using raw `libc::write` calls, minimizing output latency.
-6.  **Logger Communication:** After processing an event, detailed information (the event itself, timestamps, bounce result) is sent *non-blockingly* over an internal channel to a separate Logger/Stats thread. If the logger thread falls behind and the channel buffer is full, log messages are dropped to prevent blocking the main event pipeline. A warning is printed to stderr *once* when dropping starts, and an info message is printed *once* when the logger catches up again.
-
-### Logger/Stats Thread
-
-1.  **Decoupled Processing:** Runs independently from the main event pipeline.
-2.  **Receives Event Info:** Waits for `EventInfo` messages from the main thread via the channel.
-3.  **Statistics Accumulation:** Updates detailed statistics (overall counts, per-key drop counts, bounce timings, near-miss timings) based on the received `EventInfo`. It maintains both cumulative stats for the entire run and interval stats for periodic reporting. Near-miss events are counted if they pass the filter and occur within the configured `--near-miss-threshold-time` of the previous passed event for the same key/value.
-4.  **Event Logging:** If `--log-all-events` or `--log-bounces` is enabled, formats and prints the relevant event details to standard error. `EV_SYN` and `EV_MSC` events are skipped in `--log-all-events` mode for cleaner output.
-5.  **Periodic Stats:** If `--log-interval` is set, this thread periodically calculates and prints the *interval* statistics (stats accumulated since the last dump) to standard error, then resets the interval counters.
-6.  **Final Stats:** When the main thread signals shutdown (by closing the channel), the logger thread finishes processing any remaining messages and returns the final *cumulative* statistics object to the main thread.
-
-### Statistics Output
-
-Statistics provide insight into the filter's operation and are collected by the logger thread. **Final cumulative statistics are printed to stderr on exit** (clean EOF or signal termination).
-
-*   **Status Header:** Shows the configured debounce and near-miss thresholds and the status of logging flags.
-*   **Runtime:** Total duration from the first event seen to the last event seen by the main thread.
-*   **Overall Statistics:** Total key events processed, passed, and dropped, along with the percentage dropped.
-*   **Dropped Event Statistics:** A detailed breakdown for each key where events were dropped:
-    *   Grouped by key code (e.g., `KEY_A (30)`).
-    *   Shows drop counts for each state (`Press (1)`, `Release (0)`). *Note: Repeat (2) events are not debounced, so drop counts for repeats should always be zero.*
-    *   Includes **Bounce Time** statistics (Min / Avg / Max) indicating the time difference between the dropped event and the previous *passed* event of the same type.
-*   **Near-Miss Statistics:** Shows statistics for key events that were *passed* (not dropped) but occurred within the configured `--near-miss-threshold-time` of the previous *passed* event for that specific key code and value. Timings (Min / Avg / Max) relative to the previous event are shown.
-*   **Periodic Logging (`--log-interval`):** If set > 0, the *interval* statistics block (stats accumulated since the last dump) is printed periodically by the logger thread.
-*   **JSON Output (`--stats-json`):** Outputs final and periodic statistics in JSON format for easier machine parsing.
-
-## Troubleshooting / Notes
-
-### Why are key repeats not debounced?
-
-Key repeat events (`value == 2`) are generated by the OS or keyboard firmware when you hold a key down, and are not the result of hardware bounce. Debouncing them would interfere with normal typing (e.g., holding "A" would not repeat as expected). Therefore, `intercept-bounce` **never debounces repeat events**—all repeats are always passed through, regardless of timing. Only press (`value == 1`) and release (`value == 0`) events are debounced.
-
-### Mixed Output in Terminal (Logging + Typed Characters)
-
-When running `intercept-bounce` interactively in a pipeline (e.g., `intercept | intercept-bounce | uinput`) and using logging flags (`--log-all-events` or `--log-bounces`), you might see the characters you type mixed in with the log output printed to stderr.
-
-This happens because:
-
-1. `intercept` captures the raw key events.
-2. `intercept-bounce` logs these events to stderr.
-3. Your terminal (TTY) *also* echoes the characters you type to the screen by default.
-
-These two outputs (stderr logging and terminal echo) are independent and can get interleaved on your display.
-
-**Solution:** Temporarily disable terminal echo while running the command pipeline:
+To run all tests (excluding fuzzing, which requires a separate setup):
 
 ```bash
-stty -echo && sudo sh -c 'intercept -g ... | intercept-bounce [OPTIONS] | uinput -d ...' ; stty echo
+cargo test
 ```
 
-* `stty -echo`: Disables terminal echo.
-* `... your command ...`: Run the pipeline.
-* `stty echo`: **Crucially**, re-enables terminal echo afterwards.
+To run benchmarks:
 
-This will prevent your typed characters from appearing amidst the log output.
+```bash
+cargo bench
+```
 
 ### Generating Shell Completions and Man Pages
 
