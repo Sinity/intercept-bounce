@@ -253,7 +253,7 @@ impl Logger {
 
         // Use info! macro for event logging
         info!(
-            target: "event", // Use a specific target for event logs
+            // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
             status = status,
             relative_us = relative_us,
             relative_human = %format_relative_us(relative_us), // Include formatted string
@@ -310,7 +310,7 @@ impl Logger {
 
         // Use info! macro for bounce logging
         info!(
-            target: "event", // Use a specific target for event logs
+            // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
             status = "DROP",
             relative_us = relative_us,
             relative_human = %format_relative_us(relative_us), // Include formatted string

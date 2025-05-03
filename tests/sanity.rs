@@ -382,10 +382,12 @@ fn stats_output_human_readable() {
         .stderr(predicate::str::contains("Key Events Dropped:  2")) // e2, e4
         .stderr(predicate::str::contains("Key [KEY_A] (30):"))
         .stderr(predicate::str::contains("Press   (1): 1 drops")) // e2 dropped
-        .stderr(predicate::str::contains("Bounce Time: 3000 µs / 3000 µs / 3000 µs")) // Check timing for e2 drop
+        // Updated assertion format for milliseconds
+        .stderr(predicate::str::contains("Bounce Time: 3.0 ms / 3.0 ms / 3.0 ms")) // Check timing for e2 drop
         .stderr(predicate::str::contains("Key [KEY_B] (48):"))
         .stderr(predicate::str::contains("Press   (1): 1 drops")) // e4 dropped
-        .stderr(predicate::str::contains("Bounce Time: 2000 µs / 2000 µs / 2000 µs")); // Check timing for e4 drop
+        // Updated assertion format for milliseconds
+        .stderr(predicate::str::contains("Bounce Time: 2.0 ms / 2.0 ms / 2.0 ms")); // Check timing for e4 drop
 }
 
 #[test]
@@ -405,11 +407,21 @@ fn stats_output_json() {
 
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
     // Find the JSON part (it might be mixed with other logs if verbose)
-    // Assuming the JSON report is the last substantial block printed to stderr
-    let json_part = stderr_str.lines().filter(|l| l.trim().starts_with('{')).collect::<Vec<_>>().join("\n");
+    // Find the first line that looks like the start of a JSON object
+    let json_start_line = stderr_str
+        .lines()
+        .find(|l| l.trim().starts_with('{'))
+        .expect("Could not find start of JSON block ('{') in stderr");
 
-    let stats_json: Value = serde_json::from_str(&json_part)
-        .expect(&format!("Failed to parse JSON from stderr: {}", stderr_str));
+    // Find the index where the JSON starts
+    let json_start_index = stderr_str.find(json_start_line).unwrap_or(0);
+
+    // Attempt to parse from that point onwards
+    let json_part = &stderr_str[json_start_index..];
+
+
+    let stats_json: Value = serde_json::from_str(json_part)
+        .expect(&format!("Failed to parse JSON from stderr starting at detected block: starts with '{}', full stderr: {}", json_start_line, stderr_str));
 
     assert_eq!(stats_json["report_type"], "Cumulative");
     assert_eq!(stats_json["key_events_processed"], 2);

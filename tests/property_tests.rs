@@ -15,23 +15,6 @@ const MAX_EVENTS: usize = 1000; // Max number of events in a sequence
 const MAX_TIME_DELTA_US: u64 = 1_000_000; // Max time delta between events (1 second)
 const MAX_DEBOUNCE_MS: u64 = 500; // Max debounce time to test (500ms)
 
-// --- Strategies ---
-
-// Strategy for generating a key code (0-255 covers most standard keys)
-fn arb_keycode() -> impl Strategy<Value = u16> {
-    0u16..=255
-}
-
-// Strategy for generating a key value (0=release, 1=press, 2=repeat)
-fn arb_keyvalue() -> impl Strategy<Value = i32> {
-    0i32..=2
-}
-
-// Strategy for generating non-key event types (SYN, REL, etc.)
-fn arb_nonkey_type() -> impl Strategy<Value = u16> {
-    prop_oneof![Just(EV_SYN as u16), Just(EV_REL as u16)]
-}
-
 
 // Strategy for generating a sequence of event data with increasing timestamps.
 // Generates a Vec of tuples: (timestamp_us, type, code, value) which IS Debug.
