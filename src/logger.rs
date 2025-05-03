@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use chrono::Local;
+use tracing::{info, trace, warn}; // Import tracing macros
 
 /// Represents a message sent from the main thread to the logger thread.
 // #[derive(Debug)] // input_event does not implement Debug
@@ -193,11 +194,12 @@ impl Logger {
     }
 
     /// Adapts logic from the old BounceFilter::log_event.
+    /// Logs details of a single event (passed or dropped) using tracing.
     fn log_event_detailed(&self, data: &EventInfo) {
         let status = if data.is_bounce {
-            "[DROP]"
+            "DROP"
         } else {
-            "[PASS]"
+            "PASS"
         };
 
         let relative_us = data
@@ -207,7 +209,7 @@ impl Logger {
 
         let type_name = get_event_type_name(data.event.type_);
 
-        let (key_info, value_name) = if event::is_key_event(&data.event) {
+        let (key_name_str, value_name_str) = if event::is_key_event(&data.event) {
             let key_name = get_key_name(data.event.code);
             let value_name = match data.event.value {
                 0 => "Release",
@@ -215,12 +217,12 @@ impl Logger {
                 2 => "Repeat",
                 _ => "Unknown",
             };
-            (format!(" Key [{}] ({})", key_name, data.event.code), value_name)
+            (key_name, value_name)
         } else {
-            ("".to_string(), "")
+            ("", "") // Not a key event, no key/value names
         };
 
-        let bounce_info = if data.is_bounce && event::is_key_event(&data.event) {
+        let bounce_info_str = if data.is_bounce && event::is_key_event(&data.event) {
             if let Some(diff) = data.diff_us {
                 format!(" (Bounce Time: {})", util::format_us(diff))
             } else {
@@ -230,11 +232,11 @@ impl Logger {
             "".to_string()
         };
 
-        let near_miss_info = if !data.is_bounce && event::is_key_event(&data.event) {
+        let near_miss_info_str = if !data.is_bounce && event::is_key_event(&data.event) {
             if let Some(last_us) = data.last_passed_us {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
                      // Check against Duration directly, use accessor
-                     if Duration::from_micros(diff) >= self.config.debounce_time() {
+                     if Duration::from_micros(diff) >= self.config.debounce_time() && Duration::from_micros(diff) <= self.config.near_miss_threshold() {
                          format!(" (Diff since last passed: {})", util::format_us(diff))
                      } else {
                          "".to_string()
@@ -249,24 +251,40 @@ impl Logger {
             "".to_string()
         };
 
-
-        eprintln!(
-            "{} {} {} ({}, {} {}){}{}{}",
+        // Use info! macro for event logging
+        info!(
+            target: "event", // Use a specific target for event logs
+            status = status,
+            relative_us = relative_us,
+            relative_human = %format_relative_us(relative_us), // Include formatted string
+            event_type = data.event.type_,
+            event_type_name = type_name,
+            event_code = data.event.code,
+            event_value = data.event.value,
+            key_name = key_name_str,
+            value_name = value_name_str,
+            is_bounce = data.is_bounce,
+            bounce_time_us = data.diff_us, // Use Option<u64> directly
+            bounce_info = %bounce_info_str, // Include formatted string
+            near_miss_diff_us = if !data.is_bounce && event::is_key_event(&data.event) { data.event_us.checked_sub(data.last_passed_us.unwrap_or(0)) } else { None }, // Calculate diff for near miss field
+            near_miss_info = %near_miss_info_str, // Include formatted string
+            "[{}] {} {} ({}, {} {}){}{}{}",
             status,
             format_relative_us(relative_us),
             type_name,
             data.event.code,
-            value_name,
+            value_name_str,
             data.event.value,
-            key_info,
-            bounce_info,
-            near_miss_info
+            if event::is_key_event(&data.event) { format!(" Key [{}] ({})", key_name_str, data.event.code) } else { "".to_string() },
+            bounce_info_str,
+            near_miss_info_str
         );
     }
 
     /// Adapts logic from the old BounceFilter::log_simple_bounce.
-    /// This is used when only `--log-bounces` is enabled.
+    /// This is used when only `--log-bounces` is enabled. Logs only dropped key events.
     fn log_simple_bounce_detailed(&self, data: &EventInfo) {
+        // This function is only called if data.is_bounce is true and it's a key event.
         let code = data.event.code;
         let value = data.event.value;
         let type_name = get_event_type_name(data.event.type_);
@@ -275,7 +293,7 @@ impl Logger {
         let value_name = match value {
             0 => "Release",
             1 => "Press",
-            2 => "Repeat",
+            2 => "Repeat", // Should not happen based on call site logic, but handle defensively
             _ => "Unknown",
         };
 
@@ -284,15 +302,29 @@ impl Logger {
             .checked_sub(self.first_event_us.unwrap_or(data.event_us))
             .unwrap_or(0);
 
-        let bounce_info = if let Some(diff) = data.diff_us {
+        let bounce_info_str = if let Some(diff) = data.diff_us {
             format!(" (Bounce Time: {})", util::format_us(diff))
         } else {
             " (Bounce Time: N/A)".to_string()
         };
 
-        eprintln!(
-            "{} {} {} ({}, {} {}) Key [{}] ({}){}",
-            "[DROP]",
+        // Use info! macro for bounce logging
+        info!(
+            target: "event", // Use a specific target for event logs
+            status = "DROP",
+            relative_us = relative_us,
+            relative_human = %format_relative_us(relative_us), // Include formatted string
+            event_type = data.event.type_,
+            event_type_name = type_name,
+            event_code = code,
+            event_value = value,
+            key_name = key_name,
+            value_name = value_name,
+            is_bounce = true,
+            bounce_time_us = data.diff_us, // Use Option<u64> directly
+            bounce_info = %bounce_info_str, // Include formatted string
+            "[{}] {} {} ({}, {} {}) Key [{}] ({}){}",
+            "DROP",
             format_relative_us(relative_us),
             type_name,
             code,
@@ -300,7 +332,7 @@ impl Logger {
             value,
             key_name,
             code,
-            bounce_info
+            bounce_info_str
         );
     }
 }
