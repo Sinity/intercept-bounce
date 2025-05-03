@@ -4,6 +4,7 @@ use std::io::Write;
 use std::mem::size_of;
 use std::process::Output; // Import Output struct
 use predicates::prelude::*; // For stderr assertions
+use serde::Deserialize; // Import the Deserialize trait
 use serde_json::{Value, json}; // For parsing JSON stats
 
 const KEY_A: u16 = 30;
