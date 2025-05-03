@@ -18,9 +18,9 @@ fn main() -> Result<(), Error> {
 
     // --- Generate Man Page ---
     let man_path = out_path.join("intercept-bounce.1");
-    let man_file = fs::File::create(&man_path)?;
+    let mut man_file = fs::File::create(&man_path)?; // Make man_file mutable
     println!("Generating man page: {:?}", man_path);
-    Man::new(cmd.clone()).render(man_file)?;
+    Man::new(cmd.clone()).render(&mut man_file)?; // Pass a mutable reference
 
     // --- Generate Shell Completions ---
     let bin_name = "intercept-bounce"; // Your binary name
