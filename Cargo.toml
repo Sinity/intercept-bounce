@@ -26,6 +26,8 @@ crossbeam-channel = "0.5" # Will be replaced by ArrayQueue later if benchmark is
 tracing         = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 humantime       = "2.1"
+clap_complete = "4.5"
+clap_mangen = "0.2"
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] } # For version/git info
