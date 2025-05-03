@@ -3,6 +3,8 @@
 //! to verify core properties of the filter.
 
 use intercept_bounce::filter::BounceFilter;
+use intercept_bounce::event; // Add use statement for the event module
+use fastrand; // Add use statement for fastrand
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -82,7 +84,7 @@ proptest! {
 
             let (is_bounce, _diff_us, _last_passed_us_before) = filter.check_event(&event, debounce_time);
 
-            if !is_bounce && crate::event::is_key_event(&event) && event.value != 2 {
+            if !is_bounce && event::is_key_event(&event) && event.value != 2 { // Use event:: directly
                 let key = (event.code, event.value);
                 if let Some(last_passed) = last_passed_times.get(&key) {
                     // Only assert if event_us >= last_passed (time didn't go backwards)
@@ -121,7 +123,7 @@ proptest! {
                 value: if type_ == EV_KEY as u16 { value } else { 0 },
             };
 
-            if !crate::event::is_key_event(&event) {
+            if !event::is_key_event(&event) { // Use event:: directly
                 let (is_bounce, _diff, _last) = filter.check_event(&event, debounce_time);
                 // Avoid printing event.time which is not Debug
                 prop_assert!(
@@ -153,7 +155,7 @@ proptest! {
                 value: if type_ == EV_KEY as u16 { value } else { 0 },
             };
 
-            if crate::event::is_key_event(&event) && event.value == 2 {
+            if event::is_key_event(&event) && event.value == 2 { // Use event:: directly
                 let (is_bounce, _diff, _last) = filter.check_event(&event, debounce_time);
                 // Avoid printing event.time which is not Debug
                 prop_assert!(
