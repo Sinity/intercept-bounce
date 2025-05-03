@@ -113,11 +113,15 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
 
 
 /// Calculates the event timestamp in microseconds from its timeval struct.
+/// Returns `u64::MAX` if the calculation overflows.
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
-    let sec = event.time.tv_sec as u64;
-    let usec = event.time.tv_usec as u64;
-    sec * 1_000_000 + usec
+    let sec = event.time.tv_sec as u64; // Cast from i64
+    let usec = event.time.tv_usec as u64; // tv_usec should be non-negative, cast is okay
+    // Use checked arithmetic to prevent overflow panics from fuzzed/invalid inputs
+    sec.checked_mul(1_000_000)
+        .and_then(|s| s.checked_add(usec))
+        .unwrap_or(u64::MAX) // Return MAX on overflow
 }
 
 /// Checks if the event type is EV_KEY.
