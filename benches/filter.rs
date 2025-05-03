@@ -1,14 +1,13 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use crossbeam_channel::bounded;
+use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
+use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
-use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
-use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration; // Import Duration
-use crossbeam_channel::bounded;
-use std::io::Write; // For sink()
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -24,7 +23,14 @@ fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
 }
 
 // Helper to create EventInfo
-fn create_event_info(ts_us: u64, code: u16, value: i32, is_bounce: bool, diff_us: Option<u64>, last_passed_us: Option<u64>) -> EventInfo {
+fn create_event_info(
+    ts_us: u64,
+    code: u16,
+    value: i32,
+    is_bounce: bool,
+    diff_us: Option<u64>,
+    last_passed_us: Option<u64>,
+) -> EventInfo {
     EventInfo {
         event: key_ev(ts_us, code, value),
         event_us: ts_us,
@@ -36,7 +42,7 @@ fn create_event_info(ts_us: u64, code: u16, value: i32, is_bounce: bool, diff_us
 
 // Helper to create a non-key EventInfo (SYN)
 fn create_syn_info(ts_us: u64) -> EventInfo {
-     EventInfo {
+    EventInfo {
         event: input_event {
             time: timeval {
                 tv_sec: (ts_us / 1_000_000) as i64,
@@ -53,14 +59,21 @@ fn create_syn_info(ts_us: u64) -> EventInfo {
     }
 }
 
-
 fn bench_filter_check_event(c: &mut Criterion) {
     let debounce_time = Duration::from_millis(10); // 10ms debounce
 
     // Pre-create events for reuse in the closures
     let event_pass = key_ev(0, 30, 1); // First event
     let event_bounce = key_ev(debounce_time.as_micros() as u64 / 2, 30, 1); // Bounce event
-    let event_non_key = input_event { time: timeval { tv_sec: 0, tv_usec: 0 }, type_: EV_SYN as u16, code: 0, value: 0 };
+    let event_non_key = input_event {
+        time: timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        },
+        type_: EV_SYN as u16,
+        code: 0,
+        value: 0,
+    };
 
     // Benchmark a passing scenario (first event or outside window)
     c.bench_function("filter::check_event_pass", |b| {
@@ -98,22 +111,31 @@ fn dummy_config(
     stats_json: bool,
     verbose: bool,
 ) -> Arc<Config> {
-     Arc::new(Config::new( // Use the new constructor
-         debounce_time,
-         near_miss_threshold,
-         log_interval,
-         log_all, // log_all_events
-         log_bounces,
-         stats_json,
-         verbose,
-         "info".to_string(), // log_filter
-     ))
+    Arc::new(Config::new(
+        // Use the new constructor
+        debounce_time,
+        near_miss_threshold,
+        log_interval,
+        log_all, // log_all_events
+        log_bounces,
+        stats_json,
+        verbose,
+        "info".to_string(), // log_filter
+    ))
 }
 
 // Helper to create a populated StatsCollector (example)
 fn create_populated_stats() -> StatsCollector {
     let mut stats = StatsCollector::with_capacity();
-    let config = dummy_config(Duration::from_millis(10), Duration::from_millis(100), false, false, Duration::ZERO, false, false);
+    let config = dummy_config(
+        Duration::from_millis(10),
+        Duration::from_millis(100),
+        false,
+        false,
+        Duration::ZERO,
+        false,
+        false,
+    );
     // Add some events using stats.record_event_info_with_config(...)
     // Example: Add a passed event, a bounced event, a near-miss event for KEY_A=30
     let ev1 = create_event_info(0, 30, 1, false, None, None);
@@ -127,7 +149,6 @@ fn create_populated_stats() -> StatsCollector {
     stats
 }
 
-
 fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
     let (_sender, receiver) = bounded::<LogMessage>(1); // Channel not used in process_message directly
@@ -137,14 +158,29 @@ fn bench_logger_process_message(c: &mut Criterion) {
     let log_interval = Duration::ZERO;
 
     // Create sample EventInfo messages
-    let passed_info = create_event_info(debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)); // Passed event
+    let passed_info = create_event_info(
+        debounce_time.as_micros() as u64,
+        30,
+        1,
+        false,
+        None,
+        Some(0),
+    ); // Passed event
     let bounced_info = create_event_info(15_000, 30, 1, true, Some(5_000), Some(10_000)); // Bounced event (adjust ts if needed)
     let near_miss_info = create_event_info(25_000, 30, 1, false, None, Some(10_000)); // Near miss passed event (adjust ts if needed)
     let syn_info = create_syn_info(30_000); // SYN event
 
     // Benchmark processing messages with different logging configurations
     c.bench_function("logger::process_message_passed_no_log", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, false, false, log_interval, false, false); // No logging, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            false,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
@@ -152,7 +188,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_bounced_no_log", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, false, false, log_interval, false, false); // No logging, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            false,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
@@ -160,7 +204,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_passed_log_all", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, false); // Log all, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
@@ -168,7 +220,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_bounced_log_bounces", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, false, true, log_interval, false, false); // Log bounces, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            false,
+            true,
+            log_interval,
+            false,
+            false,
+        ); // Log bounces, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
@@ -176,7 +236,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_bounced_log_all", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, false); // Log all, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
@@ -184,7 +252,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_near_miss_log_all", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, false); // Log all, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(near_miss_info.clone()));
@@ -192,7 +268,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_syn_log_all", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, false); // Log all, not verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            false,
+        ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(syn_info.clone())); // SYN events should be skipped
@@ -201,7 +285,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
 
     // Add benchmarks with verbose logging enabled
     c.bench_function("logger::process_message_passed_log_all_verbose", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, true); // Log all, verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            true,
+        ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(passed_info.clone()));
@@ -209,7 +301,15 @@ fn bench_logger_process_message(c: &mut Criterion) {
     });
 
     c.bench_function("logger::process_message_bounced_log_all_verbose", |b| {
-        let cfg = dummy_config(debounce_time, near_miss_threshold, true, false, log_interval, false, true); // Log all, verbose
+        let cfg = dummy_config(
+            debounce_time,
+            near_miss_threshold,
+            true,
+            false,
+            log_interval,
+            false,
+            true,
+        ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
             logger.process_message(LogMessage::Event(bounced_info.clone()));
@@ -220,8 +320,24 @@ fn bench_logger_process_message(c: &mut Criterion) {
 fn bench_stats_collector_record(c: &mut Criterion) {
     let debounce_time = Duration::from_millis(10);
     let near_miss_threshold = Duration::from_millis(100);
-    let config_base = dummy_config(debounce_time, near_miss_threshold, false, false, Duration::ZERO, false, false);
-    let config_near_miss_short = dummy_config(debounce_time, Duration::from_millis(20), false, false, Duration::ZERO, false, false);
+    let config_base = dummy_config(
+        debounce_time,
+        near_miss_threshold,
+        false,
+        false,
+        Duration::ZERO,
+        false,
+        false,
+    );
+    let config_near_miss_short = dummy_config(
+        debounce_time,
+        Duration::from_millis(20),
+        false,
+        false,
+        Duration::ZERO,
+        false,
+        false,
+    );
 
     let passed_info = create_event_info(20_000, 30, 1, false, None, Some(0));
     let bounced_info = create_event_info(5_000, 30, 1, true, Some(5_000), Some(0));
@@ -240,7 +356,7 @@ fn bench_stats_collector_record(c: &mut Criterion) {
         let mut stats = StatsCollector::with_capacity();
         b.iter(|| stats.record_event_info_with_config(&near_miss_info, &config_base))
     });
-     c.bench_function("stats::record_near_miss_short_thresh", |b| {
+    c.bench_function("stats::record_near_miss_short_thresh", |b| {
         let mut stats = StatsCollector::with_capacity();
         // This should *not* record as near miss with the short threshold config
         b.iter(|| stats.record_event_info_with_config(&near_miss_info, &config_near_miss_short))
@@ -253,7 +369,15 @@ fn bench_stats_collector_record(c: &mut Criterion) {
 
 fn bench_stats_collector_print(c: &mut Criterion) {
     let stats = create_populated_stats();
-    let config = dummy_config(Duration::from_millis(10), Duration::from_millis(100), false, false, Duration::from_secs(900), false, false);
+    let config = dummy_config(
+        Duration::from_millis(10),
+        Duration::from_millis(100),
+        false,
+        false,
+        Duration::from_secs(900),
+        false,
+        false,
+    );
     let runtime = Some(123_456_789); // Example runtime
 
     c.bench_function("stats::print_json", |b| {
@@ -264,19 +388,25 @@ fn bench_stats_collector_print(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("stats::print_human", |b| {
-        b.iter(|| {
-            let mut writer = std::io::sink(); // Discard output
-            // Note: print_stats_to_stderr writes directly to stderr,
-            // but the core formatting logic is still exercised.
-            // We can't easily redirect stderr in a benchmark closure.
-            // This benchmark primarily measures the formatting/calculation overhead, not I/O.
-            stats.print_stats_to_stderr(&config, "Benchmark");
-            criterion::black_box(writer); // Prevent optimization
-        })
-    });
+    // TODO: make it not output lots of text onto my terminal when running cargo bench
+    // c.bench_function("stats::print_human", |b| {
+    //     b.iter(|| {
+    //         let writer = std::io::sink(); // Discard output
+    //                                       // Note: print_stats_to_stderr writes directly to stderr,
+    //                                       // but the core formatting logic is still exercised.
+    //                                       // We can't easily redirect stderr in a benchmark closure.
+    //                                       // This benchmark primarily measures the formatting/calculation overhead, not I/O.
+    //         stats.print_stats_to_stderr(&config, "Benchmark");
+    //         criterion::black_box(writer); // Prevent optimization
+    //     })
+    // });
 }
 
-
-criterion_group!(benches, bench_filter_check_event, bench_logger_process_message, bench_stats_collector_record, bench_stats_collector_print);
+criterion_group!(
+    benches,
+    bench_filter_check_event,
+    bench_logger_process_message,
+    bench_stats_collector_record,
+    bench_stats_collector_print
+);
 criterion_main!(benches);
