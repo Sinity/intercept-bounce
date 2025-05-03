@@ -29,6 +29,9 @@ humantime       = "2.1"
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] } # For version/git info
+clap = { version = "4.5", features = ["derive"] } # Needed for accessing Args in build script/binary
+clap_complete = "4.5"
+clap_mangen = "0.2"
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -38,3 +41,9 @@ criterion = "0.5"
 [[bench]]
 name     = "filter"
 harness  = false
+
+# Binary target for generating completions and man pages
+[[bin]]
+name = "generate-cli-files"
+path = "src/bin/generate_cli_files.rs"
+required-features = [] # Does not require any special features

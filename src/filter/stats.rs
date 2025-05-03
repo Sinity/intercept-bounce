@@ -23,6 +23,8 @@ pub struct Meta {
 /// Holds the count of dropped events and the timing differences for those drops.
 #[derive(Debug, Serialize, Clone, Default)]
 pub struct KeyValueStats {
+    /// Total events processed (passed + dropped) for this specific key state.
+    pub total_processed: u64,
     pub count: u64,
     // Stores the microsecond difference between a dropped event and the previous passed event.
     pub timings_us: Vec<u64>,
@@ -100,24 +102,46 @@ impl StatsCollector {
 
         self.key_events_processed += 1;
 
+        // Get mutable access to the specific KeyValueStats for this event, if valid
         let key_code_idx = info.event.code as usize;
         let key_value_idx = info.event.value as usize;
+        let maybe_value_stats = if key_code_idx < 1024 && key_value_idx < 3 {
+            Some(match info.event.value {
+                1 => &mut self.per_key_stats[key_code_idx].press,
+                0 => &mut self.per_key_stats[key_code_idx].release,
+                _ => &mut self.per_key_stats[key_code_idx].repeat,
+            })
+        } else {
+            None
+        };
 
+        // Increment total processed count if we found valid stats
+        if let Some(value_stats) = maybe_value_stats.as_mut() {
+            value_stats.total_processed += 1;
+        }
+
+        // Handle bounce/pass logic
         if info.is_bounce {
             self.key_events_dropped += 1;
-            if key_code_idx < 1024 && key_value_idx < 3 {
-                 let value_stats = match info.event.value { 1 => &mut self.per_key_stats[key_code_idx].press, 0 => &mut self.per_key_stats[key_code_idx].release, _ => &mut self.per_key_stats[key_code_idx].repeat, };
-                 if let Some(diff) = info.diff_us { value_stats.count += 1; value_stats.push_timing(diff); }
+            // Increment drop count and record timing if we found valid stats
+            if let Some(value_stats) = maybe_value_stats {
+                if let Some(diff) = info.diff_us {
+                    value_stats.count += 1; // Increment drop count for this state
+                    value_stats.push_timing(diff);
+                }
             }
         } else { // Event passed the filter.
             self.key_events_passed += 1;
-            if let Some(last_us) = info.last_passed_us {
-                if let Some(diff) = info.event_us.checked_sub(last_us) {
-                    // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
-                    // The filter ensures diff >= debounce_time for passed events.
-                    // Here, we check against the near-miss threshold.
-                    if diff <= config.near_miss_threshold_us() { // Add parentheses
-                        self.record_near_miss((info.event.code, info.event.value), diff);
+            // Check for near-miss only on passed events if we found valid stats
+            if maybe_value_stats.is_some() { // Check if stats struct was valid
+                 if let Some(last_us) = info.last_passed_us {
+                    if let Some(diff) = info.event_us.checked_sub(last_us) {
+                        // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
+                        // The filter ensures diff >= debounce_time for passed events.
+                        // Here, we check against the near-miss threshold.
+                        if diff <= config.near_miss_threshold_us() { // Add parentheses
+                            self.record_near_miss((info.event.code, info.event.value), diff);
+                        }
                     }
                 }
             }
@@ -178,10 +202,18 @@ impl StatsCollector {
 
                 let key_name = get_key_name(key_code as u16);
                  eprintln!("\nKey [{}] ({}):", key_name, key_code);
+                // Calculate total processed for this key
+                let total_processed_for_key = stats.press.total_processed + stats.release.total_processed + stats.repeat.total_processed;
+                let key_drop_percentage = if total_processed_for_key > 0 {
+                    (total_drops_for_key as f64 / total_processed_for_key as f64) * 100.0
+                } else {
+                    0.0
+                };
+                eprintln!("  Total Processed: {}, Dropped: {} ({:.2}%)", total_processed_for_key, total_drops_for_key, key_drop_percentage);
 
                 let print_value_stats = |value_name: &str, value_code: i32, value_stats: &KeyValueStats| {
                     if value_stats.count > 0 {
-                        eprint!("  {:<7} ({}): {}", value_name, value_code, value_stats.count);
+                        eprint!("  {:<7} ({}): {} drops", value_name, value_code, value_stats.count); // Clarify "drops"
                         if !value_stats.timings_us.is_empty() {
                             let timings = &value_stats.timings_us;
                             let min = timings.iter().min().copied().unwrap_or(0);

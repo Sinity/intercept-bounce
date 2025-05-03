@@ -17,8 +17,8 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 ## Prerequisites
 
-* **Interception Tools:** Must be installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
-* **Build Environment:** Requires either a Rust toolchain or Nix with flakes enabled.
+*   **Interception Tools:** Must be installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
+*   **Build Environment:** Requires either a Rust toolchain or Nix with flakes enabled.
 
 ## Usage
 
@@ -186,6 +186,18 @@ stty -echo && sudo sh -c 'intercept -g ... | intercept-bounce [OPTIONS] | uinput
 
 This will prevent your typed characters from appearing amidst the log output.
 
+### Generating Shell Completions and Man Pages
+
+You can generate shell completion scripts (Bash, Zsh, Fish, etc.) and a man page using the provided helper binary:
+
+```bash
+# Ensure OUT_DIR is set (or default to target/generated)
+export OUT_DIR=target/generated
+
+# Run the generation binary
+cargo run --bin generate-cli-files
+```
+The generated files will be placed in the `target/generated` directory (or the directory specified by `OUT_DIR`). You can then install them to the appropriate locations on your system (e.g., `/usr/local/share/man/man1/` for the man page, `/usr/share/bash-completion/completions/` for Bash completions).
 ---
 
 ## Additional Ideas

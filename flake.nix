@@ -21,12 +21,15 @@
       # The 'system' variable is now in scope here
       let
         pkgs = import nixpkgs {inherit system;}; # Use the system variable
+        # Get the Rust toolchain
+        rust-toolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = ["rust-src"]; # Include rust-src for rust-analyzer
+        };
       in {
         # Define packages for this specific system
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
           version = "0.6.0";
-
           src = ./.;
           # The cargoHash below will need to be updated after these changes.
           # Run `nix build .` and it will tell you the correct hash.
@@ -34,7 +37,7 @@
 
           nativeBuildInputs = [ pkgs.pkg-config ]; # Add pkg-config if needed by dependencies
           buildInputs = [ pkgs.openssl ]; # Example: Add openssl if needed
-
+          # If interception tools are needed at build/runtime: pkgs.interception-tools
           meta = {
             description = "Interception Tools bounce filter with statistics";
             license = pkgs.lib.licenses.mit; # Or Apache-2.0
@@ -42,8 +45,21 @@
           };
         };
         # You can add other system-specific outputs here, like devShells, apps, etc.
-        # devShells.default = pkgs.mkShell { ... };
-        # apps.default = flake-utils.lib.mkApp { ... };
+        devShells.default = pkgs.mkShell {
+          name = "intercept-bounce-dev";
+          buildInputs = with pkgs; [
+            # Rust toolchain
+            rust-toolchain
+            cargo # Cargo from toolchain
+            clippy # Clippy from toolchain
+            rustfmt # Rustfmt from toolchain
+            rust-analyzer # Language server
+            # System dependencies
+            pkg-config
+            openssl
+            nixpkgs-fmt # For formatting flake.nix
+          ];
+        };
       }
     ); # Close the eachDefaultSystem call
 }

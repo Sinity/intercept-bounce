@@ -62,53 +62,49 @@ impl BounceFilter {
         event: &input_event,
         debounce_time: Duration, // Use Duration
     ) -> (bool, Option<u64>, Option<u64>) {
+        // Calculate timestamp and update overall tracking
         let event_us = event::event_microseconds(event);
-        let key_code = event.code;
-        let key_value = event.value;
-
         if self.overall_first_event_us.is_none() {
             self.overall_first_event_us = Some(event_us);
         }
         self.overall_last_event_us = Some(event_us);
 
-        let mut is_bounce = false;
-        let mut diff_us_if_bounce = None;
-        let mut last_passed_us_opt = None;
-
-        if is_key_event(event) && key_value != 2 {
-            let key_code_idx = key_code as usize;
-            let key_value_idx = key_value as usize;
-
-            if key_code_idx < 1024 && key_value_idx < 3 {
-                let last_us_for_key_value = self.last_event_us[key_code_idx][key_value_idx];
-
-                if last_us_for_key_value != u64::MAX {
-                    last_passed_us_opt = Some(last_us_for_key_value);
-
-                    // Check against Duration directly
-                    if debounce_time > Duration::ZERO {
-                        if let Some(diff) = event_us.checked_sub(last_us_for_key_value) {
-                            if Duration::from_micros(diff) < debounce_time {
-                                is_bounce = true;
-                                diff_us_if_bounce = Some(diff);
-                            }
-                        } else {
-                            is_bounce = false;
-                        }
-                    }
-                }
-
-                if !is_bounce {
-                    self.last_event_us[key_code_idx][key_value_idx] = event_us;
-                }
-            } else {
-                is_bounce = false;
-            }
-        } else {
-            is_bounce = false;
+        // Only apply debounce logic to EV_KEY press (1) and release (0) events
+        if !is_key_event(event) || event.value == 2 {
+            return (false, None, None); // Not a bounce, pass through
         }
 
-        (is_bounce, diff_us_if_bounce, last_passed_us_opt)
+        // Check if key code and value indices are within bounds
+        let key_code_idx = event.code as usize;
+        let key_value_idx = event.value as usize;
+        if !(key_code_idx < 1024 && key_value_idx < 3) {
+            // Should not happen with standard keyboards, but handle defensively
+            return (false, None, None); // Pass through if out of bounds
+        }
+
+        // Get the timestamp of the last passed event for this specific key/value
+        let last_passed_us = self.last_event_us[key_code_idx][key_value_idx];
+
+        // If no previous event passed for this key/value, it cannot be a bounce
+        if last_passed_us == u64::MAX {
+            self.last_event_us[key_code_idx][key_value_idx] = event_us; // Record as passed
+            return (false, None, None); // Not a bounce, no previous passed event
+        }
+
+        // Calculate time difference if possible (handles time going backwards)
+        if let Some(diff_us) = event_us.checked_sub(last_passed_us) {
+            // Check if the difference is less than the debounce time (and debounce > 0)
+            if debounce_time > Duration::ZERO && Duration::from_micros(diff_us) < debounce_time {
+                // It's a bounce! Return bounce info. Do NOT update last_event_us.
+                return (true, Some(diff_us), Some(last_passed_us));
+            }
+        }
+
+        // If we reach here, the event is NOT a bounce (either diff >= debounce_time,
+        // debounce_time is zero, or time went backwards).
+        self.last_event_us[key_code_idx][key_value_idx] = event_us; // Record as passed
+        // Return non-bounce, providing the timestamp of the previously passed event
+        (false, None, Some(last_passed_us))
     }
 
     /// Returns the total duration based on the first and last event timestamps seen.
