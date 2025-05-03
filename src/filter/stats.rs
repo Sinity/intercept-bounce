@@ -105,7 +105,7 @@ impl StatsCollector {
         // Get mutable access to the specific KeyValueStats for this event, if valid
         let key_code_idx = info.event.code as usize;
         let key_value_idx = info.event.value as usize;
-        let maybe_value_stats = if key_code_idx < 1024 && key_value_idx < 3 {
+        let mut maybe_value_stats = if key_code_idx < 1024 && key_value_idx < 3 { // Add mut
             Some(match info.event.value {
                 1 => &mut self.per_key_stats[key_code_idx].press,
                 0 => &mut self.per_key_stats[key_code_idx].release,

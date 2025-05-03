@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use chrono::Local;
-use tracing::{info, trace, warn}; // Import tracing macros
+use tracing::info; // Only info is used directly in this file's functions
 
 /// Represents a message sent from the main thread to the logger thread.
 // #[derive(Debug)] // input_event does not implement Debug
