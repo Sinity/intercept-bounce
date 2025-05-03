@@ -416,12 +416,23 @@ fn stats_output_json() {
     // Find the index where the JSON starts
     let json_start_index = stderr_str.find(json_start_line).unwrap_or(0);
 
-    // Attempt to parse from that point onwards
+    // Attempt to parse from that point onwards, consuming only the first JSON value found
     let json_part = &stderr_str[json_start_index..];
 
+    // Use a Deserializer to parse only the first JSON object found
+    let mut deserializer = serde_json::Deserializer::from_str(json_part);
+    let stats_json: Value = match Value::deserialize(&mut deserializer) {
+        Ok(val) => val,
+        Err(e) => panic!(
+            "Failed to deserialize first JSON object from stderr starting at detected block: Error: {}, starts with '{}', full stderr: {}",
+            e, json_start_line, stderr_str
+        ),
+    };
 
-    let stats_json: Value = serde_json::from_str(json_part)
-        .expect(&format!("Failed to parse JSON from stderr starting at detected block: starts with '{}', full stderr: {}", json_start_line, stderr_str));
+    // Ensure the deserializer consumed something and check for trailing data if needed (optional)
+    // let remaining_bytes = deserializer.byte_offset();
+    // assert!(remaining_bytes > 0, "Deserializer did not consume any bytes");
+    // You could check if json_part[remaining_bytes..].trim().is_empty() if strictness is required
 
     assert_eq!(stats_json["report_type"], "Cumulative");
     assert_eq!(stats_json["key_events_processed"], 2);
