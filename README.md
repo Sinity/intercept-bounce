@@ -7,6 +7,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 ## Features
 
 * Filters keyboard chatter based on a configurable time threshold (`--debounce-time`).
+* Tracks and reports "near-miss" events that occur just outside the debounce window (`--near-miss-threshold-time`).
 * Integrates seamlessly with the Interception Tools ecosystem (reads from stdin, writes to stdout).
 * Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal).
 * Statistics include overall counts, per-key drop counts, bounce timings (min/avg/max), and near-miss timings.
@@ -14,11 +15,12 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 * Optional per-event logging for debugging (`--log-all-events`, `--log-bounces`).
 * Optional verbose logging for internal state and thread activity (`--verbose`).
 * Handles termination signals (`SIGINT`, `SIGTERM`, `SIGQUIT`) gracefully to ensure final statistics are reported.
-* Includes unit tests, integration tests, property tests, and fuzzing for robustness.
+* Includes unit tests, integration tests (including high-throughput simulation), property tests, and fuzzing for robustness.
+* Supports benchmarking different internal queue implementations via Cargo features.
 
 ## Prerequisites
 
-*   **Interception Tools:** Must be installed and configured. See the [Interception Tools documentation](https://gitlab.com/interception/linux/tools).
+*   **Interception Tools:** Must be installed and configured. See the [Interception Tools documentation](https://gitlab.gitlab.io/interception/linux/tools).
 *   **Build Environment:** Requires either a Rust toolchain or Nix with flakes enabled.
 
 ## Usage
@@ -36,14 +38,16 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 > *   `--near-miss-threshold-time <DURATION>`:
 >    *   Sets the time threshold for identifying "near-miss" events (default: `100ms`). Accepts values like `100ms`, `0.1s`.
 >    *   Passed key events occurring within this time of the previous passed event for the same key/value are counted and reported in the statistics as near-misses. This helps identify keys that might be *almost* bouncing or have inconsistent timing just outside the debounce window.
->    *   Setting this to `0` effectively disables near-miss tracking.
+>    *   Setting this to `0ms` effectively disables near-miss tracking.
 >
 > *   `--log-interval <DURATION>`:
->    *   Periodically dump statistics to stderr (default: `15m`). Accepts values like `60s`, `15m`, `1h`. Set to `0` to disable periodic dumps. Statistics are always printed on exit.
+>    *   Periodically dump statistics to stderr (default: `15m`). Accepts values like `60s`, `15m`, `1h`. Set to `0s` to disable periodic dumps. Statistics are always printed on exit.
 > *   `--log-all-events`:
 >    *   Log details of *every* incoming event to stderr ([PASS] or [DROP]). Note: `EV_SYN` and `EV_MSC` events are skipped for cleaner output.
 > * `--log-bounces`:
 >   * Log details of *only dropped* (bounced) key events to stderr. This is ignored if `--log-all-events` is active.
+> * `--list-devices`:
+>   * List available input devices and their capabilities (requires read access to `/dev/input/event*`, typically root).
 > * `--stats-json`:
 >   * Output statistics (on exit and periodic dumps) in JSON format to stderr instead of the default human-readable format.
 > * `--verbose`:
@@ -57,7 +61,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
     Pipe output from `intercept` (grabbing your keyboard) through `intercept-bounce` and into `uinput` to create a filtered virtual device. Replace `/dev/input/by-id/your-keyboard-event-device` with your actual device path.
 
     ```bash
-    sudo sh -c 'intercept -g /dev/input/by-id/your-keyboard-event-device | intercept-bounce --debounce-time 15 | uinput -d /dev/input/by-id/your-keyboard-event-device'
+    sudo sh -c 'intercept -g /dev/input/by-id/your-keyboard-event-device | intercept-bounce --debounce-time 15ms | uinput -d /dev/input/by-id/your-keyboard-event-device'
     ```
 
     *(You'll likely need `sudo` or appropriate permissions for `intercept` and `uinput`)*.
@@ -66,14 +70,14 @@ This is particularly useful for mechanical keyboards which can sometimes registe
     Filter with a 20ms threshold and log only the events that get dropped. Detailed statistics will still print to stderr on exit.
 
     ```bash
-    sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ...'
+    sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20ms --log-bounces | uinput -d ...'
     ```
 
 3.  **Debugging - Log All Events (No Filtering):**
-    See every event passing through without filtering (`--debounce-time 0`), useful for observing raw input.
+    See every event passing through without filtering (`--debounce-time 0ms`), useful for observing raw input.
 
     ```bash
-    sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 0 --log-all-events | uinput -d ...'
+    sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 0ms --log-all-events | uinput -d ...'
     ```
 
 4.  **Periodic Stats Dump:**
@@ -101,12 +105,12 @@ This is particularly useful for mechanical keyboards which can sometimes registe
         LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd" # Replace this!
 
     # --- Example 2: Filtering with Periodic Stats ---
-    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15 --log-interval 300 | uinput -d $DEVNODE"
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15ms --log-interval 300s | uinput -d $DEVNODE"
       DEVICE:
         LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd" # Replace/adjust this!
 
     # --- Example 3: Logging Only Bounced Events ---
-    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ... # Replace ... with your device link"
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 20ms --log-bounces | uinput -d ... # Replace ... with your device link"
       DEVICE:
         LINK: "/dev/input/by-id/usb-Another_Keyboard_*-event-kbd" # Replace this!
     ```
@@ -120,9 +124,9 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 The project includes various testing methods to ensure correctness and robustness.
 
 *   **Unit Tests:** Located in `tests/unit_*.rs`, these test individual modules and logic components in isolation. Run with `cargo test`.
-*   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. Run with `cargo test`.
+*   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. This includes tests for basic filtering, edge cases, complex sequences, and a high-throughput simulation (`test_high_throughput`). Run with `cargo test`.
 *   **Property Tests:** Located in `tests/property_tests.rs`, these use `proptest` to generate a wide range of inputs and verify that the filter behaves according to defined properties (e.g., output events are a subset of input, timestamps are non-decreasing for passed events). Run with `cargo test`.
-*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
+*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Fuzz targets include testing the core filter logic (`fuzz_target_1`), the statistics accumulation (`fuzz_target_stats`), and the statistics printing/formatting (`fuzz_target_stats_print`). Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
 
 To run all tests (excluding fuzzing, which requires a separate setup):
 
@@ -135,6 +139,18 @@ To run benchmarks:
 ```bash
 cargo bench
 ```
+
+### Benchmarking Channel Implementations
+
+By default, `intercept-bounce` uses `crossbeam-channel::bounded` for communication between the main processing thread and the logger thread. You can benchmark an alternative lock-free queue implementation, `crossbeam-queue::ArrayQueue`, using a Cargo feature.
+
+To run benchmarks using `crossbeam-queue::ArrayQueue`:
+
+```bash
+cargo bench --features use_lockfree_queue
+```
+
+Compare the results, particularly for the `logger::channel_send_burst` benchmark, to see the performance characteristics of each implementation under load.
 
 ### Generating Shell Completions and Man Pages
 
