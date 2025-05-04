@@ -24,9 +24,15 @@
           src = ./.;
           cargoHash = "sha256-NGhaFLAdJzfCk0YZRVrNriqd+2W1Ohbbya4s3Jid+/8="; # Update this when Cargo.lock changes
 
-          nativeBuildInputs = [
-            pkgs.pkg-config
-            pkgs.git # Needed by vergen build script if building outside git repo
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            git # Needed by vergen build script if building outside git repo
+            # Shells needed by clap_complete::generate_to in generate-cli-files
+            bash
+            elvish
+            fish
+            powershell
+            zsh
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
