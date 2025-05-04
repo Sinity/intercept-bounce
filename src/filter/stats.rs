@@ -247,7 +247,7 @@ impl StatsCollector {
 
                 let key_name = get_key_name(key_code as u16);
                 writeln!(writer, "\nKey [{key_name}] ({key_code}):")?; // Use inline formatting
-                // Calculate total processed for this key
+                                                                       // Calculate total processed for this key
                 let total_processed_for_key = stats.press.total_processed
                     + stats.release.total_processed
                     + stats.repeat.total_processed;

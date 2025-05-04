@@ -64,7 +64,6 @@ struct OtelCounters {
     log_messages_dropped: Option<opentelemetry::metrics::Counter<u64>>,
 }
 
-
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
 fn set_high_priority() {
@@ -315,13 +314,15 @@ fn main() -> io::Result<()> {
                     trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
 
                     // Increment OTLP processed counter
-                    if let Some(counter) = &otel_counters.events_processed { // Use otel_counters
+                    if let Some(counter) = &otel_counters.events_processed {
+                        // Use otel_counters
                         counter.add(1, &[]);
                     }
 
                     trace!("Locking BounceFilter mutex...");
                     let (is_bounce, diff_us, last_passed_us) = {
-                        match ctx.bounce_filter.lock() { // Use ctx
+                        match ctx.bounce_filter.lock() {
+                            // Use ctx
                             Ok(mut filter) => {
                                 trace!("BounceFilter mutex locked successfully.");
                                 let result = filter.check_event(&ev, ctx.cfg.debounce_time()); // Use ctx
@@ -408,7 +409,8 @@ fn main() -> io::Result<()> {
                             counter.add(1, &[]);
                         }
 
-                        if let Err(e) = write_event_raw(ctx.stdout_fd, &ev) { // Use ctx
+                        if let Err(e) = write_event_raw(ctx.stdout_fd, &ev) {
+                            // Use ctx
                             if e.kind() == ErrorKind::BrokenPipe {
                                 // Info level for broken pipe is appropriate
                                 info!("Output pipe broken, exiting");
@@ -453,7 +455,8 @@ fn main() -> io::Result<()> {
                         );
                         thread::sleep(ctx.check_interval); // Use ctx
                         trace!("Checking main_running flag after EINTR sleep...");
-                        if !ctx.main_running.load(Ordering::SeqCst) { // Use ctx
+                        if !ctx.main_running.load(Ordering::SeqCst) {
+                            // Use ctx
                             debug!("main_running is false after EINTR. Breaking loop");
                             break;
                         }

@@ -49,9 +49,7 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
             }
             _ => {
                 // Use io::Error::other for simplicity
-                return Err(io::Error::other(
-                    "libc::read returned unexpected value",
-                ));
+                return Err(io::Error::other("libc::read returned unexpected value"));
             }
         }
     }
@@ -99,9 +97,7 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
             }
             _ => {
                 // Use io::Error::other for simplicity
-                return Err(io::Error::other(
-                    "libc::write returned unexpected value",
-                ));
+                return Err(io::Error::other("libc::write returned unexpected value"));
             }
         }
     }

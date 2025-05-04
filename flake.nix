@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github.com/numtide/flake-utils"; # Corrected URL
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   # Define outputs using flake-utils.lib.eachDefaultSystem
@@ -21,28 +21,20 @@
       # The 'system' variable is now in scope here
       let
         pkgs = import nixpkgs {inherit system;}; # Use the system variable
-        # Get the Rust toolchain
-        rust-toolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = ["rust-src"]; # Include rust-src for rust-analyzer
-        };
       in {
         # Define packages for this specific system
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
           version = "0.6.0";
-          src = ./.;
+          src = self;
           # The cargoHash below will need to be updated after these changes.
           # Run `nix build .` and it will tell you the correct hash.
-          cargoHash = "sha256-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX="; # Placeholder - UPDATE THIS HASH
+          cargoHash = "sha256-NGhaFLAdJzfCk0YZRVrNriqd+2W1Ohbbya4s3Jid+/8="; # Placeholder - UPDATE THIS HASH
 
           nativeBuildInputs = [
             pkgs.pkg-config
-            # Need cargo/rust for the generation binary during build
-            rust-toolchain
-            pkgs.stdenv.cc # Might be needed by clap build scripts
           ];
-          buildInputs = [ pkgs.openssl ]; # Example: Add openssl if needed
-          # If interception tools are needed at build/runtime: pkgs.interception-tools
+          buildInputs = [pkgs.openssl];
 
           # Phase to generate and install docs before the standard build
           preBuild = ''
@@ -94,15 +86,16 @@
         devShells.default = pkgs.mkShell {
           name = "intercept-bounce-dev";
           buildInputs = with pkgs; [
-            # Rust toolchain
-            rust-toolchain
-            cargo # Cargo from toolchain
-            clippy # Clippy from toolchain
-            rustfmt # Rustfmt from toolchain
+            rustc
+            cargo
+            clippy
+            rustfmt
             rust-analyzer # Language server
+
             # System dependencies
             pkg-config
             openssl
+
             nixpkgs-fmt # For formatting flake.nix
           ];
         };

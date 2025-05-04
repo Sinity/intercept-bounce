@@ -229,7 +229,7 @@ impl Logger {
         if self.config.stats_json {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
-                &self.config, // Remove explicit auto-deref
+                &self.config,             // Remove explicit auto-deref
                 None,                     // Runtime is only for cumulative
                 "Periodic",               // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
