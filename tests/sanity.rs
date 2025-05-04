@@ -391,15 +391,13 @@ fn stats_output_json() {
     assert!(output.status.success());
 
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
-    // Find the first line that starts with '{' and parse the first JSON object.
-    let json_part = stderr_str
-        .lines()
-        .find(|l| l.trim().starts_with('{'))
-        .expect("No JSON block found in stderr");
+
+    // Find the start of the JSON block and parse from there.
+    let json_start_index = stderr_str.find('{').expect("No JSON block start '{' found in stderr");
+    let json_part = &stderr_str[json_start_index..];
 
     let stats_json: Value = serde_json::from_str(json_part)
         .unwrap_or_else(|e| panic!("Failed to parse JSON from stderr: {}\nStderr:\n{}", e, stderr_str));
-
 
     assert_eq!(stats_json["report_type"], "Cumulative");
     assert_eq!(stats_json["key_events_processed"], 2);
@@ -550,14 +548,17 @@ fn test_only_non_key_events() {
         "Non-key events were filtered or modified"
     );
 
-    // Check stderr stats.
+    // Check stderr stats. It should contain a JSON block, even if counts are zero.
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
-    let json_part = stderr_str
-        .lines()
-        .find(|l| l.trim().starts_with('{'))
-        .expect("No JSON block found in stderr");
+
+    // Find the start of the JSON block and parse from there.
+    let json_start_index = stderr_str.find('{')
+        .expect("No JSON block start '{' found in stderr for non-key event test");
+    let json_part = &stderr_str[json_start_index..];
+
     let stats_json: Value = serde_json::from_str(json_part)
-        .expect("Failed to deserialize JSON from non-key event stderr");
+        .unwrap_or_else(|e| panic!("Failed to parse JSON from non-key event stderr: {}\nStderr:\n{}", e, stderr_str));
+
 
     // Assert that key event counts are zero.
     assert_eq!(
