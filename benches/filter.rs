@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use crossbeam_channel::bounded;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
+use intercept_bounce::filter::BounceFilter; // Add this import
 use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use std::sync::atomic::AtomicBool;
