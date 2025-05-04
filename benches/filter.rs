@@ -188,7 +188,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(passed_info.clone()));
+            // Pass passed_info directly, no clone needed
+            logger.process_message(LogMessage::Event(passed_info));
         })
     });
 
@@ -204,7 +205,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(bounced_info.clone()));
+            // Pass bounced_info directly, no clone needed
+            logger.process_message(LogMessage::Event(bounced_info));
         })
     });
 
@@ -220,7 +222,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(passed_info.clone()));
+            // Pass passed_info directly, no clone needed
+            logger.process_message(LogMessage::Event(passed_info));
         })
     });
 
@@ -236,7 +239,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log bounces, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(bounced_info.clone()));
+            // Pass bounced_info directly, no clone needed
+            logger.process_message(LogMessage::Event(bounced_info));
         })
     });
 
@@ -252,7 +256,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(bounced_info.clone()));
+            // Pass bounced_info directly, no clone needed
+            logger.process_message(LogMessage::Event(bounced_info));
         })
     });
 
@@ -268,7 +273,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(near_miss_info.clone()));
+            // Pass near_miss_info directly, no clone needed
+            logger.process_message(LogMessage::Event(near_miss_info));
         })
     });
 
@@ -284,7 +290,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(syn_info.clone())); // SYN events should be skipped
+            // Pass syn_info directly, no clone needed
+            logger.process_message(LogMessage::Event(syn_info)); // SYN events should be skipped
         })
     });
 
@@ -301,7 +308,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(passed_info.clone()));
+            // Pass passed_info directly, no clone needed
+            logger.process_message(LogMessage::Event(passed_info));
         })
     });
 
@@ -317,7 +325,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         b.iter(|| {
-            logger.process_message(LogMessage::Event(bounced_info.clone()));
+            // Pass bounced_info directly, no clone needed
+            logger.process_message(LogMessage::Event(bounced_info));
         })
     });
 }
@@ -430,7 +439,10 @@ fn bench_logger_channel_send(c: &mut Criterion) {
                 let mut success_count = 0;
                 let mut drop_count = 0;
                 for _ in 0..BURST_SIZE {
-                    match s.try_send(message.clone()) {
+                    // Recreate the message inside the loop as try_send takes ownership
+                    // Note: dummy_event_info itself doesn't need cloning here as it's Copy
+                    let msg_to_send = LogMessage::Event(dummy_event_info);
+                    match s.try_send(msg_to_send) {
                         Ok(_) => success_count += 1,
                         Err(_) => drop_count += 1,
                     }
