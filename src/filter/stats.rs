@@ -54,7 +54,7 @@ pub struct KeyStats {
 #[derive(Debug, Clone)]
 pub struct StatsCollector {
     /// Total count of key events processed (passed or dropped).
-    pub key_events_processed: u664,
+    pub key_events_processed: u64,
     /// Total count of key events that passed the filter.
     pub key_events_passed: u64,
     /// Total count of key events dropped by the filter.

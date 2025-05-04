@@ -14,7 +14,7 @@ use std::time::Duration; // Import Duration
 /// This struct only stores the timestamp (in microseconds) of the last *passed* event
 /// for each key code and value combination. It does not store historical
 /// statistics; that responsibility is delegated to the `Logger` thread.
-#[derive(Debug)]
+// #[derive(Debug)] // Removed because input_event doesn't implement Debug
 pub struct BounceFilter {
     // Stores the timestamp (in microseconds) of the last event that *passed* the filter
     // for a given key code (index 0..1023) and key value (index 0=release, 1=press, 2=repeat).
