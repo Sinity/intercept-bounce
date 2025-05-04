@@ -3,12 +3,11 @@ use crossbeam_channel::bounded;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
-use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 // Conditionally import queue/channel types for benchmark
 #[cfg(not(feature = "use_lockfree_queue"))]
@@ -159,7 +158,12 @@ fn create_populated_stats() -> StatsCollector {
 
 fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
-    let (_sender, receiver) = bounded::<LogMessage>(1); // Channel not used in process_message directly
+    // Conditionally create the appropriate receiver type for the benchmark
+    #[cfg(not(feature = "use_lockfree_queue"))]
+    let (_sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1);
+    #[cfg(feature = "use_lockfree_queue")]
+    let receiver: Arc<ArrayQueue<LogMessage>> = Arc::new(ArrayQueue::new(1)); // Create dummy queue Arc
+
     let running = Arc::new(AtomicBool::new(true));
     let debounce_time = Duration::from_millis(10); // 10ms
     let near_miss_threshold = Duration::from_millis(100); // 100ms
@@ -452,7 +456,8 @@ fn bench_logger_channel_send(c: &mut Criterion) {
         let sender_queue = Arc::clone(&queue);
         let receiver_queue = Arc::clone(&queue);
 
-        let dummy_logger_handle = thread::spawn(move || {
+        // Prefix with underscore as it's intentionally not joined here
+        let _dummy_logger_handle = thread::spawn(move || {
             // Loop while the sender Arc is potentially alive.
             // This isn't perfect, as the sender might be dropped but the receiver
             // hasn't popped the last item yet.
