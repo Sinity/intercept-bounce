@@ -3,13 +3,13 @@ name: Rust CI
 
 on:
   push:
-    branches: ["main"] # Trigger on pushes to main
+    branches: ["master"] # CORRECTED: Use master branch
   pull_request:
-    branches: ["main"] # Trigger on PRs targeting main
+    branches: ["master"] # CORRECTED: Use master branch
 
 jobs:
-  build_and_test:
-    name: Build and Test (Nix)
+  build_and_test: # Renamed job for clarity, was nix_checks
+    name: Build and Test (Nix) # Renamed job for clarity
     runs-on: ubuntu-latest # Use a Linux runner
     steps:
       - name: Checkout repository
@@ -27,28 +27,27 @@ jobs:
       - name: Setup Cachix # Optional: speeds up builds by caching Nix derivations
         uses: cachix/cachix-action@v15
         with:
-          # Replace 'your-cache-name' with your actual Cachix cache name
-          # Create one for free at https://app.cachix.org/
-          name: intercept-bounce # Example cache name
+          # Replace 'intercept-bounce' with your actual Cachix cache name if desired
+          name: intercept-bounce # Using the name from previous suggestion, adjust if needed
           # If your cache is private, uncomment and set the secret in GitHub repo settings
           # authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Check formatting (Nix)
+        # CORRECTED: Use nix develop to run the command in the dev environment
         run: nix develop .# --command cargo fmt -- --check
 
       - name: Run Linter (Clippy - Nix)
-        # Fail the build if clippy finds warnings/errors
+        # CORRECTED: Use nix develop, run on release profile, deny warnings
         run: nix develop .# --command cargo clippy --all-targets --release -- --deny warnings
 
       - name: Run Tests (Nix)
-        # Run tests using the release profile for consistency, capture output on failure
+        # CORRECTED: Use nix develop, run on release profile, show output on failure
         run: nix develop .# --command cargo test --all-targets --release -- --nocapture
 
-      - name: Build Release Binary (Nix)
-        # Build the main package defined in flake.nix
-        # The target system is automatically determined by the runner
-        run: nix build .#packages.${pkgs.system}.default --verbose
+      - name: Build Nix package # Renamed step for clarity
+        # CORRECTED: Build the main package defined in flake.nix for linux explicitly
+        run: nix build .#packages.x86_64-linux.default --verbose
 
       # Optional: Add a step to build checks if defined in flake.nix
       # - name: Build Nix Checks
-      #   run: nix build .#checks.${pkgs.system}
+      #   run: nix build .#checks.x86_64-linux.default # Explicitly target linux
