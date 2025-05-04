@@ -2,10 +2,10 @@
 //! These tests generate a wide range of input event sequences and debounce times
 //! to verify core properties of the filter.
 
-use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::event; // Add use statement for the event module
 use fastrand; // Add use statement for fastrand
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
+use intercept_bounce::event; // Add use statement for the event module
+use intercept_bounce::filter::BounceFilter;
 use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -14,7 +14,6 @@ use std::time::Duration;
 const MAX_EVENTS: usize = 1000; // Max number of events in a sequence
 const MAX_TIME_DELTA_US: u64 = 1_000_000; // Max time delta between events (1 second)
 const MAX_DEBOUNCE_MS: u64 = 500; // Max debounce time to test (500ms)
-
 
 // Strategy for generating a sequence of event data with increasing timestamps.
 // Generates a Vec of tuples: (timestamp_us, type, code, value) which IS Debug.
@@ -25,19 +24,26 @@ fn arb_event_sequence_data() -> impl Strategy<Value = Vec<(u64, u16, u16, i32)>>
         let mut events = Vec::with_capacity(start_times.len());
         // Generate events sequentially ensuring time increases using fastrand
         for _ in 0..start_times.len() {
-             let time_delta = fastrand::u64(1..=MAX_TIME_DELTA_US); // Use fastrand directly
-             let event_us = current_time.saturating_add(time_delta);
-             let event_type = if fastrand::bool() { EV_KEY as u16 } else { if fastrand::bool() { EV_SYN as u16 } else { EV_REL as u16 } };
-             let code = fastrand::u16(0..256);
-             let value = fastrand::i32(0..3);
+            let time_delta = fastrand::u64(1..=MAX_TIME_DELTA_US); // Use fastrand directly
+            let event_us = current_time.saturating_add(time_delta);
+            let event_type = if fastrand::bool() {
+                EV_KEY as u16
+            } else {
+                if fastrand::bool() {
+                    EV_SYN as u16
+                } else {
+                    EV_REL as u16
+                }
+            };
+            let code = fastrand::u16(0..256);
+            let value = fastrand::i32(0..3);
 
-             events.push((event_us, event_type, code, value));
-             current_time = event_us;
+            events.push((event_us, event_type, code, value));
+            current_time = event_us;
         }
         events
     })
 }
-
 
 // --- Properties ---
 

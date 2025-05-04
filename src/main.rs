@@ -1,7 +1,7 @@
 // Orchestrates command-line parsing, thread setup, the main event loop,
 // signal handling, and final shutdown/stats reporting.
 
-use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
+use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::io::{self, ErrorKind};
@@ -15,13 +15,13 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use intercept_bounce::{cli, config::Config, util};
-use intercept_bounce::event;
-use intercept_bounce::filter;
-use intercept_bounce::logger;
 use event::{event_microseconds, list_input_devices, read_event_raw, write_event_raw};
 use filter::stats::StatsCollector;
 use filter::BounceFilter;
+use intercept_bounce::event;
+use intercept_bounce::filter;
+use intercept_bounce::logger;
+use intercept_bounce::{cli, config::Config, util};
 use logger::{EventInfo, LogMessage, Logger};
 use tracing::{debug, error, info, instrument, trace, warn}; // Removed Level, Span
 
@@ -29,14 +29,8 @@ use tracing::{debug, error, info, instrument, trace, warn}; // Removed Level, Sp
 use opentelemetry::global as otel_global;
 use opentelemetry::metrics::{Meter, MeterProvider as _}; // Import Meter trait and MeterProvider trait
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{
-    metrics::MeterProvider as SdkMeterProvider, // Alias the SDK struct
-    runtime,
-    trace as sdktrace,
-    Resource,
-};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use tracing_opentelemetry; // Import the crate
+use opentelemetry_sdk::{metrics::SdkMeterProvider, runtime, trace as sdktrace, Resource};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter}; // Import the crate
 
 // Define capacity constant
 const LOGGER_QUEUE_CAPACITY: usize = 1024; // Or make configurable
@@ -58,7 +52,10 @@ fn set_high_priority() {
         debug!("Attempting to set high process priority (niceness -20)...");
         let res = unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, -20) };
         if res != 0 {
-            warn!("Unable to set process niceness to -20 (requires root or CAP_SYS_NICE). Error: {}", io::Error::last_os_error());
+            warn!(
+                "Unable to set process niceness to -20 (requires root or CAP_SYS_NICE). Error: {}",
+                io::Error::last_os_error()
+            );
         } else {
             info!("Process priority set to -20 (highest).");
         }
@@ -109,17 +106,17 @@ fn init_otel(cfg: &Config) -> Option<(SdkMeterProvider, sdktrace::Tracer, Meter)
 }
 
 // Initialize tracing subscriber
-fn init_tracing(cfg: &Config) -> Option<Meter> { // Return Option<Meter>
+fn init_tracing(cfg: &Config) -> Option<Meter> {
+    // Return Option<Meter>
     let fmt_layer = fmt::layer()
         .with_writer(std::io::stderr) // Explicitly write to stderr
-        .with_target(cfg.verbose)     // Show module path only if verbose
+        .with_target(cfg.verbose) // Show module path only if verbose
         .with_level(true);
 
-    let filter = EnvFilter::try_new(&cfg.log_filter)
-        .unwrap_or_else(|e| {
-            eprintln!("Warning: Invalid RUST_LOG '{}': {}", cfg.log_filter, e);
-            EnvFilter::new("intercept_bounce=info") // Fallback
-        });
+    let filter = EnvFilter::try_new(&cfg.log_filter).unwrap_or_else(|e| {
+        eprintln!("Warning: Invalid RUST_LOG '{}': {}", cfg.log_filter, e);
+        EnvFilter::new("intercept_bounce=info") // Fallback
+    });
 
     // --- Build Subscriber ---
     let registry_base = tracing_subscriber::registry().with(fmt_layer).with(filter);
@@ -137,11 +134,13 @@ fn init_tracing(cfg: &Config) -> Option<Meter> { // Return Option<Meter>
     };
     // registry.init(); // Initialization is now conditional above
 
-    info!(version = env!("CARGO_PKG_VERSION"),
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
         // Use option_env! for git sha to avoid build errors outside git repo
         git_sha = option_env!("VERGEN_GIT_SHA_SHORT").unwrap_or("unknown"),
         build_ts = env!("VERGEN_BUILD_TIMESTAMP"),
-        "intercept-bounce starting");
+        "intercept-bounce starting"
+    );
 
     info!(debounce = %util::format_duration(cfg.debounce_time()),
         near_miss = %util::format_duration(cfg.near_miss_threshold()),
@@ -157,7 +156,6 @@ fn init_tracing(cfg: &Config) -> Option<Meter> { // Return Option<Meter>
     otel_meter // Return the meter from init_tracing
 }
 
-
 fn main() -> io::Result<()> {
     // Early parse to get config for tracing setup
     let args = cli::parse_args();
@@ -169,7 +167,6 @@ fn main() -> io::Result<()> {
     // Now use tracing for subsequent messages
     // Don't log the whole config struct at debug, use the info log below
     // debug!("Arguments parsed and config created: {:?}", cfg);
-
 
     if args.list_devices {
         info!("Scanning input devices (requires read access to /dev/input/event*)...");
@@ -196,7 +193,8 @@ fn main() -> io::Result<()> {
     debug!("Shared state initialized");
 
     debug!("Creating bounded channel for logger communication...");
-    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(LOGGER_QUEUE_CAPACITY); // Keep bounded for now
+    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) =
+        bounded(LOGGER_QUEUE_CAPACITY); // Keep bounded for now
     debug!(capacity = LOGGER_QUEUE_CAPACITY, "Channel created");
 
     debug!("Spawning logger thread...");
@@ -257,59 +255,86 @@ fn main() -> io::Result<()> {
 
     // --- OTLP Metrics Setup (in main thread) ---
     // Get counters only if the meter was successfully initialized
-    let events_processed_counter = otel_meter.as_ref().map(|m| m.u64_counter("events.processed").with_description("Total input events processed").init());
-    let events_passed_counter = otel_meter.as_ref().map(|m| m.u64_counter("events.passed").with_description("Input events passed through the filter").init());
-    let events_dropped_counter = otel_meter.as_ref().map(|m| m.u64_counter("events.dropped").with_description("Input events dropped (bounced)").init());
-    let log_messages_dropped_counter = otel_meter.as_ref().map(|m| m.u64_counter("log.messages.dropped").with_description("Log messages dropped due to channel backpressure").init());
+    let events_processed_counter = otel_meter.as_ref().map(|m| {
+        m.u64_counter("events.processed")
+            .with_description("Total input events processed")
+            .init()
+    });
+    let events_passed_counter = otel_meter.as_ref().map(|m| {
+        m.u64_counter("events.passed")
+            .with_description("Input events passed through the filter")
+            .init()
+    });
+    let events_dropped_counter = otel_meter.as_ref().map(|m| {
+        m.u64_counter("events.dropped")
+            .with_description("Input events dropped (bounced)")
+            .init()
+    });
+    let log_messages_dropped_counter = otel_meter.as_ref().map(|m| {
+        m.u64_counter("log.messages.dropped")
+            .with_description("Log messages dropped due to channel backpressure")
+            .init()
+    });
 
     // Add an instrumented span around the main loop
     #[instrument(name="main_event_loop", skip_all, fields(otel.kind = "consumer"))]
-    fn run_main_loop(main_running: &Arc<AtomicBool>, stdin_fd: RawFd, stdout_fd: RawFd, bounce_filter: &Arc<Mutex<BounceFilter>>, cfg: &Arc<Config>, main_state: &mut MainState, check_interval: Duration, events_processed_counter: &Option<opentelemetry::metrics::Counter<u64>>, events_passed_counter: &Option<opentelemetry::metrics::Counter<u64>>, events_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>, log_messages_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>) {
+    fn run_main_loop(
+        main_running: &Arc<AtomicBool>,
+        stdin_fd: RawFd,
+        stdout_fd: RawFd,
+        bounce_filter: &Arc<Mutex<BounceFilter>>,
+        cfg: &Arc<Config>,
+        main_state: &mut MainState,
+        check_interval: Duration,
+        events_processed_counter: &Option<opentelemetry::metrics::Counter<u64>>,
+        events_passed_counter: &Option<opentelemetry::metrics::Counter<u64>>,
+        events_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>,
+        log_messages_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>,
+    ) {
+        while main_running.load(Ordering::SeqCst) {
+            trace!("Main loop iteration: checking running flag (true)");
+            trace!("Attempting to read event from stdin...");
 
-    while main_running.load(Ordering::SeqCst) {
-        trace!("Main loop iteration: checking running flag (true)");
-        trace!("Attempting to read event from stdin...");
+            match read_event_raw(stdin_fd) {
+                Ok(Some(ev)) => {
+                    let event_us = event_microseconds(&ev);
+                    trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
 
-        match read_event_raw(stdin_fd) {
-            Ok(Some(ev)) => {
-                let event_us = event_microseconds(&ev);
-                trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
-
-                // Increment OTLP processed counter
-                if let Some(counter) = events_processed_counter {
-                    counter.add(1, &[]);
-                }
-
-                trace!("Locking BounceFilter mutex...");
-                let (is_bounce, diff_us, last_passed_us) = {
-                    match bounce_filter.lock() {
-                        Ok(mut filter) => {
-                            trace!("BounceFilter mutex locked successfully.");
-                            let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
-                            trace!(?result, "BounceFilter check_event returned");
-                            result
-                        },
-                        Err(poisoned) => {
-                            // Use error level for poisoned mutex
-                            error!("FATAL: BounceFilter mutex poisoned in main event loop.");
-                            let mut filter = poisoned.into_inner();
-                            let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
-                            trace!(?result, "BounceFilter check_event (poisoned) returned");
-                            result
-                        }
+                    // Increment OTLP processed counter
+                    if let Some(counter) = events_processed_counter {
+                        counter.add(1, &[]);
                     }
-                };
-                trace!("BounceFilter mutex unlocked");
 
-                let event_info = EventInfo {
-                    event: ev, // Cannot log event directly as it doesn't impl Debug
-                    event_us,
-                    is_bounce,
-                    diff_us,
-                    last_passed_us,
-                };
-                // Log EventInfo fields individually at trace level
-                trace!(event_type = event_info.event.type_,
+                    trace!("Locking BounceFilter mutex...");
+                    let (is_bounce, diff_us, last_passed_us) = {
+                        match bounce_filter.lock() {
+                            Ok(mut filter) => {
+                                trace!("BounceFilter mutex locked successfully.");
+                                let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
+                                trace!(?result, "BounceFilter check_event returned");
+                                result
+                            }
+                            Err(poisoned) => {
+                                // Use error level for poisoned mutex
+                                error!("FATAL: BounceFilter mutex poisoned in main event loop.");
+                                let mut filter = poisoned.into_inner();
+                                let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
+                                trace!(?result, "BounceFilter check_event (poisoned) returned");
+                                result
+                            }
+                        }
+                    };
+                    trace!("BounceFilter mutex unlocked");
+
+                    let event_info = EventInfo {
+                        event: ev, // Cannot log event directly as it doesn't impl Debug
+                        event_us,
+                        is_bounce,
+                        diff_us,
+                        last_passed_us,
+                    };
+                    // Log EventInfo fields individually at trace level
+                    trace!(event_type = event_info.event.type_,
                        event_code = event_info.event.code,
                        event_value = event_info.event.value,
                        event_us = event_info.event_us,
@@ -318,113 +343,134 @@ fn main() -> io::Result<()> {
                        last_passed_us = ?event_info.last_passed_us,
                        "Prepared EventInfo for logger");
 
-
-                trace!("Attempting to send EventInfo to logger channel...");
-                match main_state.log_sender.try_send(LogMessage::Event(event_info)) { // Use try_send directly
-                    Ok(_) => {
-                        trace!("Successfully sent EventInfo to logger");
-                        if main_state.currently_dropping {
-                            // Use info level when resuming logging
-                            info!("Logger channel caught up, resuming logging");
-                            main_state.currently_dropping = false;
+                    trace!("Attempting to send EventInfo to logger channel...");
+                    match main_state
+                        .log_sender
+                        .try_send(LogMessage::Event(event_info))
+                    {
+                        // Use try_send directly
+                        Ok(_) => {
+                            trace!("Successfully sent EventInfo to logger");
+                            if main_state.currently_dropping {
+                                // Use info level when resuming logging
+                                info!("Logger channel caught up, resuming logging");
+                                main_state.currently_dropping = false;
+                            }
+                        }
+                        Err(TrySendError::Full(_)) => {
+                            // Handle Full directly
+                            main_state.total_dropped_log_messages += 1;
+                            // Increment OTLP dropped log message counter if available
+                            if let Some(counter) = log_messages_dropped_counter {
+                                counter.add(1, &[]);
+                            }
+                            if !main_state.warned_about_dropping {
+                                // Use warn level for dropping logs
+                                warn!("Logger channel full, dropping log messages to maintain performance");
+                                main_state.warned_about_dropping = true;
+                                main_state.currently_dropping = true;
+                            }
+                            trace!(
+                                total_dropped = main_state.total_dropped_log_messages,
+                                "Logger channel full. Dropped log message"
+                            );
+                        }
+                        Err(TrySendError::Disconnected(_)) => {
+                            // Handle Disconnected directly
+                            // Error level for unexpected disconnect
+                            error!("Logger channel disconnected unexpectedly");
+                            debug!("Setting main_running flag to false due to logger channel disconnect");
+                            main_running.store(false, Ordering::SeqCst);
+                            debug!("Breaking main loop due to logger channel disconnect");
+                            break;
                         }
                     }
-                    Err(TrySendError::Full(_)) => { // Handle Full directly
-                        main_state.total_dropped_log_messages += 1;
-                        // Increment OTLP dropped log message counter if available
-                        if let Some(counter) = log_messages_dropped_counter {
+                    // Removed conditional send block
+
+                    if !is_bounce {
+                        trace!("Event passed filter. Attempting to write to stdout...");
+                        // Increment OTLP passed counter
+                        if let Some(counter) = events_passed_counter {
                             counter.add(1, &[]);
                         }
-                        if !main_state.warned_about_dropping {
-                            // Use warn level for dropping logs
-                            warn!("Logger channel full, dropping log messages to maintain performance");
-                            main_state.warned_about_dropping = true;
-                            main_state.currently_dropping = true;
-                        }
-                        trace!(total_dropped = main_state.total_dropped_log_messages,
-                            "Logger channel full. Dropped log message");
-                    }
-                    Err(TrySendError::Disconnected(_)) => { // Handle Disconnected directly
-                        // Error level for unexpected disconnect
-                        error!("Logger channel disconnected unexpectedly");
-                        debug!("Setting main_running flag to false due to logger channel disconnect");
-                        main_running.store(false, Ordering::SeqCst);
-                        debug!("Breaking main loop due to logger channel disconnect");
-                        break;
-                    }
-                }
-                // Removed conditional send block
 
-
-                if !is_bounce {
-                    trace!("Event passed filter. Attempting to write to stdout...");
-                    // Increment OTLP passed counter
-                    if let Some(counter) = events_passed_counter {
-                        counter.add(1, &[]);
-                    }
-
-                    if let Err(e) = write_event_raw(stdout_fd, &ev) {
-                        if e.kind() == ErrorKind::BrokenPipe {
-                            // Info level for broken pipe is appropriate
-                            info!("Output pipe broken, exiting");
-                            debug!("Setting main_running flag to false due to BrokenPipe");
-                            main_running.store(false, Ordering::SeqCst);
-                            debug!("Breaking main loop due to BrokenPipe");
-                            break;
+                        if let Err(e) = write_event_raw(stdout_fd, &ev) {
+                            if e.kind() == ErrorKind::BrokenPipe {
+                                // Info level for broken pipe is appropriate
+                                info!("Output pipe broken, exiting");
+                                debug!("Setting main_running flag to false due to BrokenPipe");
+                                main_running.store(false, Ordering::SeqCst);
+                                debug!("Breaking main loop due to BrokenPipe");
+                                break;
+                            } else {
+                                // Error level for other write errors
+                                error!(error = %e, "Error writing output event");
+                                debug!("Setting main_running flag to false due to write error");
+                                main_running.store(false, Ordering::SeqCst);
+                                debug!("Breaking main loop due to write error");
+                                break;
+                            }
                         } else {
-                            // Error level for other write errors
-                            error!(error = %e, "Error writing output event");
-                            debug!("Setting main_running flag to false due to write error");
-                            main_running.store(false, Ordering::SeqCst);
-                            debug!("Breaking main loop due to write error");
-                            break;
+                            trace!("Successfully wrote event to stdout");
                         }
                     } else {
-                        trace!("Successfully wrote event to stdout");
-                    }
-                } else {
-                    trace!("Event dropped by filter. Not writing to stdout");
-                    // Increment OTLP dropped counter
-                    if let Some(counter) = events_dropped_counter {
-                        counter.add(1, &[]);
+                        trace!("Event dropped by filter. Not writing to stdout");
+                        // Increment OTLP dropped counter
+                        if let Some(counter) = events_dropped_counter {
+                            counter.add(1, &[]);
+                        }
                     }
                 }
-            }
-            Ok(None) => {
-                // Info level for clean EOF
-                info!("Received clean EOF on stdin");
-                debug!("Setting main_running flag to false due to EOF");
-                main_running.store(false, Ordering::SeqCst);
-                debug!("Breaking main loop due to EOF");
-                break;
-            }
-            Err(e) => {
-                if e.kind() == ErrorKind::Interrupted {
-                    // Debug level for EINTR is fine
-                    debug!("Read interrupted by signal (EINTR)");
-                    trace!("Sleeping for {:?} before re-checking running flag.", check_interval);
-                    thread::sleep(check_interval);
-                    trace!("Checking main_running flag after EINTR sleep...");
-                    if !main_running.load(Ordering::SeqCst) {
-                        debug!("main_running is false after EINTR. Breaking loop");
-                        break;
-                    }
-                    trace!("main_running is still true after EINTR. Continuing read loop");
-                    continue; // Continue loop after EINTR
+                Ok(None) => {
+                    // Info level for clean EOF
+                    info!("Received clean EOF on stdin");
+                    debug!("Setting main_running flag to false due to EOF");
+                    main_running.store(false, Ordering::SeqCst);
+                    debug!("Breaking main loop due to EOF");
+                    break;
                 }
-                // Error level for other read errors
-                error!(error = %e, "Error reading input event");
-                debug!("Setting main_running flag to false due to read error");
-                main_running.store(false, Ordering::SeqCst);
-                debug!("Breaking main loop due to read error");
-                break;
+                Err(e) => {
+                    if e.kind() == ErrorKind::Interrupted {
+                        // Debug level for EINTR is fine
+                        debug!("Read interrupted by signal (EINTR)");
+                        trace!(
+                            "Sleeping for {:?} before re-checking running flag.",
+                            check_interval
+                        );
+                        thread::sleep(check_interval);
+                        trace!("Checking main_running flag after EINTR sleep...");
+                        if !main_running.load(Ordering::SeqCst) {
+                            debug!("main_running is false after EINTR. Breaking loop");
+                            break;
+                        }
+                        trace!("main_running is still true after EINTR. Continuing read loop");
+                        continue; // Continue loop after EINTR
+                    }
+                    // Error level for other read errors
+                    error!(error = %e, "Error reading input event");
+                    debug!("Setting main_running flag to false due to read error");
+                    main_running.store(false, Ordering::SeqCst);
+                    debug!("Breaking main loop due to read error");
+                    break;
+                }
             }
         }
-    }
     } // End of run_main_loop function
 
     // Call the instrumented function
-    run_main_loop(&main_running, stdin_fd, stdout_fd, &bounce_filter, &cfg, &mut main_state, check_interval, &events_processed_counter, &events_passed_counter, &events_dropped_counter, &log_messages_dropped_counter);
+    run_main_loop(
+        &main_running,
+        stdin_fd,
+        stdout_fd,
+        &bounce_filter,
+        &cfg,
+        &mut main_state,
+        check_interval,
+        &events_processed_counter,
+        &events_passed_counter,
+        &events_dropped_counter,
+        &log_messages_dropped_counter,
+    );
 
     info!("Main event loop finished");
 
@@ -444,7 +490,7 @@ fn main() -> io::Result<()> {
             debug!("Logger thread panicked. Returning default stats");
             StatsCollector::with_capacity() // Return empty stats
         }
-    } ;
+    };
     debug!("Logger thread joined. Final stats collected");
 
     debug!("Checking final_stats_printed flag before printing");
@@ -457,7 +503,7 @@ fn main() -> io::Result<()> {
                     let rt = filter.get_runtime_us();
                     trace!(?rt, "BounceFilter runtime_us");
                     rt
-                },
+                }
                 Err(_) => {
                     // Warn level for poisoned mutex during final calculation
                     warn!("BounceFilter mutex poisoned during final runtime calculation");
@@ -475,7 +521,7 @@ fn main() -> io::Result<()> {
             final_stats.print_stats_json(
                 &*cfg,
                 runtime_us,
-                "Cumulative", // Report type
+                "Cumulative",             // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
             );
             debug!("Finished printing final stats in JSON format");
@@ -495,8 +541,10 @@ fn main() -> io::Result<()> {
         }
         if main_state.total_dropped_log_messages > 0 {
             // Warn level for dropped log messages
-            warn!(count = main_state.total_dropped_log_messages,
-                "Total log messages dropped due to logger backpressure");
+            warn!(
+                count = main_state.total_dropped_log_messages,
+                "Total log messages dropped due to logger backpressure"
+            );
             debug!("Finished printing dropped log message count");
         } else {
             debug!("No log messages were dropped");
@@ -507,9 +555,9 @@ fn main() -> io::Result<()> {
 
     // --- OTLP Shutdown ---
     otel_global::shutdown_tracer_provider(); // Cleanly shutdown OTLP tracer
-    // Meter provider shutdown is typically handled by dropping the provider instance.
-    // We don't store it directly in main, so removing the explicit call.
-    // otel_global::shutdown_meter_provider();
+                                             // Meter provider shutdown is typically handled by dropping the provider instance.
+                                             // We don't store it directly in main, so removing the explicit call.
+                                             // otel_global::shutdown_meter_provider();
     info!("Application exiting successfully");
     Ok(())
 }

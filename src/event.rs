@@ -1,5 +1,7 @@
-use input_linux_sys::{input_event, EV_KEY, EV_REL, EV_ABS, EV_MSC, EV_LED, EV_REP, EV_MAX, EV_SYN};
-use libc::{self, ioctl, c_ulong};
+use input_linux_sys::{
+    input_event, EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN,
+};
+use libc::{self, c_ulong, ioctl};
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::mem::size_of;
@@ -46,10 +48,10 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
                 bytes_read += n as usize;
             }
             _ => {
-                 return Err(io::Error::new(
-                     ErrorKind::Other,
-                     "libc::read returned unexpected value",
-                 ));
+                return Err(io::Error::new(
+                    ErrorKind::Other,
+                    "libc::read returned unexpected value",
+                ));
             }
         }
     }
@@ -59,7 +61,6 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
     Ok(Some(event))
 }
 
-
 /// Writes a single `input_event` directly to a raw file descriptor using `libc::write`.
 ///
 /// Handles partial writes and EINTR signals by retrying.
@@ -68,12 +69,8 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
     let total_bytes = size_of::<input_event>();
     let mut bytes_written = 0;
 
-    let buf: &[u8] = unsafe {
-        std::slice::from_raw_parts(
-            event as *const _ as *const u8,
-            total_bytes,
-        )
-    };
+    let buf: &[u8] =
+        unsafe { std::slice::from_raw_parts(event as *const _ as *const u8, total_bytes) };
 
     while bytes_written < total_bytes {
         let result = unsafe {
@@ -91,26 +88,25 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
                     return Err(err);
                 }
             }
-             0 => {
-                 return Err(io::Error::new(
-                     ErrorKind::WriteZero,
-                     "libc::write returned 0",
-                 ));
-             }
+            0 => {
+                return Err(io::Error::new(
+                    ErrorKind::WriteZero,
+                    "libc::write returned 0",
+                ));
+            }
             n if n > 0 => {
                 bytes_written += n as usize;
             }
-             _ => {
-                 return Err(io::Error::new(
-                     ErrorKind::Other,
-                     "libc::write returned unexpected value",
-                 ));
-             }
+            _ => {
+                return Err(io::Error::new(
+                    ErrorKind::Other,
+                    "libc::write returned unexpected value",
+                ));
+            }
         }
     }
     Ok(())
 }
-
 
 /// Calculates the event timestamp in microseconds from its timeval struct.
 /// Returns `u64::MAX` if the calculation overflows.
@@ -118,7 +114,7 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
 pub fn event_microseconds(event: &input_event) -> u64 {
     let sec = event.time.tv_sec as u64; // Cast from i64
     let usec = event.time.tv_usec as u64; // tv_usec should be non-negative, cast is okay
-    // Use checked arithmetic to prevent overflow panics from fuzzed/invalid inputs
+                                          // Use checked arithmetic to prevent overflow panics from fuzzed/invalid inputs
     sec.checked_mul(1_000_000)
         .and_then(|s| s.checked_add(usec))
         .unwrap_or(u64::MAX) // Return MAX on overflow
@@ -130,12 +126,9 @@ pub fn is_key_event(event: &input_event) -> bool {
     i32::from(event.type_) == EV_KEY
 }
 
-
 /// Lists available input devices and their capabilities. Requires root privileges.
 pub fn list_input_devices() -> io::Result<()> {
-    eprintln!(
-        "{:<15} {:<30} {}", "Device", "Name", "Capabilities"
-    );
+    eprintln!("{:<15} {:<30} {}", "Device", "Name", "Capabilities");
     eprintln!("-------------------------------------------------------------------");
 
     let mut entries: Vec<_> = fs::read_dir("/dev/input/")?
@@ -157,7 +150,11 @@ pub fn list_input_devices() -> io::Result<()> {
 
     for (path, _) in entries {
         let path_str = path.display().to_string();
-        let file = match OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(&path) {
+        let file = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&path)
+        {
             Ok(f) => f,
             Err(e) => {
                 let msg = format!("{}", e);
@@ -188,16 +185,28 @@ pub fn list_input_devices() -> io::Result<()> {
         let mut has_ev_key = false;
         match eviocgbit(fd, 0, &mut type_bits_buf) {
             Ok(_) => {
-                if is_bit_set(&type_bits_buf, EV_SYN as usize) { capabilities.push("EV_SYN (Sync)"); }
+                if is_bit_set(&type_bits_buf, EV_SYN as usize) {
+                    capabilities.push("EV_SYN (Sync)");
+                }
                 if is_bit_set(&type_bits_buf, EV_KEY as usize) {
                     capabilities.push("EV_KEY (Keyboard)");
                     has_ev_key = true;
                 }
-                if is_bit_set(&type_bits_buf, EV_REL as usize) { capabilities.push("EV_REL (Relative)"); }
-                if is_bit_set(&type_bits_buf, EV_ABS as usize) { capabilities.push("EV_ABS (Absolute)"); }
-                if is_bit_set(&type_bits_buf, EV_MSC as usize) { capabilities.push("EV_MSC (Misc)"); }
-                if is_bit_set(&type_bits_buf, EV_LED as usize) { capabilities.push("EV_LED (LEDs)"); }
-                if is_bit_set(&type_bits_buf, EV_REP as usize) { capabilities.push("EV_REP (Repeat)"); }
+                if is_bit_set(&type_bits_buf, EV_REL as usize) {
+                    capabilities.push("EV_REL (Relative)");
+                }
+                if is_bit_set(&type_bits_buf, EV_ABS as usize) {
+                    capabilities.push("EV_ABS (Absolute)");
+                }
+                if is_bit_set(&type_bits_buf, EV_MSC as usize) {
+                    capabilities.push("EV_MSC (Misc)");
+                }
+                if is_bit_set(&type_bits_buf, EV_LED as usize) {
+                    capabilities.push("EV_LED (LEDs)");
+                }
+                if is_bit_set(&type_bits_buf, EV_REP as usize) {
+                    capabilities.push("EV_REP (Repeat)");
+                }
             }
             Err(e) => {
                 warn!(device=%path_str, error=%e, "Could not get device capabilities via EVIOCGBIT ioctl");

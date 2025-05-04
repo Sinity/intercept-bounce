@@ -183,7 +183,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+                debounce_time.as_micros() as u64,
+                30,
+                1,
+                false,
+                None,
+                Some(0),
             ));
             logger.process_message(msg);
         })
@@ -203,7 +208,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                15_000, 30, 1, true, Some(5_000), Some(10_000)
+                15_000,
+                30,
+                1,
+                true,
+                Some(5_000),
+                Some(10_000),
             ));
             logger.process_message(msg);
         })
@@ -222,8 +232,13 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-             let msg = LogMessage::Event(create_event_info(
-                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+            let msg = LogMessage::Event(create_event_info(
+                debounce_time.as_micros() as u64,
+                30,
+                1,
+                false,
+                None,
+                Some(0),
             ));
             logger.process_message(msg);
         })
@@ -243,7 +258,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                15_000, 30, 1, true, Some(5_000), Some(10_000)
+                15_000,
+                30,
+                1,
+                true,
+                Some(5_000),
+                Some(10_000),
             ));
             logger.process_message(msg);
         })
@@ -263,7 +283,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                15_000, 30, 1, true, Some(5_000), Some(10_000)
+                15_000,
+                30,
+                1,
+                true,
+                Some(5_000),
+                Some(10_000),
             ));
             logger.process_message(msg);
         })
@@ -282,9 +307,8 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(create_event_info(
-                25_000, 30, 1, false, None, Some(10_000)
-            ));
+            let msg =
+                LogMessage::Event(create_event_info(25_000, 30, 1, false, None, Some(10_000)));
             logger.process_message(msg);
         })
     });
@@ -322,7 +346,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+                debounce_time.as_micros() as u64,
+                30,
+                1,
+                false,
+                None,
+                Some(0),
             ));
             logger.process_message(msg);
         })
@@ -342,7 +371,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
-                15_000, 30, 1, true, Some(5_000), Some(10_000)
+                15_000,
+                30,
+                1,
+                true,
+                Some(5_000),
+                Some(10_000),
             ));
             logger.process_message(msg);
         })

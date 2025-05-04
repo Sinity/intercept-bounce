@@ -76,17 +76,23 @@ impl BounceFilter {
         let event_us = event::event_microseconds(event);
 
         // Update overall timestamps
-        if self.overall_first_event_us.is_none() { self.overall_first_event_us = Some(event_us); }
+        if self.overall_first_event_us.is_none() {
+            self.overall_first_event_us = Some(event_us);
+        }
         self.overall_last_event_us = Some(event_us);
 
         // --- Early returns for non-debounced events ---
         // Pass non-key events or key repeats immediately
-        if !is_key_event(event) || event.value == 2 { return (false, None, None); }
+        if !is_key_event(event) || event.value == 2 {
+            return (false, None, None);
+        }
 
         // Check bounds for key code/value indices
         let key_code_idx = event.code as usize;
         let key_value_idx = event.value as usize;
-        if !(key_code_idx < 1024 && key_value_idx < 3) { return (false, None, None); } // Out of bounds
+        if !(key_code_idx < 1024 && key_value_idx < 3) {
+            return (false, None, None);
+        } // Out of bounds
 
         // --- Debounce logic ---
         let last_passed_us = self.last_event_us[key_code_idx][key_value_idx];

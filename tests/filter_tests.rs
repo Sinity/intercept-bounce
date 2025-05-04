@@ -2,8 +2,8 @@
 //! These tests focus *only* on the state and decision logic within BounceFilter,
 //! assuming the logger thread handles stats accumulation separately.
 
-use intercept_bounce::filter::BounceFilter;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
+use intercept_bounce::filter::BounceFilter;
 use std::time::Duration;
 
 // --- Test Constants ---
@@ -62,7 +62,10 @@ fn drops_press_bounce() {
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes, no previous
-    assert_eq!(results[1], (true, Some(DEBOUNCE_TIME.as_micros() as u64 / 2), Some(0))); // e2 bounces, diff=5ms, prev=0
+    assert_eq!(
+        results[1],
+        (true, Some(DEBOUNCE_TIME.as_micros() as u64 / 2), Some(0))
+    ); // e2 bounces, diff=5ms, prev=0
 }
 
 #[test]
@@ -73,7 +76,10 @@ fn drops_release_bounce() {
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes
-    assert_eq!(results[1], (true, Some(DEBOUNCE_TIME.as_micros() as u64 / 2), Some(0))); // e2 bounces
+    assert_eq!(
+        results[1],
+        (true, Some(DEBOUNCE_TIME.as_micros() as u64 / 2), Some(0))
+    ); // e2 bounces
 }
 
 #[test]
@@ -106,7 +112,10 @@ fn drops_just_below_window_boundary() {
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes
-    assert_eq!(results[1], (true, Some(DEBOUNCE_TIME.as_micros() as u64 - 1), Some(0))); // e2 drops (< check)
+    assert_eq!(
+        results[1],
+        (true, Some(DEBOUNCE_TIME.as_micros() as u64 - 1), Some(0))
+    ); // e2 drops (< check)
 }
 
 // --- Independent Filtering Tests ---
@@ -215,7 +224,7 @@ fn window_zero_passes_all_key_events() {
     let e3 = key_ev(2, KEY_A, 0); // Release A (Pass) @ 2us
     let e4 = key_ev(3, KEY_A, 0); // Release A again very quickly (Pass) @ 3us
     let results = check_sequence(&mut filter, &[e1, e2, e3, e4], Duration::ZERO); // Pass 0 debounce time
-    // (is_bounce, diff_us, last_passed_us)
+                                                                                  // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes
     assert_eq!(results[1], (false, None, Some(0))); // e2 passes, prev=0
     assert_eq!(results[2], (false, None, None)); // e3 passes
@@ -231,7 +240,7 @@ fn handles_time_going_backwards() {
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     // (is_bounce, diff_us, last_passed_us)
     assert_eq!(results[0], (false, None, None)); // e1 passes
-    // e2 passes because event_us < last_passed_us results in checked_sub returning None
+                                                 // e2 passes because event_us < last_passed_us results in checked_sub returning None
     assert_eq!(results[1], (false, None, Some(t * 2)));
 }
 
@@ -243,4 +252,3 @@ fn initial_state_empty() {
     assert_eq!(filter.get_runtime_us(), None);
     // We could expose last_event_us for testing if needed, but maybe not necessary
 }
-

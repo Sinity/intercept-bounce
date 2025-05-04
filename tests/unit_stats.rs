@@ -5,8 +5,8 @@
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 // Remove duplicate imports below
-use intercept_bounce::logger::EventInfo;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
+use intercept_bounce::logger::EventInfo;
 use std::time::Duration;
 
 // --- Test Constants ---
@@ -32,7 +32,7 @@ fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
 
 /// Creates an EV_SYN input_event.
 fn syn_ev(ts_us: u64) -> input_event {
-     input_event {
+    input_event {
         time: timeval {
             tv_sec: (ts_us / 1_000_000) as i64,
             tv_usec: (ts_us % 1_000_000) as i64,
@@ -72,19 +72,19 @@ fn bounced_event_info(
 
 // Helper to create a dummy Config for tests
 fn dummy_config(debounce_time: Duration, near_miss_threshold: Duration) -> Config {
-    Config::new( // Use the new constructor
+    Config::new(
+        // Use the new constructor
         debounce_time,
         near_miss_threshold,
-        Duration::ZERO, // log_interval
-        false,          // log_all_events
-        false,          // log_bounces
-        false,          // stats_json
-        false,          // verbose
+        Duration::ZERO,     // log_interval
+        false,              // log_all_events
+        false,              // log_bounces
+        false,              // stats_json
+        false,              // verbose
         "info".to_string(), // log_filter
-        None,           // otel_endpoint
+        None,               // otel_endpoint
     )
 }
-
 
 // --- Test Cases ---
 
@@ -153,7 +153,10 @@ fn stats_near_miss_default_threshold() {
     stats.record_event_info_with_config(&passed_event_info(ev2, ev2_ts, Some(ev1_ts)), &config); // last_passed = ev1_ts
     stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev2_ts)), &config); // last_passed = ev2_ts
     stats.record_event_info_with_config(&passed_event_info(ev4, ev4_ts, Some(ev3_ts)), &config); // last_passed = ev3_ts
-    stats.record_event_info_with_config(&bounced_event_info(ev5, ev5_ts, bounce_time, Some(ev4_ts)), &config); // last_passed = ev4_ts
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev5, ev5_ts, bounce_time, Some(ev4_ts)),
+        &config,
+    ); // last_passed = ev4_ts
 
     assert_eq!(stats.key_events_processed, 5);
     assert_eq!(stats.key_events_passed, 4);
@@ -166,7 +169,7 @@ fn stats_near_miss_default_threshold() {
     // Near miss diffs are relative to the *previous passed* event
     assert_eq!(near_misses[0], near_miss_time1); // ev2 diff relative to ev1
     assert_eq!(near_misses[1], near_miss_time2); // ev3 diff relative to ev2
-    // ev4 is not a near miss relative to ev3 (> 100ms)
+                                                 // ev4 is not a near miss relative to ev3 (> 100ms)
 
     // Check bounce stats
     let key_a_stats = &stats.per_key_stats[KEY_A as usize];
@@ -210,21 +213,26 @@ fn stats_near_miss_custom_threshold() {
 
 #[test]
 fn stats_ignores_non_key_events() {
-     let mut stats = StatsCollector::with_capacity();
-     let ev1 = key_ev(1000, KEY_A, 1);
-     let ev2 = syn_ev(2000); // SYN event
-     let syn_info = EventInfo { event: ev2, event_us: 2000, is_bounce: false, diff_us: None, last_passed_us: None };
+    let mut stats = StatsCollector::with_capacity();
+    let ev1 = key_ev(1000, KEY_A, 1);
+    let ev2 = syn_ev(2000); // SYN event
+    let syn_info = EventInfo {
+        event: ev2,
+        event_us: 2000,
+        is_bounce: false,
+        diff_us: None,
+        last_passed_us: None,
+    };
 
-     let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100));
+    let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100));
 
-     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
-     stats.record_event_info_with_config(&syn_info, &config); // Process the SYN event info
+    stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
+    stats.record_event_info_with_config(&syn_info, &config); // Process the SYN event info
 
-     assert_eq!(stats.key_events_processed, 1); // Only ev1 counted
-     assert_eq!(stats.key_events_passed, 1);
-     assert_eq!(stats.key_events_dropped, 0);
+    assert_eq!(stats.key_events_processed, 1); // Only ev1 counted
+    assert_eq!(stats.key_events_passed, 1);
+    assert_eq!(stats.key_events_dropped, 0);
 }
-
 
 #[test]
 fn stats_json_output_structure() {
@@ -235,7 +243,8 @@ fn stats_json_output_structure() {
     let ev2 = key_ev(1500, KEY_A, 1); // Bounce (diff 500)
     let ev3 = key_ev(DEBOUNCE_TIME.as_micros() as u64 + 2000, KEY_A, 1); // Near miss
 
-    let config = Config::new( // Use the new constructor
+    let config = Config::new(
+        // Use the new constructor
         DEBOUNCE_TIME,
         Duration::from_millis(100), // Include near-miss threshold in config
         Duration::ZERO,
@@ -249,10 +258,18 @@ fn stats_json_output_structure() {
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev2, 1500, 500, Some(1000)), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev3, DEBOUNCE_TIME.as_micros() as u64 + 2000, Some(1000)), &config); // Near miss relative to ev1
+    stats.record_event_info_with_config(
+        &passed_event_info(ev3, DEBOUNCE_TIME.as_micros() as u64 + 2000, Some(1000)),
+        &config,
+    ); // Near miss relative to ev1
 
     let mut buf = Vec::new();
-    stats.print_stats_json(&config, Some(DEBOUNCE_TIME.as_micros() as u64 + 1000), "Cumulative", &mut buf); // Pass report_type
+    stats.print_stats_json(
+        &config,
+        Some(DEBOUNCE_TIME.as_micros() as u64 + 1000),
+        "Cumulative",
+        &mut buf,
+    ); // Pass report_type
     let s = String::from_utf8(buf).unwrap();
     println!("JSON Output:\n{}", s); // Print JSON for debugging if test fails
 
@@ -267,7 +284,7 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"key_events_passed\":"));
     assert!(s.contains("\"key_events_dropped\":"));
     assert!(s.contains("\"per_key_stats\": [")); // Should be an array now
-    // Check if KEY_A (30) stats object is present within the array
+                                                 // Check if KEY_A (30) stats object is present within the array
     assert!(s.contains("\"key_code\": 30"));
     assert!(s.contains("\"key_name\": \"KEY_A\""));
     assert!(s.contains("\"stats\": {")); // Nested stats object
@@ -276,7 +293,7 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"timings_us\": ["));
     assert!(s.contains("500")); // Check bounce timing value
     assert!(s.contains("\"per_key_passed_near_miss_timing\": [")); // Should be an array now
-    // Check if near miss object for KEY_A, value 1 is present
+                                                                   // Check if near miss object for KEY_A, value 1 is present
     assert!(s.contains("\"key_code\": 30"));
     assert!(s.contains("\"key_value\": 1"));
     assert!(s.contains("\"key_name\": \"KEY_A\""));
@@ -288,7 +305,6 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"min_us\": 11000")); // Check calculated min
     assert!(s.contains("\"avg_us\": 11000")); // Check calculated avg
     assert!(s.contains("\"max_us\": 11000")); // Check calculated max
-
 
     // Ensure keys with no drops/near-misses are NOT present (e.g., key B=48)
     assert!(!s.contains("\"key_code\": 48")); // Check no object for key 48
@@ -322,11 +338,12 @@ fn stats_only_passed() {
     let near_miss_idx = KEY_C as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
     let expected_diff = (t + 1) * 2; // Diff between ev3 and ev1
-    if Duration::from_micros(expected_diff) < Duration::from_millis(100) { // Only record if < 100ms
+    if Duration::from_micros(expected_diff) < Duration::from_millis(100) {
+        // Only record if < 100ms
         assert_eq!(near_misses.len(), 1);
         assert_eq!(near_misses[0], expected_diff);
     } else {
-         assert!(near_misses.is_empty());
+        assert!(near_misses.is_empty());
     }
 }
 

@@ -13,12 +13,12 @@ use chrono::Local;
 use input_linux_sys::{input_event, EV_MSC, EV_SYN};
 use std::io;
 // Removed unused: use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, Ordering};
 use opentelemetry::metrics::{Counter, Meter}; // Import OTLP metrics types
-use tracing::{instrument, Span}; // Import instrument and Span
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::info; // Only info is used directly in this file's functions
+use tracing::info;
+use tracing::{instrument, Span}; // Import instrument and Span // Only info is used directly in this file's functions
 
 /// Represents a message sent from the main thread to the logger thread.
 // #[derive(Clone)] // Remove Clone
@@ -96,8 +96,11 @@ impl Logger {
         let check_interval = Duration::from_millis(100); // Used for periodic checks
 
         // --- OTLP Metrics Setup (in logger thread) ---
-        let near_miss_counter: Option<Counter<u64>> = self.otel_meter.as_ref()
-            .map(|m| m.u64_counter("events.near_miss").with_description("Passed events that were near misses").init());
+        let near_miss_counter: Option<Counter<u64>> = self.otel_meter.as_ref().map(|m| {
+            m.u64_counter("events.near_miss")
+                .with_description("Passed events that were near misses")
+                .init()
+        });
 
         loop {
             // Check running flag first

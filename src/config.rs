@@ -29,11 +29,17 @@ impl Config {
         otel_endpoint: Option<String>,
     ) -> Self {
         Self {
-            debounce_time, near_miss_threshold, log_interval,
-            log_all_events, log_bounces, stats_json, verbose, log_filter, otel_endpoint
+            debounce_time,
+            near_miss_threshold,
+            log_interval,
+            log_all_events,
+            log_bounces,
+            stats_json,
+            verbose,
+            log_filter,
+            otel_endpoint,
         }
     }
-
 
     // Provide accessor methods that return Duration
     pub fn debounce_time(&self) -> Duration {
@@ -48,16 +54,21 @@ impl Config {
 
     // Provide accessor methods that return u64 microseconds for internal use
     pub fn debounce_us(&self) -> u64 {
-        self.debounce_time.as_micros().try_into().unwrap_or(u64::MAX)
+        self.debounce_time
+            .as_micros()
+            .try_into()
+            .unwrap_or(u64::MAX)
     }
     pub fn near_miss_threshold_us(&self) -> u64 {
-        self.near_miss_threshold.as_micros().try_into().unwrap_or(u64::MAX)
+        self.near_miss_threshold
+            .as_micros()
+            .try_into()
+            .unwrap_or(u64::MAX)
     }
     pub fn log_interval_us(&self) -> u64 {
         self.log_interval.as_micros().try_into().unwrap_or(u64::MAX)
     }
 }
-
 
 impl From<&crate::cli::Args> for Config {
     fn from(a: &crate::cli::Args) -> Self {
@@ -68,7 +79,8 @@ impl From<&crate::cli::Args> for Config {
             "intercept_bounce=info"
         };
         // Allow overriding with RUST_LOG environment variable
-        let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| default_log_filter.to_string());
+        let log_filter =
+            std::env::var("RUST_LOG").unwrap_or_else(|_| default_log_filter.to_string());
 
         Self {
             debounce_time: a.debounce_time,
