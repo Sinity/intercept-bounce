@@ -24,10 +24,29 @@ fn main() -> Result<(), Error> {
 
     // --- Generate Shell Completions ---
     let bin_name = "intercept-bounce"; // Your binary name
-    for shell in Shell::value_variants() {
-        let completions_path = out_path.join(format!("{bin_name}.{shell}")); // Use inline formatting
-        println!("Generating completion file: {completions_path:?}"); // Use inline formatting
-        generate_to(*shell, &mut cmd.clone(), bin_name, out_path)?; // Remove needless borrow
+    // Generate for supported shells explicitly
+    for shell in [
+        Shell::Bash,
+        Shell::Elvish,
+        Shell::Fish,
+        Shell::PowerShell,
+        Shell::Zsh,
+    ] {
+        let ext = match shell {
+            Shell::Bash => "bash",
+            Shell::Elvish => "elv",
+            Shell::Fish => "fish",
+            Shell::PowerShell => "ps1",
+            Shell::Zsh => "zsh",
+            _ => continue, // Skip unknown/unsupported shells if any appear in future versions
+        };
+        let completions_path = out_path.join(format!("{bin_name}.{ext}"));
+        println!("Generating completion file: {completions_path:?}");
+        // Generate directly to the final path, ensuring the target directory exists
+        if let Some(parent) = completions_path.parent() {
+             fs::create_dir_all(parent)?;
+        }
+        generate_to(shell, &mut cmd.clone(), bin_name, &completions_path)?;
     }
 
     println!(

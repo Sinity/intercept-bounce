@@ -3,45 +3,52 @@ name: Rust CI
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"] # Trigger on pushes to main
   pull_request:
-    branches: ["master"]
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: ["main"] # Trigger on PRs targeting main
 
 jobs:
-  nix_checks:
-    name: Nix Checks (Format, Clippy, Test, Build)
-    runs-on: ubuntu-latest
+  build_and_test:
+    name: Build and Test (Nix)
+    runs-on: ubuntu-latest # Use a Linux runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v25
+        uses: cachix/install-nix-action@v27 # Use a recent version
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+          # Enable experimental features required for flakes
           extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
             experimental-features = nix-command flakes
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v14
+      - name: Setup Cachix # Optional: speeds up builds by caching Nix derivations
+        uses: cachix/cachix-action@v15
         with:
-          name: nix-community
+          # Replace 'your-cache-name' with your actual Cachix cache name
+          # Create one for free at https://app.cachix.org/
+          name: intercept-bounce # Example cache name
+          # If your cache is private, uncomment and set the secret in GitHub repo settings
+          # authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Check formatting (via Nix devShell)
-        run: nix develop --command cargo fmt --check
+      - name: Check formatting (Nix)
+        run: nix develop .# --command cargo fmt -- --check
 
-      - name: Run Clippy (via Nix devShell)
-        run: nix develop --command cargo clippy --all-targets -- -D warnings
+      - name: Run Linter (Clippy - Nix)
+        # Fail the build if clippy finds warnings/errors
+        run: nix develop .# --command cargo clippy --all-targets --release -- --deny warnings
 
-      - name: Run tests (via Nix devShell)
-        run: nix develop --command cargo test --all-targets
+      - name: Run Tests (Nix)
+        # Run tests using the release profile for consistency, capture output on failure
+        run: nix develop .# --command cargo test --all-targets --release -- --nocapture
 
-      - name: Build release binary (via Nix devShell)
-        run: nix develop --command cargo build --release --verbose
+      - name: Build Release Binary (Nix)
+        # Build the main package defined in flake.nix
+        # The target system is automatically determined by the runner
+        run: nix build .#packages.${pkgs.system}.default --verbose
 
-      - name: Build Nix package
-        run: nix build .#packages.${{ runner.os == 'Linux' && 'x86_64-linux' || 'aarch64-darwin' }}.default
+      # Optional: Add a step to build checks if defined in flake.nix
+      # - name: Build Nix Checks
+      #   run: nix build .#checks.${pkgs.system}

@@ -62,16 +62,29 @@
 
             # Install completions
             echo "Installing completions..."
-            for shell in bash fish zsh; do # Add other shells if generated
-              mkdir -p $out/share/$shell/completions
-              cp target/generated/intercept-bounce.$shell $out/share/$shell/completions/
-            done
-            # Example for nushell (adjust path if needed)
-            # mkdir -p $out/share/nushell/completions
-            # cp target/generated/intercept-bounce.nu $out/share/nushell/completions/
-            # Example for powershell (adjust path if needed)
-            # mkdir -p $out/share/powershell/completions
-            # cp target/generated/intercept-bounce.ps1 $out/share/powershell/completions/
+            install_completion() {
+              local shell=$1
+              local ext=$2
+              local dest_dir=$out/share/$shell/completions
+              mkdir -p $dest_dir
+              # Install completion file, potentially renaming it based on shell conventions
+              if [ "$shell" = "bash" ]; then
+                cp target/generated/intercept-bounce.$ext $dest_dir/intercept-bounce
+              elif [ "$shell" = "zsh" ]; then
+                 # Zsh completions often start with an underscore
+                cp target/generated/intercept-bounce.$ext $dest_dir/_intercept-bounce
+              else
+                cp target/generated/intercept-bounce.$ext $dest_dir/intercept-bounce.$ext
+              fi
+              echo "Installed $shell completion to $dest_dir"
+            }
+
+            install_completion bash bash
+            install_completion elvish elv
+            install_completion fish fish
+            install_completion powershell ps1
+            install_completion zsh zsh
+
             echo "Finished installing docs."
           '';
 
