@@ -31,7 +31,7 @@
 
           nativeBuildInputs = [
             pkgs.pkg-config
-            pkgs.git
+            pkgs.git # Needed for vergen build script
           ];
           buildInputs = [pkgs.openssl];
 

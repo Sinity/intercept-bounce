@@ -65,6 +65,7 @@ fn drops_bounce() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     // Execute the command and capture output
@@ -106,6 +107,7 @@ fn passes_outside_window() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -131,6 +133,7 @@ fn passes_non_key_events() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -157,6 +160,7 @@ fn filters_different_keys_independently() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -181,6 +185,7 @@ fn filters_key_release() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -206,6 +211,7 @@ fn filters_key_repeat() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -229,6 +235,7 @@ fn window_zero_passes_all() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("0ms") // 0ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -252,6 +259,7 @@ fn handles_time_going_backwards() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms") // 5ms window - ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -277,6 +285,7 @@ fn filters_just_below_window_boundary() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -302,6 +311,7 @@ fn passes_at_window_boundary() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -353,6 +363,7 @@ fn test_complex_sequence() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
@@ -377,6 +388,7 @@ fn stats_output_human_readable() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms")
+        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
         .write_stdin(input_bytes);
 
     cmd.assert()
@@ -412,6 +424,7 @@ fn stats_output_json() {
     cmd.arg("--debounce-time")
         .arg("5ms")
         .arg("--stats-json") // Enable JSON output
+        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
         .write_stdin(input_bytes);
 
     let output = cmd.output().expect("Failed to run command");
@@ -494,6 +507,7 @@ fn log_bounces_flag() {
     cmd.arg("--debounce-time")
         .arg("5ms")
         .arg("--log-bounces") // Enable bounce logging
+        .env("RUST_LOG", "intercept_bounce=info") // Set specific level for log check
         .write_stdin(input_bytes);
 
     cmd.assert()
@@ -518,6 +532,7 @@ fn log_all_events_flag() {
     cmd.arg("--debounce-time")
         .arg("5ms")
         .arg("--log-all-events") // Enable all logging
+        .env("RUST_LOG", "intercept_bounce=info") // Set specific level for log check
         .write_stdin(input_bytes);
 
     cmd.assert()
@@ -549,6 +564,7 @@ fn test_debounce_zero_passes_all() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("0ms") // Explicitly set 0ms window
+        .env("RUST_LOG", "warn") // Set consistent log level
         .write_stdin(input_bytes);
 
     let output: Output = cmd
@@ -576,6 +592,7 @@ fn test_only_non_key_events() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--stats-json") // Get stats output
+        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
         .write_stdin(input_bytes);
 
     let output = cmd
