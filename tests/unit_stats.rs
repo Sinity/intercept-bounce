@@ -4,6 +4,7 @@ use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::logger::EventInfo;
+use serde_json::{json, Value}; // Added import
 use std::time::Duration;
 
 // --- Test Constants ---

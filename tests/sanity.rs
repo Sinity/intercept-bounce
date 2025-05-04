@@ -1,7 +1,6 @@
 use assert_cmd::Command;
 use input_linux_sys::{input_event, timeval, EV_KEY};
 use predicates::prelude::*;
-use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::mem::size_of;
