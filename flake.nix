@@ -26,13 +26,12 @@
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
           version = "0.6.0";
-          src = self;
-          # The cargoHash below will need to be updated after these changes.
-          # Run `nix build .` and it will tell you the correct hash.
-          cargoHash = "sha256-NGhaFLAdJzfCk0YZRVrNriqd+2W1Ohbbya4s3Jid+/8="; # Placeholder - UPDATE THIS HASH
+          src = ./.;
+          cargoHash = "sha256-NGhaFLAdJzfCk0YZRVrNriqd+2W1Ohbbya4s3Jid+/8=";
 
           nativeBuildInputs = [
             pkgs.pkg-config
+            pkgs.git
           ];
           buildInputs = [pkgs.openssl];
 
