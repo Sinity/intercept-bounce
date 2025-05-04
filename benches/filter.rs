@@ -6,14 +6,12 @@ use intercept_bounce::filter::BounceFilter; // Add this import
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::thread;
+use std::thread; // Add thread import
 use std::time::Duration;
 
-// Conditionally import queue/channel types for benchmark
-#[cfg(not(feature = "use_lockfree_queue"))]
-use crossbeam_channel::{bounded, Receiver, Sender};
-#[cfg(feature = "use_lockfree_queue")]
-use crossbeam_queue::ArrayQueue;
+// Import crossbeam-channel directly
+use crossbeam_channel::{bounded, Sender, Receiver};
+
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -158,10 +156,7 @@ fn create_populated_stats() -> StatsCollector {
 fn bench_logger_process_message(c: &mut Criterion) {
     // Setup dummy logger components
     // Conditionally create the appropriate receiver type for the benchmark
-    #[cfg(not(feature = "use_lockfree_queue"))]
     let (_sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(1);
-    #[cfg(feature = "use_lockfree_queue")]
-    let receiver: Arc<ArrayQueue<LogMessage>> = Arc::new(ArrayQueue::new(1)); // Create dummy queue Arc
 
     let running = Arc::new(AtomicBool::new(true));
     let debounce_time = Duration::from_millis(10); // 10ms
@@ -420,88 +415,31 @@ fn bench_logger_channel_send(c: &mut Criterion) {
     let dummy_event_info = create_event_info(1000, 30, 1, false, None, None);
     let message = LogMessage::Event(dummy_event_info);
 
-    // --- Benchmark for crossbeam-channel (default) ---
-    #[cfg(not(feature = "use_lockfree_queue"))]
-    {
-        let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) =
-            bounded(QUEUE_CAPACITY);
-        let dummy_logger_handle = thread::spawn(move || {
-            while let Ok(_) = receiver.recv() {
-                thread::yield_now();
-            }
-        });
+    // Benchmark only crossbeam-channel
+    let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
+    let dummy_logger_handle = thread::spawn(move || {
+        while let Ok(_) = receiver.recv() { thread::yield_now(); }
+    });
 
-        c.bench_function("logger::channel_send_burst [crossbeam-channel]", |b| {
-            b.iter_batched(
-                || sender.clone(),
-                |s| {
-                    let mut success_count = 0;
-                    let mut drop_count = 0;
-                    for _ in 0..BURST_SIZE {
-                        match s.try_send(message.clone()) {
-                            Ok(_) => success_count += 1,
-                            Err(_) => drop_count += 1,
-                        }
+    c.bench_function("logger::channel_send_burst", |b| { // Remove feature name from bench name
+        b.iter_batched(
+            || sender.clone(),
+            |s| {
+                let mut success_count = 0;
+                let mut drop_count = 0;
+                for _ in 0..BURST_SIZE {
+                    match s.try_send(message.clone()) {
+                        Ok(_) => success_count += 1,
+                        Err(_) => drop_count += 1,
                     }
-                    (success_count, drop_count)
-                },
-                criterion::BatchSize::SmallInput,
-            )
-        });
-        drop(sender);
-        dummy_logger_handle
-            .join()
-            .expect("Dummy logger thread panicked");
-    }
-
-    // --- Benchmark for crossbeam-queue::ArrayQueue (feature-gated) ---
-    #[cfg(feature = "use_lockfree_queue")]
-    {
-        let queue = Arc::new(ArrayQueue::new(QUEUE_CAPACITY));
-        let sender_queue = Arc::clone(&queue);
-        let receiver_queue = Arc::clone(&queue);
-
-        // Prefix with underscore as it's intentionally not joined here
-        let _dummy_logger_handle = thread::spawn(move || {
-            // Loop while the sender Arc is potentially alive.
-            // This isn't perfect, as the sender might be dropped but the receiver
-            // hasn't popped the last item yet.
-            // A more robust approach might use an AtomicBool, but for a benchmark
-            // focusing on send performance, this is likely sufficient.
-            while Arc::strong_count(&receiver_queue) > 1 {
-                while let Some(_) = receiver_queue.pop() {
-                    thread::yield_now();
                 }
-                // Yield even if queue was empty to prevent 100% CPU usage
-                thread::yield_now();
-            }
-        });
-
-        c.bench_function("logger::channel_send_burst [crossbeam-queue]", |b| {
-            b.iter_batched(
-                || Arc::clone(&sender_queue), // Clone the Arc sender
-                |q| {
-                    let mut success_count = 0;
-                    let mut drop_count = 0;
-                    for _ in 0..BURST_SIZE {
-                        // ArrayQueue::push requires Clone, so clone the message here
-                        match q.push(message.clone()) {
-                            Ok(_) => success_count += 1,
-                            Err(_) => drop_count += 1, // push fails if full
-                        }
-                    }
-                    (success_count, drop_count)
-                },
-                criterion::BatchSize::SmallInput,
-            )
-        });
-
-        // Drop the sender Arc reference. The receiver thread should eventually exit its loop.
-        drop(sender_queue);
-        // Joining might still be unreliable if the receiver thread is stuck spinning.
-        // Let's skip the join for the benchmark run.
-        // dummy_logger_handle.join().expect("Dummy logger thread panicked");
-    }
+                (success_count, drop_count)
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+    drop(sender);
+    dummy_logger_handle.join().expect("Dummy logger thread panicked");
 }
 
 criterion_group!(

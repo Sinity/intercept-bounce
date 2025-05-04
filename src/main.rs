@@ -1,12 +1,7 @@
 // Orchestrates command-line parsing, thread setup, the main event loop,
 // signal handling, and final shutdown/stats reporting.
 
-// Conditionally import and define types
-#[cfg(not(feature = "use_lockfree_queue"))]
 use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
-#[cfg(feature = "use_lockfree_queue")]
-use crossbeam_queue::ArrayQueue;
-
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::io::{self, ErrorKind};
@@ -33,16 +28,10 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 // Define capacity constant
 const LOGGER_QUEUE_CAPACITY: usize = 1024; // Or make configurable
 
-// Conditionally define the sender type used in MainState
-#[cfg(not(feature = "use_lockfree_queue"))]
-type LogSender = Sender<LogMessage>;
-#[cfg(feature = "use_lockfree_queue")]
-type LogSender = Arc<ArrayQueue<LogMessage>>; // ArrayQueue is shared via Arc
-
 /// State specific to the main processing thread for managing communication
 /// with the logger thread and handling log drop warnings.
 struct MainState {
-    log_sender: LogSender, // Use the alias
+    log_sender: Sender<LogMessage>, // Use Sender directly
     warned_about_dropping: bool,
     currently_dropping: bool,
     total_dropped_log_messages: u64,
@@ -141,42 +130,21 @@ fn main() -> io::Result<()> {
     let logger_running = Arc::new(AtomicBool::new(true));
     debug!("Shared state initialized");
 
-    // --- Conditionally create channel/queue ---
-    #[cfg(not(feature = "use_lockfree_queue"))]
-    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(LOGGER_QUEUE_CAPACITY);
-    #[cfg(not(feature = "use_lockfree_queue"))]
-    info!(channel_type="crossbeam-channel", capacity=LOGGER_QUEUE_CAPACITY, "Using bounded channel for logger");
-
-    #[cfg(feature = "use_lockfree_queue")]
-    let log_queue = Arc::new(ArrayQueue::new(LOGGER_QUEUE_CAPACITY));
-    #[cfg(feature = "use_lockfree_queue")]
-    let log_sender = Arc::clone(&log_queue); // Sender is just the Arc reference
-    #[cfg(feature = "use_lockfree_queue")]
-    let log_receiver = Arc::clone(&log_queue); // Receiver is also the Arc reference
-    #[cfg(feature = "use_lockfree_queue")]
-    info!(channel_type="crossbeam-queue::ArrayQueue", capacity=LOGGER_QUEUE_CAPACITY, "Using lock-free queue for logger");
-    // --- End conditional creation ---
-
+    debug!("Creating bounded channel for logger communication...");
+    let (log_sender, log_receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(LOGGER_QUEUE_CAPACITY); // Keep bounded for now
+    debug!(capacity = LOGGER_QUEUE_CAPACITY, "Channel created");
 
     debug!("Spawning logger thread...");
     let logger_cfg = Arc::clone(&cfg);
     let logger_running_clone_for_logger = Arc::clone(&logger_running);
-    let logger_handle: JoinHandle<StatsCollector> = {
-         // Pass the appropriate receiver type to the logger thread
-         #[cfg(not(feature = "use_lockfree_queue"))]
-         let receiver_arg = log_receiver;
-         #[cfg(feature = "use_lockfree_queue")]
-         let receiver_arg = log_receiver; // Pass the Arc<ArrayQueue>
-
-         thread::spawn(move || {
-            let mut logger = Logger::new(
-                receiver_arg, // Pass the correct type
-                logger_running_clone_for_logger,
-                logger_cfg,
-            );
-            logger.run()
-        })
-    };
+    let logger_handle: JoinHandle<StatsCollector> = thread::spawn(move || {
+        let mut logger = Logger::new(
+            log_receiver, // Pass Receiver directly
+            logger_running_clone_for_logger,
+            logger_cfg,
+        );
+        logger.run()
+    });
     debug!("Logger thread spawned");
 
     debug!("Setting up signal handling thread...");
@@ -268,16 +236,9 @@ fn main() -> io::Result<()> {
                        "Prepared EventInfo for logger");
 
 
-                trace!("Attempting to send EventInfo to logger channel/queue...");
-                // --- Conditionally send message ---
-                #[cfg(not(feature = "use_lockfree_queue"))]
-                let send_result = main_state.log_sender.try_send(LogMessage::Event(event_info));
-                #[cfg(feature = "use_lockfree_queue")]
-                // ArrayQueue::push requires Clone, so clone EventInfo here
-                let send_result = main_state.log_sender.push(LogMessage::Event(event_info.clone()));
-
-                match send_result {
-                    Ok(_) => { // Handles Ok(()) for push and Ok(_) for try_send
+                trace!("Attempting to send EventInfo to logger channel...");
+                match main_state.log_sender.try_send(LogMessage::Event(event_info)) { // Use try_send directly
+                    Ok(_) => {
                         trace!("Successfully sent EventInfo to logger");
                         if main_state.currently_dropping {
                             // Use info level when resuming logging
@@ -285,8 +246,7 @@ fn main() -> io::Result<()> {
                             main_state.currently_dropping = false;
                         }
                     }
-                    #[cfg(not(feature = "use_lockfree_queue"))] // Only crossbeam-channel has Full/Disconnected distinct errors
-                    Err(TrySendError::Full(_)) => {
+                    Err(TrySendError::Full(_)) => { // Handle Full directly
                         main_state.total_dropped_log_messages += 1;
                         if !main_state.warned_about_dropping {
                             // Use warn level for dropping logs
@@ -297,8 +257,7 @@ fn main() -> io::Result<()> {
                         trace!(total_dropped = main_state.total_dropped_log_messages,
                             "Logger channel full. Dropped log message");
                     }
-                    #[cfg(not(feature = "use_lockfree_queue"))] // Only crossbeam-channel has Full/Disconnected distinct errors
-                    Err(TrySendError::Disconnected(_)) => {
+                    Err(TrySendError::Disconnected(_)) => { // Handle Disconnected directly
                         // Error level for unexpected disconnect
                         error!("Logger channel disconnected unexpectedly");
                         debug!("Setting main_running flag to false due to logger channel disconnect");
@@ -306,19 +265,8 @@ fn main() -> io::Result<()> {
                         debug!("Breaking main loop due to logger channel disconnect");
                         break;
                     }
-                     #[cfg(feature = "use_lockfree_queue")] // ArrayQueue push returns Err(item) when full
-                     Err(_) => { // The error contains the message we tried to push
-                         main_state.total_dropped_log_messages += 1;
-                         if !main_state.warned_about_dropping {
-                             warn!("Logger queue full, dropping log messages to maintain performance");
-                             main_state.warned_about_dropping = true;
-                             main_state.currently_dropping = true;
-                         }
-                         trace!(total_dropped = main_state.total_dropped_log_messages, "Logger queue full. Dropped log message");
-                         // Note: ArrayQueue doesn't have a disconnected state like crossbeam-channel
-                     }
                 }
-                // --- End conditional send ---
+                // Removed conditional send block
 
 
                 if !is_bounce {
@@ -381,10 +329,7 @@ fn main() -> io::Result<()> {
     info!("Main event loop finished");
 
     debug!("Starting shutdown process");
-    #[cfg(not(feature = "use_lockfree_queue"))]
-    drop(main_state.log_sender); // Drop sender to signal logger for crossbeam-channel
-    #[cfg(feature = "use_lockfree_queue")]
-    drop(main_state.log_sender); // Drop the main thread's Arc reference for ArrayQueue
+    drop(main_state.log_sender); // Drop sender directly
     debug!("log_sender dropped");
 
     debug!("Waiting for logger thread to join...");

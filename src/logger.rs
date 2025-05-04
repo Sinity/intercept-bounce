@@ -7,11 +7,7 @@ use crate::filter::keynames::{get_key_name, get_event_type_name};
 use crate::filter::stats::StatsCollector;
 use crate::config::Config;
 use crate::util; // Import util
-// Conditionally import and define types
-#[cfg(not(feature = "use_lockfree_queue"))]
-use crossbeam_channel::{Receiver, RecvTimeoutError};
-#[cfg(feature = "use_lockfree_queue")]
-use crossbeam_queue::ArrayQueue;
+use crossbeam_channel::{Receiver, RecvTimeoutError}; // Use directly
 
 use input_linux_sys::{input_event, EV_SYN, EV_MSC};
 use std::io;
@@ -22,15 +18,8 @@ use std::time::{Duration, Instant};
 use chrono::Local;
 use tracing::info; // Only info is used directly in this file's functions
 
-// Conditionally define the receiver type alias
-#[cfg(not(feature = "use_lockfree_queue"))]
-type LogReceiver = Receiver<LogMessage>;
-#[cfg(feature = "use_lockfree_queue")]
-type LogReceiver = Arc<ArrayQueue<LogMessage>>; // Receiver is the Arc reference
-
-
 /// Represents a message sent from the main thread to the logger thread.
-#[derive(Clone)] // Add Clone for ArrayQueue push
+// #[derive(Clone)] // Remove Clone
 // #[derive(Debug)] // input_event does not implement Debug
 pub enum LogMessage {
     /// Contains detailed information about a single processed event.
@@ -38,7 +27,7 @@ pub enum LogMessage {
 }
 
 /// Detailed information about a single processed event, sent to the logger.
-#[derive(Clone)] // Add Clone for ArrayQueue push
+// #[derive(Clone)] // Remove Clone
 // #[derive(Debug)] // input_event does not implement Debug
 pub struct EventInfo {
     /// The raw input event.
@@ -57,7 +46,7 @@ pub struct EventInfo {
 
 /// Manages the state and execution loop for the logger thread.
 pub struct Logger {
-    receiver: LogReceiver, // Use the alias
+    receiver: Receiver<LogMessage>, // Use Receiver directly
     logger_running: Arc<AtomicBool>,
     config: Arc<Config>,
 
@@ -71,12 +60,12 @@ pub struct Logger {
 impl Logger {
     /// Creates a new Logger instance.
     pub fn new(
-        receiver: LogReceiver, // Use the alias
+        receiver: Receiver<LogMessage>, // Use Receiver directly
         logger_running: Arc<AtomicBool>,
         config: Arc<Config>,
     ) -> Self {
         Logger {
-            receiver, // Use the alias
+                receiver, // Use Receiver directly
             logger_running,
             config,
             cumulative_stats: StatsCollector::with_capacity(),
@@ -100,66 +89,15 @@ impl Logger {
         let check_interval = Duration::from_millis(100); // Used for periodic checks
 
         loop {
-            let mut work_done = false; // Track if we processed a message in this iteration
-
-            // --- Conditionally receive messages ---
-            #[cfg(not(feature = "use_lockfree_queue"))]
-            {
-                // Use recv_timeout for crossbeam-channel
-                match self.receiver.recv_timeout(check_interval) {
-                    Ok(msg) => {
-                        tracing::trace!("Logger thread received message from channel");
-                        self.process_message(msg);
-                        work_done = true;
-                        tracing::trace!("Logger thread finished processing message");
-                    }
-                    Err(RecvTimeoutError::Timeout) => {
-                        // No message received, continue to check flags/timer
-                    }
-                    Err(RecvTimeoutError::Disconnected) => {
-                        tracing::warn!("Detected channel disconnected. Attempting to drain channel");
-                        // Drain logic remains similar for disconnected channel
-                        while let Ok(msg) = self.receiver.try_recv() {
-                            self.process_message(msg);
-                        }
-                        tracing::warn!("Finished draining channel. Exiting run loop");
-                        break; // Exit loop on disconnect
-                    }
-                }
-            } // End cfg block for crossbeam-channel
-
-            #[cfg(feature = "use_lockfree_queue")]
-            {
-                // Use non-blocking pop for ArrayQueue
-                while let Some(msg) = self.receiver.pop() {
-                     tracing::trace!("Logger thread received message from queue");
-                     self.process_message(msg);
-                     work_done = true;
-                     tracing::trace!("Logger thread finished processing message");
-                }
-                // Note: ArrayQueue doesn't signal disconnect directly.
-                // We rely on the logger_running flag and main thread dropping its Arc.
-            } // End cfg block for ArrayQueue
-            // --- End conditional receive ---
-
-
-            // Check running flag *after* attempting to process messages
+            // Check running flag first
             if !self.logger_running.load(Ordering::SeqCst) {
-                tracing::debug!("Received shutdown signal via AtomicBool, attempting final drain");
-                // Drain logic for ArrayQueue needs pop loop
-                #[cfg(feature = "use_lockfree_queue")]
-                while let Some(msg) = self.receiver.pop() {
-                     tracing::trace!("Logger thread draining queue: Processing message after shutdown");
-                     self.process_message(msg);
-                }
-                // Drain logic for crossbeam-channel (already handled disconnect case above)
-                #[cfg(not(feature = "use_lockfree_queue"))]
+                tracing::debug!("Received shutdown signal via AtomicBool, attempting to drain channel");
                 while let Ok(msg) = self.receiver.try_recv() {
-                     tracing::trace!("Logger thread draining channel: Processing message after shutdown");
-                     self.process_message(msg);
+                    tracing::trace!("Draining channel: Processing message after shutdown signal");
+                    self.process_message(msg);
                 }
-                tracing::debug!("Finished final drain. Exiting run loop");
-                break; // Exit loop on shutdown signal
+                tracing::debug!("Finished draining channel. Exiting run loop");
+                break;
             }
 
             // Check periodic stats dump timer
@@ -167,17 +105,31 @@ impl Logger {
                 tracing::debug!("Triggering periodic stats dump");
                 self.dump_periodic_stats();
                 self.last_dump_time = Instant::now();
-                work_done = true; // Dumping stats counts as work
                 tracing::debug!("Periodic stats dump complete. Timer reset");
             }
 
-            // If no message was processed and no timer fired, yield/sleep briefly
-            // to avoid busy-waiting, especially with ArrayQueue's non-blocking pop.
-            if !work_done {
-                tracing::trace!("Logger thread yielding/sleeping briefly");
-                thread::sleep(check_interval / 10); // Sleep for a fraction of the check interval
+            // Receive messages with timeout
+            match self.receiver.recv_timeout(check_interval) {
+                Ok(msg) => {
+                    tracing::trace!("Logger thread received message from channel");
+                    self.process_message(msg);
+                    tracing::trace!("Logger thread finished processing message");
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    // No message received, loop continues to check flags/timer
+                    tracing::trace!("Logger thread receive timed out. Re-checking flags");
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    tracing::warn!("Detected channel disconnected. Attempting to drain channel");
+                    while let Ok(msg) = self.receiver.try_recv() {
+                        tracing::trace!("Logger thread draining channel: Processing message after disconnect");
+                        self.process_message(msg);
+                    }
+                    tracing::warn!("Finished draining channel. Exiting run loop");
+                    break; // Exit loop on disconnect
+                }
             }
-
         } // End loop
 
         tracing::debug!("Run loop exited. Preparing final stats");
