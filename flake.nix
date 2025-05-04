@@ -33,6 +33,7 @@
             fish
             powershell
             zsh
+            nushell
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
@@ -81,6 +82,7 @@
             install_completion fish fish
             install_completion powershell ps1
             install_completion zsh zsh
+            install_completion nu nu
 
             echo "Finished installing docs."
           '';

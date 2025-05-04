@@ -29,6 +29,7 @@ fn main() -> Result<(), Error> {
         Shell::Fish,
         Shell::PowerShell,
         Shell::Zsh,
+        Shell::Nu,
     ] {
         let ext = match shell {
             Shell::Bash => "bash",
@@ -36,6 +37,7 @@ fn main() -> Result<(), Error> {
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
+            Shell::Nu => "nu",
             _ => continue, // Should not happen with explicit list
         };
         let completions_path = out_path.join(format!("{bin_name}.{ext}"));
