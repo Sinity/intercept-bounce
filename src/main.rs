@@ -494,6 +494,9 @@ fn main() -> io::Result<()> {
         debug!("Final statistics flag was already set (expected on signal). Skipping final stats print in main");
     }
 
+    // --- OTLP Shutdown ---
+    otel_global::shutdown_tracer_provider(); // Cleanly shutdown OTLP tracer
+    otel_global::shutdown_meter_provider(); // Cleanly shutdown OTLP meter provider
     info!("Application exiting successfully");
     Ok(())
 }

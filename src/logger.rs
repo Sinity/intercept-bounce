@@ -172,6 +172,9 @@ impl Logger {
                        diff_us = ?data.diff_us,
                        last_passed_us = ?data.last_passed_us,
                        "Logger processing EventInfo");
+                // Record event details in the current span
+                Span::current().record("event_type", data.event.type_);
+                Span::current().record("is_bounce", data.is_bounce);
 
                 self.cumulative_stats
                     .record_event_info_with_config(&data, &self.config);
