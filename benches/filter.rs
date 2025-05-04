@@ -187,9 +187,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass passed_info directly, no clone needed
-            logger.process_message(LogMessage::Event(passed_info));
+            let msg = LogMessage::Event(create_event_info(
+                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -204,9 +207,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass bounced_info directly, no clone needed
-            logger.process_message(LogMessage::Event(bounced_info));
+            let msg = LogMessage::Event(create_event_info(
+                15_000, 30, 1, true, Some(5_000), Some(10_000)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -221,9 +227,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass passed_info directly, no clone needed
-            logger.process_message(LogMessage::Event(passed_info));
+             let msg = LogMessage::Event(create_event_info(
+                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -238,9 +247,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log bounces, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass bounced_info directly, no clone needed
-            logger.process_message(LogMessage::Event(bounced_info));
+            let msg = LogMessage::Event(create_event_info(
+                15_000, 30, 1, true, Some(5_000), Some(10_000)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -255,9 +267,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass bounced_info directly, no clone needed
-            logger.process_message(LogMessage::Event(bounced_info));
+            let msg = LogMessage::Event(create_event_info(
+                15_000, 30, 1, true, Some(5_000), Some(10_000)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -272,9 +287,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass near_miss_info directly, no clone needed
-            logger.process_message(LogMessage::Event(near_miss_info));
+            let msg = LogMessage::Event(create_event_info(
+                25_000, 30, 1, false, None, Some(10_000)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -289,9 +307,10 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass syn_info directly, no clone needed
-            logger.process_message(LogMessage::Event(syn_info)); // SYN events should be skipped
+            let msg = LogMessage::Event(create_syn_info(30_000));
+            logger.process_message(msg); // SYN events should be skipped
         })
     });
 
@@ -307,9 +326,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             true,
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass passed_info directly, no clone needed
-            logger.process_message(LogMessage::Event(passed_info));
+            let msg = LogMessage::Event(create_event_info(
+                debounce_time.as_micros() as u64, 30, 1, false, None, Some(0)
+            ));
+            logger.process_message(msg);
         })
     });
 
@@ -324,9 +346,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
             true,
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg);
+        // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            // Pass bounced_info directly, no clone needed
-            logger.process_message(LogMessage::Event(bounced_info));
+            let msg = LogMessage::Event(create_event_info(
+                15_000, 30, 1, true, Some(5_000), Some(10_000)
+            ));
+            logger.process_message(msg);
         })
     });
 }
@@ -421,7 +446,7 @@ fn bench_logger_channel_send(c: &mut Criterion) {
 
     // Create a dummy message to send
     let dummy_event_info = create_event_info(1000, 30, 1, false, None, None);
-    let message = LogMessage::Event(dummy_event_info);
+    // let message = LogMessage::Event(dummy_event_info); // This is unused now
 
     // Benchmark only crossbeam-channel
     let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
