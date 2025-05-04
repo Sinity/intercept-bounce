@@ -10,8 +10,7 @@ use std::thread; // Add thread import
 use std::time::Duration;
 
 // Import crossbeam-channel directly
-use crossbeam_channel::{bounded, Sender, Receiver};
-
+use crossbeam_channel::{bounded, Receiver, Sender};
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -418,10 +417,13 @@ fn bench_logger_channel_send(c: &mut Criterion) {
     // Benchmark only crossbeam-channel
     let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
     let dummy_logger_handle = thread::spawn(move || {
-        while let Ok(_) = receiver.recv() { thread::yield_now(); }
+        while let Ok(_) = receiver.recv() {
+            thread::yield_now();
+        }
     });
 
-    c.bench_function("logger::channel_send_burst", |b| { // Remove feature name from bench name
+    c.bench_function("logger::channel_send_burst", |b| {
+        // Remove feature name from bench name
         b.iter_batched(
             || sender.clone(),
             |s| {
@@ -439,7 +441,9 @@ fn bench_logger_channel_send(c: &mut Criterion) {
         )
     });
     drop(sender);
-    dummy_logger_handle.join().expect("Dummy logger thread panicked");
+    dummy_logger_handle
+        .join()
+        .expect("Dummy logger thread panicked");
 }
 
 criterion_group!(
