@@ -23,7 +23,7 @@ use event::{event_microseconds, list_input_devices, read_event_raw, write_event_
 use filter::stats::StatsCollector;
 use filter::BounceFilter;
 use logger::{EventInfo, LogMessage, Logger};
-use tracing::{debug, error, info, instrument, trace, warn, Level, Span}; // Import instrument, Level, Span
+use tracing::{debug, error, info, instrument, trace, warn}; // Removed Level, Span
 
 // --- OTLP Imports ---
 use opentelemetry::global as otel_global;
