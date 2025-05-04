@@ -39,6 +39,14 @@ type LogSender = Sender<LogMessage>;
 #[cfg(feature = "use_lockfree_queue")]
 type LogSender = Arc<ArrayQueue<LogMessage>>; // ArrayQueue is shared via Arc
 
+/// State specific to the main processing thread for managing communication
+/// with the logger thread and handling log drop warnings.
+struct MainState {
+    log_sender: LogSender, // Use the alias
+    warned_about_dropping: bool,
+    currently_dropping: bool,
+    total_dropped_log_messages: u64,
+}
 
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).

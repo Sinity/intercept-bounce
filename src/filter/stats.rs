@@ -269,7 +269,7 @@ impl StatsCollector {
                     util::format_us(min),
                     util::format_us(avg as u64),
                     util::format_us(max)
-                );
+                )?; // Add ? here
             }
         }
          if !any_near_miss {
