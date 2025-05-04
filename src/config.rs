@@ -17,6 +17,7 @@ pub struct Config {
 
 impl Config {
     /// Creates a new Config instance (primarily for testing/benchmarking).
+    #[allow(clippy::too_many_arguments)] // Allow many args for test/bench helper
     pub fn new(
         debounce_time: Duration,
         near_miss_threshold: Duration,

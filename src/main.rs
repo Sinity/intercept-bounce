@@ -44,6 +44,27 @@ struct MainState {
     total_dropped_log_messages: u64,
 }
 
+// --- Structs to group arguments for run_main_loop ---
+
+/// Holds context information passed to the main event loop.
+struct MainLoopContext<'a> {
+    main_running: &'a Arc<AtomicBool>,
+    stdin_fd: RawFd,
+    stdout_fd: RawFd,
+    bounce_filter: &'a Arc<Mutex<BounceFilter>>,
+    cfg: &'a Arc<Config>,
+    check_interval: Duration,
+}
+
+/// Holds the optional OpenTelemetry counters.
+struct OtelCounters {
+    events_processed: Option<opentelemetry::metrics::Counter<u64>>,
+    events_passed: Option<opentelemetry::metrics::Counter<u64>>,
+    events_dropped: Option<opentelemetry::metrics::Counter<u64>>,
+    log_messages_dropped: Option<opentelemetry::metrics::Counter<u64>>,
+}
+
+
 /// Attempts to set the process priority to the highest level (-20 niceness).
 /// Prints a warning if it fails (e.g., due to insufficient permissions).
 fn set_high_priority() {
@@ -277,25 +298,18 @@ fn main() -> io::Result<()> {
     });
 
     // Add an instrumented span around the main loop
+    // Refactored to accept context structs instead of individual arguments
     #[instrument(name="main_event_loop", skip_all, fields(otel.kind = "consumer"))]
     fn run_main_loop(
-        main_running: &Arc<AtomicBool>,
-        stdin_fd: RawFd,
-        stdout_fd: RawFd,
-        bounce_filter: &Arc<Mutex<BounceFilter>>,
-        cfg: &Arc<Config>,
+        ctx: &MainLoopContext, // Use the context struct
         main_state: &mut MainState,
-        check_interval: Duration,
-        events_processed_counter: &Option<opentelemetry::metrics::Counter<u64>>,
-        events_passed_counter: &Option<opentelemetry::metrics::Counter<u64>>,
-        events_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>,
-        log_messages_dropped_counter: &Option<opentelemetry::metrics::Counter<u64>>,
+        otel_counters: &OtelCounters, // Use the counters struct
     ) {
-        while main_running.load(Ordering::SeqCst) {
+        while ctx.main_running.load(Ordering::SeqCst) {
             trace!("Main loop iteration: checking running flag (true)");
             trace!("Attempting to read event from stdin...");
 
-            match read_event_raw(stdin_fd) {
+            match read_event_raw(ctx.stdin_fd) {
                 Ok(Some(ev)) => {
                     let event_us = event_microseconds(&ev);
                     trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
@@ -318,7 +332,7 @@ fn main() -> io::Result<()> {
                                 // Use error level for poisoned mutex
                                 error!("FATAL: BounceFilter mutex poisoned in main event loop.");
                                 let mut filter = poisoned.into_inner();
-                                let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
+                                let result = filter.check_event(&ev, ctx.cfg.debounce_time()); // Use ctx
                                 trace!(?result, "BounceFilter check_event (poisoned) returned");
                                 result
                             }
@@ -361,7 +375,7 @@ fn main() -> io::Result<()> {
                             // Handle Full directly
                             main_state.total_dropped_log_messages += 1;
                             // Increment OTLP dropped log message counter if available
-                            if let Some(counter) = log_messages_dropped_counter {
+                            if let Some(counter) = &otel_counters.log_messages_dropped {
                                 counter.add(1, &[]);
                             }
                             if !main_state.warned_about_dropping {
@@ -380,7 +394,7 @@ fn main() -> io::Result<()> {
                             // Error level for unexpected disconnect
                             error!("Logger channel disconnected unexpectedly");
                             debug!("Setting main_running flag to false due to logger channel disconnect");
-                            main_running.store(false, Ordering::SeqCst);
+                            ctx.main_running.store(false, Ordering::SeqCst); // Use ctx
                             debug!("Breaking main loop due to logger channel disconnect");
                             break;
                         }
@@ -390,23 +404,23 @@ fn main() -> io::Result<()> {
                     if !is_bounce {
                         trace!("Event passed filter. Attempting to write to stdout...");
                         // Increment OTLP passed counter
-                        if let Some(counter) = events_passed_counter {
+                        if let Some(counter) = &otel_counters.events_passed {
                             counter.add(1, &[]);
                         }
 
-                        if let Err(e) = write_event_raw(stdout_fd, &ev) {
+                        if let Err(e) = write_event_raw(ctx.stdout_fd, &ev) { // Use ctx
                             if e.kind() == ErrorKind::BrokenPipe {
                                 // Info level for broken pipe is appropriate
                                 info!("Output pipe broken, exiting");
                                 debug!("Setting main_running flag to false due to BrokenPipe");
-                                main_running.store(false, Ordering::SeqCst);
+                                ctx.main_running.store(false, Ordering::SeqCst); // Use ctx
                                 debug!("Breaking main loop due to BrokenPipe");
                                 break;
                             } else {
                                 // Error level for other write errors
                                 error!(error = %e, "Error writing output event");
                                 debug!("Setting main_running flag to false due to write error");
-                                main_running.store(false, Ordering::SeqCst);
+                                ctx.main_running.store(false, Ordering::SeqCst); // Use ctx
                                 debug!("Breaking main loop due to write error");
                                 break;
                             }
@@ -416,7 +430,7 @@ fn main() -> io::Result<()> {
                     } else {
                         trace!("Event dropped by filter. Not writing to stdout");
                         // Increment OTLP dropped counter
-                        if let Some(counter) = events_dropped_counter {
+                        if let Some(counter) = &otel_counters.events_dropped {
                             counter.add(1, &[]);
                         }
                     }
@@ -425,7 +439,7 @@ fn main() -> io::Result<()> {
                     // Info level for clean EOF
                     info!("Received clean EOF on stdin");
                     debug!("Setting main_running flag to false due to EOF");
-                    main_running.store(false, Ordering::SeqCst);
+                    ctx.main_running.store(false, Ordering::SeqCst); // Use ctx
                     debug!("Breaking main loop due to EOF");
                     break;
                 }
@@ -435,11 +449,11 @@ fn main() -> io::Result<()> {
                         debug!("Read interrupted by signal (EINTR)");
                         trace!(
                             "Sleeping for {:?} before re-checking running flag.",
-                            check_interval
+                            ctx.check_interval // Use ctx
                         );
-                        thread::sleep(check_interval);
+                        thread::sleep(ctx.check_interval); // Use ctx
                         trace!("Checking main_running flag after EINTR sleep...");
-                        if !main_running.load(Ordering::SeqCst) {
+                        if !ctx.main_running.load(Ordering::SeqCst) { // Use ctx
                             debug!("main_running is false after EINTR. Breaking loop");
                             break;
                         }
@@ -449,7 +463,7 @@ fn main() -> io::Result<()> {
                     // Error level for other read errors
                     error!(error = %e, "Error reading input event");
                     debug!("Setting main_running flag to false due to read error");
-                    main_running.store(false, Ordering::SeqCst);
+                    ctx.main_running.store(false, Ordering::SeqCst); // Use ctx
                     debug!("Breaking main loop due to read error");
                     break;
                 }
@@ -457,20 +471,25 @@ fn main() -> io::Result<()> {
         }
     } // End of run_main_loop function
 
-    // Call the instrumented function
-    run_main_loop(
-        &main_running,
+    // Create context structs
+    let main_loop_context = MainLoopContext {
+        main_running: &main_running,
         stdin_fd,
         stdout_fd,
-        &bounce_filter,
-        &cfg,
-        &mut main_state,
+        bounce_filter: &bounce_filter,
+        cfg: &cfg,
         check_interval,
-        &events_processed_counter,
-        &events_passed_counter,
-        &events_dropped_counter,
-        &log_messages_dropped_counter,
-    );
+    };
+
+    let otel_counters = OtelCounters {
+        events_processed: events_processed_counter,
+        events_passed: events_passed_counter,
+        events_dropped: events_dropped_counter,
+        log_messages_dropped: log_messages_dropped_counter,
+    };
+
+    // Call the instrumented function with the context structs
+    run_main_loop(&main_loop_context, &mut main_state, &otel_counters);
 
     info!("Main event loop finished");
 
