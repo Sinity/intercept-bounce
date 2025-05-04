@@ -315,16 +315,16 @@ fn main() -> io::Result<()> {
                     trace!(ev.type_, ev.code, ev.value, event_us, "Read event");
 
                     // Increment OTLP processed counter
-                    if let Some(counter) = events_processed_counter {
+                    if let Some(counter) = &otel_counters.events_processed { // Use otel_counters
                         counter.add(1, &[]);
                     }
 
                     trace!("Locking BounceFilter mutex...");
                     let (is_bounce, diff_us, last_passed_us) = {
-                        match bounce_filter.lock() {
+                        match ctx.bounce_filter.lock() { // Use ctx
                             Ok(mut filter) => {
                                 trace!("BounceFilter mutex locked successfully.");
-                                let result = filter.check_event(&ev, cfg.debounce_time()); // Use Duration
+                                let result = filter.check_event(&ev, ctx.cfg.debounce_time()); // Use ctx
                                 trace!(?result, "BounceFilter check_event returned");
                                 result
                             }
