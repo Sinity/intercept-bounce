@@ -6,7 +6,7 @@ use std::time::Duration;
 #[inline]
 pub fn format_us(us: u64) -> String {
     if us < 1000 {
-        format!("{} µs", us)
+        format!("{us} µs") // Use inline formatting
     } else if us < 1_000_000 {
         format!("{:.1} ms", us as f64 / 1000.0)
     } else {

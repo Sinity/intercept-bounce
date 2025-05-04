@@ -214,7 +214,7 @@ impl StatsCollector {
         // let log_all_events = config.log_all_events;
         // let log_bounces = config.log_bounces;
 
-        writeln!(writer, "\n--- Overall Statistics ({}) ---", report_type)?; // Use writeln!
+        writeln!(writer, "\n--- Overall Statistics ({report_type}) ---")?; // Use inline formatting
         writeln!(
             writer,
             "Key Events Processed: {}",
@@ -227,7 +227,7 @@ impl StatsCollector {
         } else {
             0.0
         };
-        writeln!(writer, "Percentage Dropped:  {:.2}%", percentage)?;
+        writeln!(writer, "Percentage Dropped:  {percentage:.2}%")?; // Use inline formatting
 
         let mut any_drops = false;
         for key_code in 0..self.per_key_stats.len() {
@@ -246,7 +246,7 @@ impl StatsCollector {
                 }
 
                 let key_name = get_key_name(key_code as u16);
-                writeln!(writer, "\nKey [{}] ({}):", key_name, key_code)?;
+                writeln!(writer, "\nKey [{key_name}] ({key_code}):")?; // Use inline formatting
                 // Calculate total processed for this key
                 let total_processed_for_key = stats.press.total_processed
                     + stats.release.total_processed
@@ -256,10 +256,10 @@ impl StatsCollector {
                 } else {
                     0.0
                 };
+                // Use inline formatting
                 writeln!(
                     writer,
-                    "  Total Processed: {}, Dropped: {} ({:.2}%)",
-                    total_processed_for_key, total_drops_for_key, key_drop_percentage
+                    "  Total Processed: {total_processed_for_key}, Dropped: {total_drops_for_key} ({key_drop_percentage:.2}%)"
                 )?;
 
                 // Use a closure that captures writer mutably
@@ -481,7 +481,7 @@ impl StatsCollector {
             runtime_human,
             debounce_time_human: debounce_human,
             near_miss_threshold_human: near_miss_human,
-            log_interval_human: log_interval_human,
+            log_interval_human,
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,

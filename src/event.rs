@@ -48,8 +48,8 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
                 bytes_read += n as usize;
             }
             _ => {
-                return Err(io::Error::new(
-                    ErrorKind::Other,
+                // Use io::Error::other for simplicity
+                return Err(io::Error::other(
                     "libc::read returned unexpected value",
                 ));
             }
@@ -98,8 +98,8 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
                 bytes_written += n as usize;
             }
             _ => {
-                return Err(io::Error::new(
-                    ErrorKind::Other,
+                // Use io::Error::other for simplicity
+                return Err(io::Error::other(
                     "libc::write returned unexpected value",
                 ));
             }
@@ -128,7 +128,7 @@ pub fn is_key_event(event: &input_event) -> bool {
 
 /// Lists available input devices and their capabilities. Requires root privileges.
 pub fn list_input_devices() -> io::Result<()> {
-    eprintln!("{:<15} {:<30} {}", "Device", "Name", "Capabilities");
+    eprintln!("{:<15} {:<30} Capabilities", "Device", "Name"); // Move literal into format string
     eprintln!("-------------------------------------------------------------------");
 
     let mut entries: Vec<_> = fs::read_dir("/dev/input/")?
@@ -157,7 +157,7 @@ pub fn list_input_devices() -> io::Result<()> {
         {
             Ok(f) => f,
             Err(e) => {
-                let msg = format!("{}", e);
+                let msg = format!("{e}"); // Use inline formatting
                 if msg.contains("Permission denied") {
                     eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
                     continue;

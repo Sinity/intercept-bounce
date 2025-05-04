@@ -19,15 +19,15 @@ fn main() -> Result<(), Error> {
     // --- Generate Man Page ---
     let man_path = out_path.join("intercept-bounce.1");
     let mut man_file = fs::File::create(&man_path)?; // Make man_file mutable
-    println!("Generating man page: {:?}", man_path);
+    println!("Generating man page: {man_path:?}"); // Use inline formatting
     Man::new(cmd.clone()).render(&mut man_file)?; // Pass a mutable reference
 
     // --- Generate Shell Completions ---
     let bin_name = "intercept-bounce"; // Your binary name
     for shell in Shell::value_variants() {
-        let completions_path = out_path.join(format!("{}.{}", bin_name, shell));
-        println!("Generating completion file: {:?}", completions_path);
-        generate_to(*shell, &mut cmd.clone(), bin_name, &out_path)?;
+        let completions_path = out_path.join(format!("{bin_name}.{shell}")); // Use inline formatting
+        println!("Generating completion file: {completions_path:?}"); // Use inline formatting
+        generate_to(*shell, &mut cmd.clone(), bin_name, out_path)?; // Remove needless borrow
     }
 
     println!(

@@ -519,7 +519,7 @@ fn main() -> io::Result<()> {
             // Use a dedicated tracing event for stats output
             info!(target: "stats", stats_kind = "cumulative", format = "json", "Emitting final statistics");
             final_stats.print_stats_json(
-                &*cfg,
+                &cfg, // Remove explicit auto-deref
                 runtime_us,
                 "Cumulative",             // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
@@ -529,7 +529,7 @@ fn main() -> io::Result<()> {
             debug!("Printing final stats in human-readable format");
             // Use a dedicated tracing event for stats output
             info!(target: "stats", stats_kind = "cumulative", format = "human", "Emitting final statistics");
-            final_stats.print_stats_to_stderr(&*cfg, "Cumulative"); // Pass config and type
+            final_stats.print_stats_to_stderr(&cfg, "Cumulative"); // Remove explicit auto-deref
             debug!("Finished printing main stats block");
             if let Some(rt) = runtime_us {
                 // Use info level for final runtime print, format as duration

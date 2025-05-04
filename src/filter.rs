@@ -33,6 +33,13 @@ pub struct BounceFilter {
     overall_last_event_us: Option<u64>,
 }
 
+// Add Default impl as suggested by clippy::new_without_default
+impl Default for BounceFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BounceFilter {
     /// Creates a new, stateless `BounceFilter`.
     #[must_use]

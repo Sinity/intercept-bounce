@@ -229,7 +229,7 @@ impl Logger {
         if self.config.stats_json {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
-                &*self.config,
+                &self.config, // Remove explicit auto-deref
                 None,                     // Runtime is only for cumulative
                 "Periodic",               // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
@@ -237,7 +237,7 @@ impl Logger {
             tracing::debug!("Logger thread finished printing periodic stats in JSON format");
         } else {
             tracing::debug!("Logger thread printing periodic stats in human-readable format");
-            interval_stats_clone.print_stats_to_stderr(&*self.config, "Periodic"); // Pass config and type
+            interval_stats_clone.print_stats_to_stderr(&self.config, "Periodic"); // Remove explicit auto-deref
             tracing::debug!(
                 "Logger thread finished printing periodic stats in human-readable format"
             );
@@ -254,10 +254,10 @@ impl Logger {
     fn log_event_detailed(&self, data: &EventInfo) {
         let status = if data.is_bounce { "DROP" } else { "PASS" };
 
+        // Use saturating_sub for manual_saturating_arithmetic
         let relative_us = data
             .event_us
-            .checked_sub(self.first_event_us.unwrap_or(data.event_us))
-            .unwrap_or(0);
+            .saturating_sub(self.first_event_us.unwrap_or(data.event_us));
 
         let type_name = get_event_type_name(data.event.type_);
 
@@ -352,10 +352,10 @@ impl Logger {
             _ => "Unknown",
         };
 
+        // Use saturating_sub for manual_saturating_arithmetic
         let relative_us = data
             .event_us
-            .checked_sub(self.first_event_us.unwrap_or(data.event_us))
-            .unwrap_or(0);
+            .saturating_sub(self.first_event_us.unwrap_or(data.event_us));
 
         let bounce_info_str = if let Some(diff) = data.diff_us {
             format!(" (Bounce Time: {})", util::format_us(diff))
@@ -395,13 +395,13 @@ impl Logger {
 /// Helper to format relative timestamps consistently for logging.
 fn format_relative_us(relative_us: u64) -> String {
     let s = if relative_us < 1_000 {
-        format!("+{} µs", relative_us)
+        format!("+{relative_us} µs") // Use inline formatting
     } else if relative_us < 1_000_000 {
         format!("+{:.1} ms", relative_us as f64 / 1000.0)
     } else {
         format!("+{:.3} s", relative_us as f64 / 1_000_000.0)
     };
-    format!("{:<10}", s)
+    format!("{s:<10}") // Use inline formatting
 }
 
 // format_us moved to src/util.rs
