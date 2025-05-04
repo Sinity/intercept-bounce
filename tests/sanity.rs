@@ -487,3 +487,75 @@ fn log_all_events_flag() {
         // Check that SYN events are NOT logged even with --log-all-events
         .stderr(predicate::str::contains("EV_SYN").not());
 }
+
+#[test]
+fn test_debounce_zero_passes_all() {
+    let e1 = key_ev(0, KEY_A, 1);     // Press A at 0ms
+    let e2 = key_ev(1_000, KEY_A, 1); // Press A again at 1ms (would be bounce with window > 1)
+    let e3 = key_ev(2_000, KEY_A, 0); // Release A at 2ms
+    let e4 = key_ev(3_000, KEY_A, 0); // Release A again at 3ms (would be bounce with window > 1)
+    let input_events = vec![e1, e2, e3, e4];
+    let expected_events = vec![e1, e2, e3, e4]; // All should pass
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time")
+        .arg("0ms") // Explicitly set 0ms window
+        .write_stdin(input_bytes);
+
+    let output: Output = cmd.output().expect("Failed to run command with 0ms debounce");
+    assert!(output.status.success(), "Command failed with 0ms debounce");
+
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Events were filtered when debounce window was 0ms"
+    );
+}
+
+#[test]
+fn test_only_non_key_events() {
+    let e1 = non_key_ev(1000); // SYN event at 1ms
+    let e2 = non_key_ev(2000); // SYN event at 2ms
+    let e3 = non_key_ev(3000); // SYN event at 3ms
+    let input_events = vec![e1, e2, e3];
+    let expected_events = vec![e1, e2, e3]; // All should pass
+
+    let input_bytes = events_to_bytes(&input_events);
+    let expected_output_bytes = events_to_bytes(&expected_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--stats-json") // Get stats output
+       .write_stdin(input_bytes);
+
+    let output = cmd.output().expect("Failed to run command with only non-key events");
+    assert!(output.status.success(), "Command failed with only non-key events");
+
+    // Check stdout contains all input events
+    let actual_stdout_bytes = output.stdout;
+    assert_eq!(
+        actual_stdout_bytes, expected_output_bytes,
+        "Non-key events were filtered or modified"
+    );
+
+    // Check stderr stats
+    let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
+    let json_start_line = stderr_str
+        .lines()
+        .find(|l| l.trim().starts_with('{'))
+        .expect("Could not find start of JSON block in non-key event stderr");
+    let json_start_index = stderr_str.find(json_start_line).unwrap_or(0);
+    let json_part = &stderr_str[json_start_index..];
+    let mut deserializer = serde_json::Deserializer::from_str(json_part);
+    let stats_json: Value = Value::deserialize(&mut deserializer)
+        .expect("Failed to deserialize JSON from non-key event stderr");
+
+    // Assert that key event counts are zero
+    assert_eq!(stats_json["key_events_processed"], 0, "Processed count should be 0 for non-key events");
+    assert_eq!(stats_json["key_events_passed"], 0, "Passed count should be 0 for non-key events");
+    assert_eq!(stats_json["key_events_dropped"], 0, "Dropped count should be 0 for non-key events");
+    assert!(stats_json["per_key_stats"].as_object().map_or(true, |m| m.is_empty()), "Per-key stats should be empty");
+    assert!(stats_json["per_key_passed_near_miss_timing"].as_object().map_or(true, |m| m.is_empty()), "Near-miss stats should be empty");
+}
