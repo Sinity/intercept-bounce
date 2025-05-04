@@ -49,6 +49,33 @@ pub struct KeyStats {
     pub repeat: KeyValueStats,
 }
 
+/// Structure for serializing per-key drop statistics in JSON.
+#[derive(Serialize, Debug)]
+struct PerKeyStatsJson<'a> {
+    key_code: u16,
+    key_name: &'static str,
+    total_processed: u64,
+    total_dropped: u64,
+    drop_percentage: f64,
+    stats: &'a KeyStats, // Contains press/release/repeat details
+}
+
+/// Structure for serializing near-miss statistics in JSON.
+#[derive(Serialize, Debug)]
+struct NearMissJson<'a> {
+    key_code: u16,
+    key_value: i32,
+    key_name: &'static str,
+    value_name: &'static str,
+    count: usize,
+    timings_us: &'a Vec<u64>,
+    // Add min/avg/max directly to JSON object
+    min_us: u64,
+    avg_us: u64,
+    max_us: u64,
+}
+
+
 /// Top-level statistics collector. Owned and managed by the logger thread.
 /// Accumulates counts, drop timings, and near-miss timings for all processed events.
 #[derive(Debug, Clone)]
