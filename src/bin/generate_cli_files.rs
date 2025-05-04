@@ -1,5 +1,5 @@
 // src/bin/generate_cli_files.rs
-use clap::{CommandFactory, ValueEnum};
+use clap::CommandFactory;
 use clap_complete::{generate_to, Shell};
 use clap_mangen::Man;
 use std::{env, fs, io::Error, path::Path};
@@ -40,10 +40,8 @@ fn main() -> Result<(), Error> {
         };
         let completions_path = out_path.join(format!("{bin_name}.{ext}"));
         println!("Generating completion file: {completions_path:?}");
-        // Ensure the target directory exists.
-        if let Some(parent) = completions_path.parent() {
-             fs::create_dir_all(parent)?;
-        }
+        // The output directory `out_path` is already created before the loop.
+        // `generate_to` writes directly to the file path provided.
         generate_to(shell, &mut cmd.clone(), bin_name, &completions_path)?;
     }
 
