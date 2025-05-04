@@ -11,6 +11,8 @@ pub struct Config {
     pub verbose: bool,
     // Add log filter string
     pub log_filter: String,
+    // OTLP endpoint
+    pub otel_endpoint: Option<String>,
 }
 
 impl Config {
@@ -24,10 +26,11 @@ impl Config {
         stats_json: bool,
         verbose: bool,
         log_filter: String,
+        otel_endpoint: Option<String>,
     ) -> Self {
         Self {
             debounce_time, near_miss_threshold, log_interval,
-            log_all_events, log_bounces, stats_json, verbose, log_filter
+            log_all_events, log_bounces, stats_json, verbose, log_filter, otel_endpoint
         }
     }
 
@@ -76,6 +79,7 @@ impl From<&crate::cli::Args> for Config {
             stats_json: a.stats_json,
             verbose: a.verbose,
             log_filter,
+            otel_endpoint: a.otel_endpoint.clone(),
         }
     }
 }

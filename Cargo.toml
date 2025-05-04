@@ -29,9 +29,16 @@ humantime       = "2.1"
 clap_complete = "4.5"
 clap_mangen = "0.2"
 
+# --- OpenTelemetry Dependencies ---
+opentelemetry = { version = "0.23", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.23", features = ["rt-tokio-current-thread", "metrics"] } # Using tokio-current-thread runtime
+opentelemetry-otlp = { version = "0.16", features = ["grpc-tonic", "metrics"] }
+tracing-opentelemetry = "0.24"
+
 [features]
 default = [] # Keep default features empty or list non-optional ones
 debug_ring_buffer = [] # Add this line
+# Remove 'otel' feature block
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] } # For version/git info

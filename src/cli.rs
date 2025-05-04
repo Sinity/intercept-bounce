@@ -72,6 +72,11 @@ pub struct Args {
     /// Enable verbose logging (internal state, thread startup, etc).
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub verbose: bool,
+
+    // --- OpenTelemetry Export ---
+    /// OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317").
+    #[arg(long)]
+    pub otel_endpoint: Option<String>,
 }
 
 pub fn parse_args() -> Args {

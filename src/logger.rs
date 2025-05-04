@@ -12,7 +12,10 @@ use crossbeam_channel::{Receiver, RecvTimeoutError}; // Use directly
 use chrono::Local;
 use input_linux_sys::{input_event, EV_MSC, EV_SYN};
 use std::io;
+use std::ops::Deref; // Import Deref
 use std::sync::atomic::{AtomicBool, Ordering};
+use opentelemetry::metrics::{Counter, Meter}; // Import OTLP metrics types
+use tracing::{instrument, Span}; // Import instrument and Span
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::info; // Only info is used directly in this file's functions
@@ -54,6 +57,9 @@ pub struct Logger {
 
     last_dump_time: Instant,
     first_event_us: Option<u64>,
+
+    // Optional OTLP Meter for logger-specific metrics
+    otel_meter: Option<Meter>,
 }
 
 impl Logger {
@@ -62,6 +68,7 @@ impl Logger {
         receiver: Receiver<LogMessage>, // Use Receiver directly
         logger_running: Arc<AtomicBool>,
         config: Arc<Config>,
+        otel_meter: Option<Meter>, // Accept optional meter
     ) -> Self {
         Logger {
             receiver, // Use Receiver directly
@@ -71,6 +78,7 @@ impl Logger {
             interval_stats: StatsCollector::with_capacity(),
             last_dump_time: Instant::now(),
             first_event_us: None,
+            otel_meter, // Store the meter
         }
     }
 
@@ -87,6 +95,10 @@ impl Logger {
         let log_interval = self.config.log_interval(); // Get Duration directly
         let check_interval = Duration::from_millis(100); // Used for periodic checks
 
+        // --- OTLP Metrics Setup (in logger thread) ---
+        let near_miss_counter: Option<Counter<u64>> = self.otel_meter.as_ref()
+            .map(|m| m.u64_counter("events.near_miss").with_description("Passed events that were near misses").init());
+
         loop {
             // Check running flag first
             if !self.logger_running.load(Ordering::SeqCst) {
@@ -95,7 +107,7 @@ impl Logger {
                 );
                 while let Ok(msg) = self.receiver.try_recv() {
                     tracing::trace!("Draining channel: Processing message after shutdown signal");
-                    self.process_message(msg);
+                    self.process_message(msg, &near_miss_counter); // Pass counter
                 }
                 tracing::debug!("Finished draining channel. Exiting run loop");
                 break;
@@ -113,7 +125,7 @@ impl Logger {
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
                     tracing::trace!("Logger thread received message from channel");
-                    self.process_message(msg);
+                    self.process_message(msg, &near_miss_counter); // Pass counter
                     tracing::trace!("Logger thread finished processing message");
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -127,7 +139,7 @@ impl Logger {
                         tracing::trace!(
                             "Logger thread draining channel: Processing message after disconnect"
                         );
-                        self.process_message(msg);
+                        self.process_message(msg, &near_miss_counter); // Pass counter
                     }
                     tracing::warn!("Finished draining channel. Exiting run loop");
                     break; // Exit loop on disconnect
@@ -142,7 +154,12 @@ impl Logger {
 
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
-    pub fn process_message(&mut self, msg: LogMessage) {
+    #[instrument(name = "logger_process_message", skip(self, msg, near_miss_counter), fields(otel.kind = "internal", event_type=tracing::field::Empty, is_bounce=tracing::field::Empty))]
+    pub fn process_message(
+        &mut self,
+        msg: LogMessage,
+        near_miss_counter: &Option<Counter<u64>>, // Receive counter
+    ) {
         // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
@@ -166,6 +183,19 @@ impl Logger {
                     tracing::trace!(ts = data.event_us, "Logger recorded first event timestamp");
                 }
 
+                // --- Increment Near-Miss Counter ---
+                if !data.is_bounce && event::is_key_event(&data.event) {
+                    if let Some(last_us) = data.last_passed_us {
+                        if let Some(diff) = data.event_us.checked_sub(last_us) {
+                            if diff <= self.config.near_miss_threshold_us() {
+                                if let Some(counter) = near_miss_counter {
+                                    counter.add(1, &[]);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if self.config.log_all_events {
                     if data.event.type_ == EV_SYN as u16 || data.event.type_ == EV_MSC as u16 {
                         return; // Skip logging SYN/MSC events even in log-all mode
@@ -184,6 +214,7 @@ impl Logger {
     }
 
     /// Dumps the current interval statistics to stderr.
+    #[instrument(name = "dump_periodic_stats", skip(self))]
     fn dump_periodic_stats(&mut self) {
         let wallclock = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
         tracing::info!(target: "stats", kind = "periodic", wallclock = %wallclock, "Periodic stats dump");
@@ -213,6 +244,7 @@ impl Logger {
 
     /// Adapts logic from the old BounceFilter::log_event.
     /// Logs details of a single event (passed or dropped) using tracing.
+    #[instrument(name = "log_event_detailed", skip(self, data), fields(otel.kind = "internal", status=tracing::field::Empty, key_code=data.event.code))]
     fn log_event_detailed(&self, data: &EventInfo) {
         let status = if data.is_bounce { "DROP" } else { "PASS" };
 
@@ -299,6 +331,7 @@ impl Logger {
 
     /// Adapts logic from the old BounceFilter::log_simple_bounce.
     /// This is used when only `--log-bounces` is enabled. Logs only dropped key events.
+    #[instrument(name = "log_simple_bounce_detailed", skip(self, data), fields(otel.kind = "internal", key_code=data.event.code))]
     fn log_simple_bounce_detailed(&self, data: &EventInfo) {
         // This function is only called if data.is_bounce is true and it's a key event.
         let code = data.event.code;
