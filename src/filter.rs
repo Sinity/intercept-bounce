@@ -103,7 +103,7 @@ impl BounceFilter {
         // If we reach here, the event is NOT a bounce (either diff >= debounce_time,
         // debounce_time is zero, or time went backwards).
         self.last_event_us[key_code_idx][key_value_idx] = event_us; // Record as passed
-        // Return non-bounce, providing the timestamp of the previously passed event
+                                                                    // Return non-bounce, providing the timestamp of the previously passed event
         (false, None, Some(last_passed_us))
     }
 
@@ -111,7 +111,8 @@ impl BounceFilter {
     /// Returns `None` if no events were processed.
     pub fn get_runtime_us(&self) -> Option<u64> {
         self.overall_last_event_us.and_then(|last| {
-            self.overall_first_event_us.map(|first| last.saturating_sub(first))
+            self.overall_first_event_us
+                .map(|first| last.saturating_sub(first))
         })
     }
 }
