@@ -419,25 +419,25 @@ fn stats_output_json() {
 
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
     // Find the JSON part (it might be mixed with other logs if verbose)
-    // Find the first line that looks like the start of a JSON object
-    let json_start_line = stderr_str
+    // Find the first line that starts with '{' and take all lines from there
+    let json_lines: Vec<&str> = stderr_str
         .lines()
-        .find(|l| l.trim().starts_with('{'))
-        .expect("Could not find start of JSON block ('{') in stderr");
+        .skip_while(|l| !l.trim().starts_with('{'))
+        .collect();
 
-    // Find the index where the JSON starts
-    let json_start_index = stderr_str.find(json_start_line).unwrap_or(0);
-
-    // Attempt to parse from that point onwards, consuming only the first JSON value found
-    let json_part = &stderr_str[json_start_index..];
+    // Join the JSON lines back into a single string
+    let json_part = json_lines.join("\n");
 
     // Use a Deserializer to parse only the first JSON object found
-    let mut deserializer = serde_json::Deserializer::from_str(json_part);
+    // Ensure json_part is not empty before creating Deserializer
+    assert!(!json_part.is_empty(), "No JSON block found in stderr");
+
+    let mut deserializer = serde_json::Deserializer::from_str(json_part.as_str());
     let stats_json: Value = match Value::deserialize(&mut deserializer) {
         Ok(val) => val,
         Err(e) => panic!(
             "Failed to deserialize first JSON object from stderr starting at detected block: Error: {}, starts with '{}', full stderr: {}",
-            e, json_start_line, stderr_str
+            e, json_lines.first().unwrap_or(&""), stderr_str
         ),
     };
 
@@ -595,13 +595,18 @@ fn test_only_non_key_events() {
 
     // Check stderr stats
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
-    let json_start_line = stderr_str
+    // Find the first line that starts with '{' and take all lines from there
+    let json_lines: Vec<&str> = stderr_str
         .lines()
-        .find(|l| l.trim().starts_with('{'))
-        .expect("Could not find start of JSON block in non-key event stderr");
-    let json_start_index = stderr_str.find(json_start_line).unwrap_or(0);
-    let json_part = &stderr_str[json_start_index..];
-    let mut deserializer = serde_json::Deserializer::from_str(json_part);
+        .skip_while(|l| !l.trim().starts_with('{'))
+        .collect();
+
+    // Join the JSON lines back into a single string
+    let json_part = json_lines.join("\n");
+
+    // Ensure json_part is not empty before creating Deserializer
+    assert!(!json_part.is_empty(), "No JSON block found in stderr");
+    let mut deserializer = serde_json::Deserializer::from_str(json_part.as_str());
     let stats_json: Value = Value::deserialize(&mut deserializer)
         .expect("Failed to deserialize JSON from non-key event stderr");
 
@@ -620,14 +625,14 @@ fn test_only_non_key_events() {
     );
     assert!(
         stats_json["per_key_stats"]
-            .as_object()
-            .map_or(true, |m| m.is_empty()),
+            .as_array() // Check if it's an array
+            .map_or(true, |a| a.is_empty()), // Check if the array is empty
         "Per-key stats should be empty"
     );
     assert!(
         stats_json["per_key_passed_near_miss_timing"]
-            .as_object()
-            .map_or(true, |m| m.is_empty()),
+            .as_array() // Check if it's an array
+            .map_or(true, |a| a.is_empty()), // Check if the array is empty
         "Near-miss stats should be empty"
     );
 }
