@@ -546,6 +546,7 @@ dependencies = [
  "clap_mangen",
  "criterion",
  "crossbeam-channel",
+ "fastrand",
  "humantime",
  "input-linux-sys",
  "libc",

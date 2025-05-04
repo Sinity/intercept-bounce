@@ -439,10 +439,31 @@ fn stats_output_json() {
     assert_eq!(stats_json["key_events_processed"], 2);
     assert_eq!(stats_json["key_events_passed"], 1);
     assert_eq!(stats_json["key_events_dropped"], 1);
-    assert!(stats_json["per_key_stats"]["30"].is_object()); // KEY_A stats exist
-    assert_eq!(stats_json["per_key_stats"]["30"]["press"]["count"], 1);
-    assert_eq!(stats_json["per_key_stats"]["30"]["press"]["timings_us"], json!([3000]));
-    assert!(stats_json["per_key_stats"]["48"].is_null()); // KEY_B stats should not exist
+
+    // Assert that per_key_stats is an array
+    assert!(stats_json["per_key_stats"].is_array(), "per_key_stats should be an array");
+
+    // Find the object for KEY_A (30) in the array
+    let key_a_stats = stats_json["per_key_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key_code"] == 30)
+        .expect("Did not find stats object for key_code 30 in per_key_stats array");
+
+    // Assertions on the found object
+    assert!(key_a_stats.is_object());
+    assert_eq!(key_a_stats["key_name"], "KEY_A");
+    assert_eq!(key_a_stats["stats"]["press"]["count"], 1);
+    assert_eq!(key_a_stats["stats"]["press"]["timings_us"], json!([3000]));
+
+    // Ensure KEY_B (48) is not present in the array
+    let key_b_present = stats_json["per_key_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["key_code"] == 48);
+    assert!(!key_b_present, "Stats for key_code 48 should not be present");
 }
 
  #[test]

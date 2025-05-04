@@ -1,10 +1,10 @@
 #![no_main]
 
 use arbitrary::{Arbitrary, Unstructured};
+use input_linux_sys::{input_event, timeval};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::logger::EventInfo;
-use input_linux_sys::{input_event, timeval, EV_KEY};
 use libfuzzer_sys::fuzz_target;
 use std::time::Duration;
 
@@ -12,8 +12,8 @@ use std::time::Duration;
 #[derive(Arbitrary, Debug, Clone)]
 struct ArbitraryEventData {
     // EventInfo fields
-    event_type: u16, // Keep it simple, maybe focus on EV_KEY?
-    event_code: u16, // Limit range? e.g., 0..1024
+    event_type: u16,  // Keep it simple, maybe focus on EV_KEY?
+    event_code: u16,  // Limit range? e.g., 0..1024
     event_value: i32, // Limit range? e.g., 0..3
     event_us: u64,
     is_bounce: bool,
@@ -36,13 +36,24 @@ fuzz_target!(|data: &[u8]| {
             Duration::from_millis(arb_data.debounce_ms),
             Duration::from_millis(arb_data.near_miss_ms),
             Duration::ZERO, // log_interval not relevant here
-            false, false, false, false, // other flags not relevant
+            false,
+            false,
+            false,
+            false, // other flags not relevant
             "info".to_string(),
         );
 
         // Construct EventInfo
-        let diff_us = if arb_data.diff_us_present { Some(arb_data.diff_us_value) } else { None };
-        let last_passed_us = if arb_data.last_passed_us_present { Some(arb_data.last_passed_us_value) } else { None };
+        let diff_us = if arb_data.diff_us_present {
+            Some(arb_data.diff_us_value)
+        } else {
+            None
+        };
+        let last_passed_us = if arb_data.last_passed_us_present {
+            Some(arb_data.last_passed_us_value)
+        } else {
+            None
+        };
 
         // Ensure event_us >= last_passed_us if present, to avoid trivial checked_sub(None)
         // This makes the fuzzer focus on valid time sequences for diff calculation.
@@ -50,7 +61,7 @@ fuzz_target!(|data: &[u8]| {
         // Ensure diff_us makes sense relative to timestamps if both present
         let valid_diff_us = diff_us.filter(|&diff| {
             if let Some(last) = valid_last_passed_us {
-                 arb_data.event_us.checked_sub(last) == Some(diff)
+                arb_data.event_us.checked_sub(last) == Some(diff)
             } else {
                 // If no last_passed, diff_us should ideally be None for a real bounce.
                 // But the fuzzer might generate Some(diff) anyway.
@@ -58,7 +69,6 @@ fuzz_target!(|data: &[u8]| {
                 true
             }
         });
-
 
         let event_info = EventInfo {
             event: input_event {

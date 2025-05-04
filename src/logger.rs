@@ -2,20 +2,19 @@
 // and accumulating/reporting statistics based on messages received
 // from the main processing thread.
 
-use crate::event;
-use crate::filter::keynames::{get_key_name, get_event_type_name};
-use crate::filter::stats::StatsCollector;
 use crate::config::Config;
+use crate::event;
+use crate::filter::keynames::{get_event_type_name, get_key_name};
+use crate::filter::stats::StatsCollector;
 use crate::util; // Import util
 use crossbeam_channel::{Receiver, RecvTimeoutError}; // Use directly
 
-use input_linux_sys::{input_event, EV_SYN, EV_MSC};
+use chrono::Local;
+use input_linux_sys::{input_event, EV_MSC, EV_SYN};
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread; // Add thread import for yield_now/sleep
 use std::time::{Duration, Instant};
-use chrono::Local;
 use tracing::info; // Only info is used directly in this file's functions
 
 /// Represents a message sent from the main thread to the logger thread.
@@ -65,7 +64,7 @@ impl Logger {
         config: Arc<Config>,
     ) -> Self {
         Logger {
-                receiver, // Use Receiver directly
+            receiver, // Use Receiver directly
             logger_running,
             config,
             cumulative_stats: StatsCollector::with_capacity(),
@@ -91,7 +90,9 @@ impl Logger {
         loop {
             // Check running flag first
             if !self.logger_running.load(Ordering::SeqCst) {
-                tracing::debug!("Received shutdown signal via AtomicBool, attempting to drain channel");
+                tracing::debug!(
+                    "Received shutdown signal via AtomicBool, attempting to drain channel"
+                );
                 while let Ok(msg) = self.receiver.try_recv() {
                     tracing::trace!("Draining channel: Processing message after shutdown signal");
                     self.process_message(msg);
@@ -123,7 +124,9 @@ impl Logger {
                 Err(RecvTimeoutError::Disconnected) => {
                     tracing::warn!("Detected channel disconnected. Attempting to drain channel");
                     while let Ok(msg) = self.receiver.try_recv() {
-                        tracing::trace!("Logger thread draining channel: Processing message after disconnect");
+                        tracing::trace!(
+                            "Logger thread draining channel: Processing message after disconnect"
+                        );
                         self.process_message(msg);
                     }
                     tracing::warn!("Finished draining channel. Exiting run loop");
@@ -139,7 +142,8 @@ impl Logger {
 
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
-    pub fn process_message(&mut self, msg: LogMessage) { // Made public for benches/tests
+    pub fn process_message(&mut self, msg: LogMessage) {
+        // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
                 // Log EventInfo fields individually at trace level
@@ -152,8 +156,10 @@ impl Logger {
                        last_passed_us = ?data.last_passed_us,
                        "Logger processing EventInfo");
 
-                self.cumulative_stats.record_event_info_with_config(&data, &self.config);
-                self.interval_stats.record_event_info_with_config(&data, &self.config);
+                self.cumulative_stats
+                    .record_event_info_with_config(&data, &self.config);
+                self.interval_stats
+                    .record_event_info_with_config(&data, &self.config);
 
                 if self.first_event_us.is_none() {
                     self.first_event_us = Some(data.event_us);
@@ -166,7 +172,10 @@ impl Logger {
                     }
                     tracing::trace!("Logger logging all events");
                     self.log_event_detailed(&data);
-                } else if self.config.log_bounces && data.is_bounce && event::is_key_event(&data.event) {
+                } else if self.config.log_bounces
+                    && data.is_bounce
+                    && event::is_key_event(&data.event)
+                {
                     tracing::trace!("Logger logging bounce event");
                     self.log_simple_bounce_detailed(&data);
                 }
@@ -184,15 +193,17 @@ impl Logger {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
                 &*self.config,
-                None, // Runtime is only for cumulative
-                "Periodic", // Report type
+                None,                     // Runtime is only for cumulative
+                "Periodic",               // Report type
                 &mut io::stderr().lock(), // Write directly to stderr
             );
             tracing::debug!("Logger thread finished printing periodic stats in JSON format");
         } else {
             tracing::debug!("Logger thread printing periodic stats in human-readable format");
             interval_stats_clone.print_stats_to_stderr(&*self.config, "Periodic"); // Pass config and type
-            tracing::debug!("Logger thread finished printing periodic stats in human-readable format");
+            tracing::debug!(
+                "Logger thread finished printing periodic stats in human-readable format"
+            );
         }
 
         tracing::debug!("Logger thread resetting interval stats");
@@ -203,11 +214,7 @@ impl Logger {
     /// Adapts logic from the old BounceFilter::log_event.
     /// Logs details of a single event (passed or dropped) using tracing.
     fn log_event_detailed(&self, data: &EventInfo) {
-        let status = if data.is_bounce {
-            "DROP"
-        } else {
-            "PASS"
-        };
+        let status = if data.is_bounce { "DROP" } else { "PASS" };
 
         let relative_us = data
             .event_us
@@ -242,12 +249,14 @@ impl Logger {
         let near_miss_info_str = if !data.is_bounce && event::is_key_event(&data.event) {
             if let Some(last_us) = data.last_passed_us {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
-                     // Check against Duration directly, use accessor
-                     if Duration::from_micros(diff) >= self.config.debounce_time() && Duration::from_micros(diff) <= self.config.near_miss_threshold() {
-                         format!(" (Diff since last passed: {})", util::format_us(diff))
-                     } else {
-                         "".to_string()
-                     }
+                    // Check against Duration directly, use accessor
+                    if Duration::from_micros(diff) >= self.config.debounce_time()
+                        && Duration::from_micros(diff) <= self.config.near_miss_threshold()
+                    {
+                        format!(" (Diff since last passed: {})", util::format_us(diff))
+                    } else {
+                        "".to_string()
+                    }
                 } else {
                     "".to_string()
                 }

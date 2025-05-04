@@ -1,11 +1,11 @@
 // fuzz/fuzz_targets/fuzz_target_1.rs
 #![no_main]
 
+use input_linux_sys::input_event;
 use intercept_bounce::filter::BounceFilter;
 use libfuzzer_sys::fuzz_target;
 use std::mem::size_of;
 use std::time::Duration;
-use input_linux_sys::input_event;
 
 // Define a reasonable max number of events to process from fuzz data
 // to prevent excessively long fuzz runs.
@@ -35,9 +35,8 @@ fuzz_target!(|data: &[u8]| {
         // Using read_unaligned because fuzz data might not be aligned.
         // Ensure the pointer is valid before reading.
         if event_bytes.len() == event_size {
-            let event: input_event = unsafe {
-                std::ptr::read_unaligned(event_bytes.as_ptr() as *const _)
-            };
+            let event: input_event =
+                unsafe { std::ptr::read_unaligned(event_bytes.as_ptr() as *const _) };
 
             // Call the function under test. The primary goal of fuzzing here
             // is to find panics, crashes, hangs, or memory issues within check_event
@@ -48,9 +47,9 @@ fuzz_target!(|data: &[u8]| {
             // For example, ensure runtime calculation doesn't panic.
             let _ = filter.get_runtime_us();
         } else {
-             // This case should ideally not be reached due to the outer check,
-             // but handle defensively.
-             break;
+            // This case should ideally not be reached due to the outer check,
+            // but handle defensively.
+            break;
         }
     }
 });
