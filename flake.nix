@@ -52,7 +52,8 @@
             # Standard binary installation
             runHook preInstall
             mkdir -p $out/bin
-            cp target/release/intercept-bounce $out/bin/
+            # Use the target-specific path provided by rustPlatform
+            cp target/${pkgs.stdenv.hostPlatform.config}/release/intercept-bounce $out/bin/
             runHook postInstall
 
             # Install man page
