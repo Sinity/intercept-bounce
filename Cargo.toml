@@ -31,18 +31,17 @@ clap_mangen = "0.2"
 
 # --- OpenTelemetry Dependencies ---
 opentelemetry = { version = "0.23", features = ["metrics"] }
-opentelemetry_sdk = { version = "0.23", features = ["rt-tokio-current-thread", "metrics"] } # Using tokio-current-thread runtime
+opentelemetry_sdk = { version = "0.23", features = ["rt-tokio-current-thread", "metrics"] }
 opentelemetry-otlp = { version = "0.16", features = ["grpc-tonic", "metrics"] }
 tracing-opentelemetry = "0.24"
 
 [features]
-default = [] # Keep default features empty or list non-optional ones
-debug_ring_buffer = [] # Add this line
-# Remove 'otel' feature block
+default = []
+debug_ring_buffer = [] # Optional feature for debugging
 
 [build-dependencies]
-vergen = { version = "8", features = ["build", "git", "gitcl"] } # For version/git info
-clap = { version = "4.5", features = ["derive"] } # Needed for accessing Args in build script/binary
+vergen = { version = "8", features = ["build", "git", "gitcl"] }
+clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 clap_mangen = "0.2"
 
@@ -50,17 +49,17 @@ clap_mangen = "0.2"
 assert_cmd = "2.0"
 predicates = "3.0"
 criterion = "0.5"
-proptest = "1.0" # Added for property testing
-arbitrary = { version = "1.0", features = ["derive"] } # Added for fuzzing
-libfuzzer-sys = "0.4" # Added for fuzzing
-fastrand = "2.0" # Added for property testing strategy
+proptest = "1.0"
+arbitrary = { version = "1.0", features = ["derive"] }
+libfuzzer-sys = "0.4"
+fastrand = "2.0"
 
 [[bench]]
 name     = "filter"
 harness  = false
 
-# Binary target for generating completions and man pages
+# Helper binary for generating completions and man pages during build
 [[bin]]
 name = "generate-cli-files"
 path = "src/bin/generate_cli_files.rs"
-required-features = [] # Does not require any special features
+required-features = []

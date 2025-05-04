@@ -8,23 +8,21 @@ use std::{env, fs, io::Error, path::Path};
 use intercept_bounce::cli::Args;
 
 fn main() -> Result<(), Error> {
-    // Generate completions and man page based on environment variable during build
-    // Example: OUT_DIR=target/generated cargo run --bin generate-cli-files
+    // Get output directory from environment variable or default.
     let outdir = env::var_os("OUT_DIR").unwrap_or_else(|| "target/generated".into());
     let out_path = Path::new(&outdir);
     fs::create_dir_all(out_path)?;
 
-    let cmd = Args::command(); // Get the clap::Command struct
+    let cmd = Args::command();
 
     // --- Generate Man Page ---
     let man_path = out_path.join("intercept-bounce.1");
-    let mut man_file = fs::File::create(&man_path)?; // Make man_file mutable
-    println!("Generating man page: {man_path:?}"); // Use inline formatting
-    Man::new(cmd.clone()).render(&mut man_file)?; // Pass a mutable reference
+    let mut man_file = fs::File::create(&man_path)?;
+    println!("Generating man page: {man_path:?}");
+    Man::new(cmd.clone()).render(&mut man_file)?;
 
     // --- Generate Shell Completions ---
-    let bin_name = "intercept-bounce"; // Your binary name
-    // Generate for supported shells explicitly
+    let bin_name = "intercept-bounce";
     for shell in [
         Shell::Bash,
         Shell::Elvish,
@@ -38,11 +36,11 @@ fn main() -> Result<(), Error> {
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
-            _ => continue, // Skip unknown/unsupported shells if any appear in future versions
+            _ => continue, // Should not happen with explicit list
         };
         let completions_path = out_path.join(format!("{bin_name}.{ext}"));
         println!("Generating completion file: {completions_path:?}");
-        // Generate directly to the final path, ensuring the target directory exists
+        // Ensure the target directory exists.
         if let Some(parent) = completions_path.parent() {
              fs::create_dir_all(parent)?;
         }

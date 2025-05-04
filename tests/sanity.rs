@@ -1,11 +1,11 @@
 use assert_cmd::Command;
 use input_linux_sys::{input_event, timeval, EV_KEY};
-use predicates::prelude::*; // For stderr assertions
-use serde::Deserialize; // Import the Deserialize trait
+use predicates::prelude::*;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::mem::size_of;
-use std::process::Output; // Import Output struct // For parsing JSON stats
+use std::process::Output;
 
 const KEY_A: u16 = 30;
 const KEY_B: u16 = 48;
@@ -39,118 +39,104 @@ fn non_key_ev(ts: u64) -> input_event {
 
 // Helper to serialize events into bytes
 fn events_to_bytes(events: &[input_event]) -> Vec<u8> {
-    let mut bytes = Vec::new();
+    let mut bytes = Vec::with_capacity(events.len() * size_of::<input_event>());
     for ev in events {
+        // Safety: input_event is POD and the slice points to valid memory owned by ev.
         unsafe {
-            bytes
-                .write_all(std::slice::from_raw_parts(
-                    ev as *const _ as *const u8,
-                    size_of::<input_event>(),
-                ))
-                .unwrap();
+            bytes.write_all(std::slice::from_raw_parts(
+                ev as *const _ as *const u8,
+                size_of::<input_event>(),
+            ))
         }
+        .expect("Failed to write event to byte vector");
     }
     bytes
 }
 
 #[test]
 fn drops_bounce() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(3_000, KEY_A, 1); // Press A again at 3ms (bounce)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(3_000, KEY_A, 1); // Bounce
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1]; // Only the first event should pass
+    let expected_events = vec![e1]; // Only e1 should pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
-    // Execute the command and capture output
-    let output_result = cmd.output();
+    let output = cmd.output().expect("Failed to execute command");
 
-    // Check if the command execution itself failed
-    let output = match output_result {
-        Ok(out) => out,
-        Err(e) => {
-            panic!("Failed to execute command: {}", e);
-        }
-    };
-
-    // Assert that the command exited successfully
     assert!(
         output.status.success(),
         "Command exited with non-zero status: {:?}",
         output.status
     );
 
-    // Now assert the stdout content
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Bounce event was not dropped"
     );
 }
 
 #[test]
 fn passes_outside_window() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(6_000, KEY_A, 1); // Press A again at 6ms (outside 5ms window)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(6_000, KEY_A, 1); // Outside 5ms window
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1, e2]; // Both events should pass
+    let expected_events = vec![e1, e2]; // Both should pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Event outside window was dropped"
     );
 }
 
 #[test]
 fn passes_non_key_events() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = non_key_ev(1_000); // SYN event at 1ms
-    let e3 = key_ev(3_000, KEY_A, 1); // Press A again at 3ms (bounce)
-    let e4 = non_key_ev(4_000); // SYN event at 4ms
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = non_key_ev(1_000); // SYN event
+    let e3 = key_ev(3_000, KEY_A, 1); // Bounce
+    let e4 = non_key_ev(4_000); // SYN event
     let input_events = vec![e1, e2, e3, e4];
-    let expected_events = vec![e1, e2, e4]; // Key bounce (e3) dropped, SYN events pass
+    let expected_events = vec![e1, e2, e4]; // Bounce e3 dropped, SYN events pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Non-key event was dropped or bounce was not filtered correctly"
     );
 }
 
 #[test]
 fn filters_different_keys_independently() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(2_000, KEY_B, 1); // Press B at 2ms
-    let e3 = key_ev(3_000, KEY_A, 1); // Press A again at 3ms (bounce of e1)
-    let e4 = key_ev(4_000, KEY_B, 1); // Press B again at 4ms (bounce of e2)
-    let e5 = key_ev(6_000, KEY_A, 1); // Press A again at 6ms (outside bounce window of e1)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(2_000, KEY_B, 1);
+    let e3 = key_ev(3_000, KEY_A, 1); // Bounce of e1
+    let e4 = key_ev(4_000, KEY_B, 1); // Bounce of e2
+    let e5 = key_ev(6_000, KEY_A, 1); // Outside bounce window of e1
     let input_events = vec![e1, e2, e3, e4, e5];
     let expected_events = vec![e1, e2, e5]; // Bounces e3 and e4 dropped
 
@@ -159,23 +145,22 @@ fn filters_different_keys_independently() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Filtering affected different keys incorrectly"
     );
 }
 
 #[test]
 fn filters_key_release() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(1_000, KEY_A, 0); // Release A at 1ms
-    let e3 = key_ev(3_000, KEY_A, 0); // Release A again at 3ms (bounce of e2)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(1_000, KEY_A, 0);
+    let e3 = key_ev(3_000, KEY_A, 0); // Bounce of e2
     let input_events = vec![e1, e2, e3];
     let expected_events = vec![e1, e2]; // Bounce e3 dropped
 
@@ -184,88 +169,84 @@ fn filters_key_release() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Key release bounce was not filtered"
     );
 }
 
 #[test]
 fn filters_key_repeat() {
-    // Key repeats (value 2) are NOT debounced: all repeat events should pass, regardless of timing.
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(500_000, KEY_A, 2); // Repeat A at 500ms (normal repeat)
-    let e3 = key_ev(502_000, KEY_A, 2); // Repeat A again at 502ms (would be "bounce" if we debounced repeats)
+    // Key repeats (value 2) are NOT debounced.
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(500_000, KEY_A, 2); // Repeat
+    let e3 = key_ev(502_000, KEY_A, 2); // Repeat (would be bounce if repeats were debounced)
     let input_events = vec![e1, e2, e3];
-    let expected_events = vec![e1, e2, e3]; // All repeats should pass
+    let expected_events = vec![e1, e2, e3]; // All should pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Key repeat events should not be debounced"
     );
 }
 
 #[test]
 fn window_zero_passes_all() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(1_000, KEY_A, 1); // Press A again at 1ms (would be bounce with window > 1)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(1_000, KEY_A, 1); // Would be bounce with window > 1ms
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1, e2]; // Both should pass when window is 0
+    let expected_events = vec![e1, e2]; // Both pass with window 0
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("0ms") // 0ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("0ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Events were filtered when window was 0"
     );
 }
 
 #[test]
 fn handles_time_going_backwards() {
-    let e1 = key_ev(5_000, KEY_A, 1); // Press A at 5ms
-    let e2 = key_ev(3_000, KEY_A, 1); // Press A "again" at 3ms (time jumped back)
+    let e1 = key_ev(5_000, KEY_A, 1); // @ 5ms
+    let e2 = key_ev(3_000, KEY_A, 1); // @ 3ms (time jumped back)
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1, e2]; // Both events should pass
+    let expected_events = vec![e1, e2]; // Both should pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("5ms") // 5ms window - ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("5ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Event with earlier timestamp was dropped"
     );
 }
@@ -274,24 +255,23 @@ fn handles_time_going_backwards() {
 fn filters_just_below_window_boundary() {
     const WINDOW_MS: u64 = 10;
     let window_us = WINDOW_MS * 1_000;
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(window_us - 1, KEY_A, 1); // Press A again just inside window (9.999ms)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(window_us - 1, KEY_A, 1); // Just inside window (9.999ms)
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1]; // e2 should be filtered
+    let expected_events = vec![e1]; // e2 filtered
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg(format!("{}ms", WINDOW_MS))
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Event just inside window boundary was not filtered"
     );
 }
@@ -300,87 +280,70 @@ fn filters_just_below_window_boundary() {
 fn passes_at_window_boundary() {
     const WINDOW_MS: u64 = 10;
     let window_us = WINDOW_MS * 1_000;
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(window_us, KEY_A, 1); // Press A again exactly at window boundary (10.000ms)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(window_us, KEY_A, 1); // Exactly at window boundary (10.000ms)
     let input_events = vec![e1, e2];
-    let expected_events = vec![e1, e2]; // e2 should pass
+    let expected_events = vec![e1, e2]; // e2 passes
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg(format!("{}ms", WINDOW_MS))
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Event exactly at window boundary was filtered"
     );
 }
 
-// Removed passes_all_with_bypass test, as --window 0 serves this purpose.
-// The window_zero_passes_all test covers this scenario.
 
 #[test]
 fn test_complex_sequence() {
-    const WINDOW_MS: u64 = 10; // 10ms window
+    const WINDOW_MS: u64 = 10;
     let window_us = WINDOW_MS * 1_000;
 
-    // Define a complex sequence of events
-    let e1 = key_ev(0, KEY_A, 1); // A Press (Pass)
-    let e2 = key_ev(window_us / 2, KEY_A, 1); // A Press (Bounce) - within window of e1
-    let e3 = key_ev(window_us + 1, KEY_A, 0); // A Release (Pass) - outside window of e1
-    let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0); // A Release (Bounce) - within window of e3
-    let e5 = non_key_ev(window_us * 2); // SYN event (Pass)
-    let e6 = key_ev(window_us * 2 + 1, KEY_B, 1); // B Press (Pass)
-    let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // B Repeat (Pass) - Different value than e6
-    let e8 = key_ev(window_us * 3, KEY_A, 1); // A Press (Pass) - outside window of e3/e4
-    let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1); // A Press (Bounce) - within window of e8
-    let e10 = key_ev(window_us * 4, KEY_B, 2); // B Repeat (Pass) - outside window of e6/e7
+    let e1 = key_ev(0, KEY_A, 1);                                // Pass (A Press)
+    let e2 = key_ev(window_us / 2, KEY_A, 1);                    // Bounce (A Press)
+    let e3 = key_ev(window_us + 1, KEY_A, 0);                    // Pass (A Release)
+    let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0);    // Bounce (A Release)
+    let e5 = non_key_ev(window_us * 2);                          // Pass (SYN)
+    let e6 = key_ev(window_us * 2 + 1, KEY_B, 1);                // Pass (B Press)
+    let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // Pass (B Repeat)
+    let e8 = key_ev(window_us * 3, KEY_A, 1);                    // Pass (A Press)
+    let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1);    // Bounce (A Press)
+    let e10 = key_ev(window_us * 4, KEY_B, 2);                   // Pass (B Repeat)
 
     let input_events = vec![e1, e2, e3, e4, e5, e6, e7, e8, e9, e10];
-
-    // Define the expected output sequence (events that should NOT be dropped)
-    // Note: e7 (KEY_B, value 2) should PASS because its value is different from e6 (KEY_B, value 1).
-    // The bounce filter only drops events with the *same* key code AND *same* value within the window.
-    let expected_events = vec![
-        e1,  // A Press (Pass)
-        e3,  // A Release (Pass)
-        e5,  // SYN event (Pass)
-        e6,  // B Press (Pass)
-        e7,  // B Repeat (Pass) - Different value than e6, so not a bounce
-        e8,  // A Press (Pass)
-        e10, // B Repeat (Pass)
-    ];
+    let expected_events = vec![e1, e3, e5, e6, e7, e8, e10]; // Bounces e2, e4, e9 dropped
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS)) // ADDED ms SUFFIX
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg(format!("{}ms", WINDOW_MS))
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd.output().unwrap();
-    let actual_stdout_bytes = output.stdout;
 
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Complex event sequence was not filtered correctly"
     );
 }
 
 #[test]
 fn stats_output_human_readable() {
-    let e1 = key_ev(0, KEY_A, 1); // Pass
-    let e2 = key_ev(3_000, KEY_A, 1); // Bounce (5ms window)
-    let e3 = key_ev(10_000, KEY_B, 1); // Pass
-    let e4 = key_ev(12_000, KEY_B, 1); // Bounce (5ms window)
+    let e1 = key_ev(0, KEY_A, 1);       // Pass
+    let e2 = key_ev(3_000, KEY_A, 1);   // Bounce
+    let e3 = key_ev(10_000, KEY_B, 1);  // Pass
+    let e4 = key_ev(12_000, KEY_B, 1);  // Bounce
     let e5 = key_ev(100_000, KEY_A, 0); // Pass (Release)
     let input_events = vec![e1, e2, e3, e4, e5];
     let input_bytes = events_to_bytes(&input_events);
@@ -388,76 +351,56 @@ fn stats_output_human_readable() {
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms")
-        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     cmd.assert()
-        .success() // Check exit code 0
+        .success()
         .stderr(predicate::str::contains(
             "--- Overall Statistics (Cumulative) ---",
         ))
-        .stderr(predicate::str::contains("Key Events Processed: 5")) // All 5 key events
+        .stderr(predicate::str::contains("Key Events Processed: 5"))
         .stderr(predicate::str::contains("Key Events Passed:   3")) // e1, e3, e5
         .stderr(predicate::str::contains("Key Events Dropped:  2")) // e2, e4
         .stderr(predicate::str::contains("Key [KEY_A] (30):"))
-        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e2 dropped
-        // Updated assertion format for milliseconds
+        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e2
         .stderr(predicate::str::contains(
-            "Bounce Time: 3.0 ms / 3.0 ms / 3.0 ms",
-        )) // Check timing for e2 drop
+            "Bounce Time: 3.0 ms / 3.0 ms / 3.0 ms", // Timing for e2
+        ))
         .stderr(predicate::str::contains("Key [KEY_B] (48):"))
-        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e4 dropped
-        // Updated assertion format for milliseconds
+        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e4
         .stderr(predicate::str::contains(
-            "Bounce Time: 2.0 ms / 2.0 ms / 2.0 ms",
-        )); // Check timing for e4 drop
+            "Bounce Time: 2.0 ms / 2.0 ms / 2.0 ms", // Timing for e4
+        ));
 }
 
 #[test]
 fn stats_output_json() {
-    let e1 = key_ev(0, KEY_A, 1); // Pass
-    let e2 = key_ev(3_000, KEY_A, 1); // Bounce (5ms window)
+    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e2 = key_ev(3_000, KEY_A, 1); // Bounce
     let input_events = vec![e1, e2];
     let input_bytes = events_to_bytes(&input_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms")
-        .arg("--stats-json") // Enable JSON output
-        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
+        .arg("--stats-json")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output = cmd.output().expect("Failed to run command");
     assert!(output.status.success());
 
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
-    // Find the JSON part (it might be mixed with other logs if verbose)
-    // Find the first line that starts with '{' and take all lines from there
-    let json_lines: Vec<&str> = stderr_str
+    // Find the first line that starts with '{' and parse the first JSON object.
+    let json_part = stderr_str
         .lines()
-        .skip_while(|l| !l.trim().starts_with('{'))
-        .collect();
+        .find(|l| l.trim().starts_with('{'))
+        .expect("No JSON block found in stderr");
 
-    // Join the JSON lines back into a single string
-    let json_part = json_lines.join("\n");
+    let stats_json: Value = serde_json::from_str(json_part)
+        .unwrap_or_else(|e| panic!("Failed to parse JSON from stderr: {}\nStderr:\n{}", e, stderr_str));
 
-    // Use a Deserializer to parse only the first JSON object found
-    // Ensure json_part is not empty before creating Deserializer
-    assert!(!json_part.is_empty(), "No JSON block found in stderr");
-
-    let mut deserializer = serde_json::Deserializer::from_str(json_part.as_str());
-    let stats_json: Value = match Value::deserialize(&mut deserializer) {
-        Ok(val) => val,
-        Err(e) => panic!(
-            "Failed to deserialize first JSON object from stderr starting at detected block: Error: {}, starts with '{}', full stderr: {}",
-            e, json_lines.first().unwrap_or(&""), stderr_str
-        ),
-    };
-
-    // Ensure the deserializer consumed something and check for trailing data if needed (optional)
-    // let remaining_bytes = deserializer.byte_offset();
-    // assert!(remaining_bytes > 0, "Deserializer did not consume any bytes");
-    // You could check if json_part[remaining_bytes..].trim().is_empty() if strictness is required
 
     assert_eq!(stats_json["report_type"], "Cumulative");
     assert_eq!(stats_json["key_events_processed"], 2);
@@ -498,73 +441,73 @@ fn stats_output_json() {
 
 #[test]
 fn log_bounces_flag() {
-    let e1 = key_ev(0, KEY_A, 1); // Pass
-    let e2 = key_ev(3_000, KEY_A, 1); // Bounce (5ms window)
+    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e2 = key_ev(3_000, KEY_A, 1); // Bounce
     let input_events = vec![e1, e2];
     let input_bytes = events_to_bytes(&input_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms")
-        .arg("--log-bounces") // Enable bounce logging
-        .env("RUST_LOG", "intercept_bounce=info") // Set specific level for log check
+        .arg("--log-bounces")
+        .env("RUST_LOG", "intercept_bounce=info") // Ensure info level is enabled
         .write_stdin(input_bytes);
 
     cmd.assert()
         .success()
-        // Check for the specific log line format for a dropped event
+        // Check for the DROP log line for the bounced event.
         .stderr(
             predicate::str::contains("[DROP]").and(predicate::str::contains("Key [KEY_A] (30)")),
-        );
-    // Check that PASS lines are NOT present (unless RUST_LOG=trace/debug)
-    // .stderr(predicate::str::contains("[PASS]").not()); // This might fail if info logs are present
+        )
+        // Ensure the PASS line for e1 is NOT present at info level without --log-all-events.
+        .stderr(predicate::str::contains("[PASS]").not());
 }
 
 #[test]
 fn log_all_events_flag() {
-    let e1 = key_ev(0, KEY_A, 1); // Pass
-    let e2 = key_ev(3_000, KEY_A, 1); // Bounce (5ms window)
-    let e3 = non_key_ev(4_000); // SYN (Pass)
+    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e2 = key_ev(3_000, KEY_A, 1); // Bounce
+    let e3 = non_key_ev(4_000);       // SYN (Pass)
     let input_events = vec![e1, e2, e3];
     let input_bytes = events_to_bytes(&input_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
         .arg("5ms")
-        .arg("--log-all-events") // Enable all logging
-        .env("RUST_LOG", "intercept_bounce=info") // Set specific level for log check
+        .arg("--log-all-events")
+        .env("RUST_LOG", "intercept_bounce=info") // Ensure info level is enabled
         .write_stdin(input_bytes);
 
     cmd.assert()
         .success()
-        // Check for PASS log for e1
+        // Check for PASS log for e1.
         .stderr(
             predicate::str::contains("[PASS]").and(predicate::str::contains("Key [KEY_A] (30)")),
         )
-        // Check for DROP log for e2
+        // Check for DROP log for e2.
         .stderr(
             predicate::str::contains("[DROP]").and(predicate::str::contains("Key [KEY_A] (30)")),
         )
-        // Check that SYN events are NOT logged even with --log-all-events
+        // Check that SYN events are NOT logged (only key events are logged).
         .stderr(predicate::str::contains("EV_SYN").not());
 }
 
 #[test]
 fn test_debounce_zero_passes_all() {
-    let e1 = key_ev(0, KEY_A, 1); // Press A at 0ms
-    let e2 = key_ev(1_000, KEY_A, 1); // Press A again at 1ms (would be bounce with window > 1)
-    let e3 = key_ev(2_000, KEY_A, 0); // Release A at 2ms
-    let e4 = key_ev(3_000, KEY_A, 0); // Release A again at 3ms (would be bounce with window > 1)
+    let e1 = key_ev(0, KEY_A, 1);
+    let e2 = key_ev(1_000, KEY_A, 1); // Would bounce if window > 1ms
+    let e3 = key_ev(2_000, KEY_A, 0);
+    let e4 = key_ev(3_000, KEY_A, 0); // Would bounce if window > 1ms
     let input_events = vec![e1, e2, e3, e4];
-    let expected_events = vec![e1, e2, e3, e4]; // All should pass
+    let expected_events = vec![e1, e2, e3, e4]; // All pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg("0ms") // Explicitly set 0ms window
-        .env("RUST_LOG", "warn") // Set consistent log level
+        .arg("0ms")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output: Output = cmd
@@ -572,27 +515,26 @@ fn test_debounce_zero_passes_all() {
         .expect("Failed to run command with 0ms debounce");
     assert!(output.status.success(), "Command failed with 0ms debounce");
 
-    let actual_stdout_bytes = output.stdout;
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Events were filtered when debounce window was 0ms"
     );
 }
 
 #[test]
 fn test_only_non_key_events() {
-    let e1 = non_key_ev(1000); // SYN event at 1ms
-    let e2 = non_key_ev(2000); // SYN event at 2ms
-    let e3 = non_key_ev(3000); // SYN event at 3ms
+    let e1 = non_key_ev(1000);
+    let e2 = non_key_ev(2000);
+    let e3 = non_key_ev(3000);
     let input_events = vec![e1, e2, e3];
-    let expected_events = vec![e1, e2, e3]; // All should pass
+    let expected_events = vec![e1, e2, e3]; // All pass
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
-    cmd.arg("--stats-json") // Get stats output
-        .env("RUST_LOG", "warn") // Set consistent log level for stats tests
+    cmd.arg("--stats-json")
+        .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
     let output = cmd
@@ -603,31 +545,22 @@ fn test_only_non_key_events() {
         "Command failed with only non-key events"
     );
 
-    // Check stdout contains all input events
-    let actual_stdout_bytes = output.stdout;
+    // Check stdout contains all input events.
     assert_eq!(
-        actual_stdout_bytes, expected_output_bytes,
+        output.stdout, expected_output_bytes,
         "Non-key events were filtered or modified"
     );
 
-    // Check stderr stats
+    // Check stderr stats.
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
-    // Find the first line that starts with '{' and take all lines from there
-    let json_lines: Vec<&str> = stderr_str
+    let json_part = stderr_str
         .lines()
-        .skip_while(|l| !l.trim().starts_with('{'))
-        .collect();
-
-    // Join the JSON lines back into a single string
-    let json_part = json_lines.join("\n");
-
-    // Ensure json_part is not empty before creating Deserializer
-    assert!(!json_part.is_empty(), "No JSON block found in stderr");
-    let mut deserializer = serde_json::Deserializer::from_str(json_part.as_str());
-    let stats_json: Value = Value::deserialize(&mut deserializer)
+        .find(|l| l.trim().starts_with('{'))
+        .expect("No JSON block found in stderr");
+    let stats_json: Value = serde_json::from_str(json_part)
         .expect("Failed to deserialize JSON from non-key event stderr");
 
-    // Assert that key event counts are zero
+    // Assert that key event counts are zero.
     assert_eq!(
         stats_json["key_events_processed"], 0,
         "Processed count should be 0 for non-key events"
