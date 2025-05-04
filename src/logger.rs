@@ -12,7 +12,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError}; // Use directly
 use chrono::Local;
 use input_linux_sys::{input_event, EV_MSC, EV_SYN};
 use std::io;
-use std::ops::Deref; // Import Deref
+// Removed unused: use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use opentelemetry::metrics::{Counter, Meter}; // Import OTLP metrics types
 use tracing::{instrument, Span}; // Import instrument and Span

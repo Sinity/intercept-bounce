@@ -5,6 +5,7 @@ use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::io::{self, ErrorKind};
+use std::os::fd::RawFd; // Import RawFd
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
 use std::sync::{
@@ -28,7 +29,12 @@ use tracing::{debug, error, info, instrument, trace, warn, Level, Span}; // Impo
 use opentelemetry::global as otel_global;
 use opentelemetry::metrics::{Meter, MeterProvider as _}; // Import Meter trait and MeterProvider trait
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{metrics::MeterProvider, runtime, trace as sdktrace, Resource};
+use opentelemetry_sdk::{
+    metrics::MeterProvider as SdkMeterProvider, // Alias the SDK struct
+    runtime,
+    trace as sdktrace,
+    Resource,
+};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use tracing_opentelemetry; // Import the crate
 
@@ -64,7 +70,8 @@ fn set_high_priority() {
 }
 
 // --- OTLP Initialization ---
-fn init_otel(cfg: &Config) -> Option<(MeterProvider, sdktrace::Tracer, Meter)> {
+// Update function signature and return type to use the aliased SdkMeterProvider
+fn init_otel(cfg: &Config) -> Option<(SdkMeterProvider, sdktrace::Tracer, Meter)> {
     let otel_endpoint = cfg.otel_endpoint.as_ref()?;
     info!(endpoint = %otel_endpoint, "Initializing OpenTelemetry exporter...");
 
@@ -114,17 +121,21 @@ fn init_tracing(cfg: &Config) -> Option<Meter> { // Return Option<Meter>
             EnvFilter::new("intercept_bounce=info") // Fallback
         });
 
-    let mut registry = tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(filter);
+    // --- Build Subscriber ---
+    let registry_base = tracing_subscriber::registry().with(fmt_layer).with(filter);
 
     // --- OTLP Layer (if configured) ---
     let otel_meter = if let Some((_meter_provider, tracer, meter)) = init_otel(cfg) {
         let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-        registry = registry.with(otel_layer); // Add the layer
+        // Initialize with the OTLP layer included
+        registry_base.with(otel_layer).init();
         Some(meter) // Return the meter for passing to logger
-    } else { None };
-    registry.init(); // Initialize the subscriber registry
+    } else {
+        // Initialize without the OTLP layer
+        registry_base.init();
+        None
+    };
+    // registry.init(); // Initialization is now conditional above
 
     info!(version = env!("CARGO_PKG_VERSION"),
         // Use option_env! for git sha to avoid build errors outside git repo
@@ -496,7 +507,9 @@ fn main() -> io::Result<()> {
 
     // --- OTLP Shutdown ---
     otel_global::shutdown_tracer_provider(); // Cleanly shutdown OTLP tracer
-    otel_global::shutdown_meter_provider(); // Cleanly shutdown OTLP meter provider
+    // Meter provider shutdown is typically handled by dropping the provider instance.
+    // We don't store it directly in main, so removing the explicit call.
+    // otel_global::shutdown_meter_provider();
     info!("Application exiting successfully");
     Ok(())
 }
