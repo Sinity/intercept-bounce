@@ -162,18 +162,11 @@ fn bench_logger_process_message(c: &mut Criterion) {
     let near_miss_threshold = Duration::from_millis(100); // 100ms
     let log_interval = Duration::ZERO;
 
-    // Create sample EventInfo messages
-    let passed_info = create_event_info(
-        debounce_time.as_micros() as u64,
-        30,
-        1,
-        false,
-        None,
-        Some(0),
-    ); // Passed event
-    let bounced_info = create_event_info(15_000, 30, 1, true, Some(5_000), Some(10_000)); // Bounced event (adjust ts if needed)
-    let near_miss_info = create_event_info(25_000, 30, 1, false, None, Some(10_000)); // Near miss passed event (adjust ts if needed)
-    let syn_info = create_syn_info(30_000); // SYN event
+    // These are no longer needed here as they are created inside the closures below
+    // let passed_info = ...
+    // let bounced_info = ...
+    // let near_miss_info = ...
+    // let syn_info = ...
 
     // Benchmark processing messages with different logging configurations
     c.bench_function("logger::process_message_passed_no_log", |b| {
@@ -445,8 +438,7 @@ fn bench_logger_channel_send(c: &mut Criterion) {
     const QUEUE_CAPACITY: usize = 1024;
 
     // Create a dummy message to send
-    let dummy_event_info = create_event_info(1000, 30, 1, false, None, None);
-    // let message = LogMessage::Event(dummy_event_info); // This is unused now
+    // let dummy_event_info = create_event_info(1000, 30, 1, false, None, None); // This is unused now
 
     // Benchmark only crossbeam-channel
     let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
@@ -464,9 +456,9 @@ fn bench_logger_channel_send(c: &mut Criterion) {
                 let mut success_count = 0;
                 let mut drop_count = 0;
                 for _ in 0..BURST_SIZE {
-                    // Recreate the message inside the loop as try_send takes ownership
-                    // Note: dummy_event_info itself doesn't need cloning here as it's Copy
-                    let msg_to_send = LogMessage::Event(dummy_event_info);
+                    // Recreate both EventInfo and LogMessage inside the loop
+                    let dummy_event_info_inner = create_event_info(1000, 30, 1, false, None, None);
+                    let msg_to_send = LogMessage::Event(dummy_event_info_inner);
                     match s.try_send(msg_to_send) {
                         Ok(_) => success_count += 1,
                         Err(_) => drop_count += 1,
