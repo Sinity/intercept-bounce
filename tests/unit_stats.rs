@@ -81,6 +81,7 @@ fn dummy_config(debounce_time: Duration, near_miss_threshold: Duration) -> Confi
         false,          // stats_json
         false,          // verbose
         "info".to_string(), // log_filter
+        None,           // otel_endpoint
     )
 }
 
@@ -243,6 +244,7 @@ fn stats_json_output_structure() {
         true, // Assume JSON is enabled for this test
         false,
         "info".to_string(),
+        None, // otel_endpoint
     );
 
     stats.record_event_info_with_config(&passed_event_info(ev1, 1000, None), &config);
