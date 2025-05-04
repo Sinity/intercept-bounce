@@ -22,9 +22,10 @@ pub struct BounceFilter {
     last_event_us: [[u64; 3]; 1024],
     // Ring buffer to store the last N *passed* events for debugging purposes.
     // Needs input_event to derive Copy or Default, or use MaybeUninit.
-    // For now, let's assume input_event can be Default (it can't directly).
     // We'll use Option<input_event> and initialize with None.
+    #[cfg(feature = "debug_ring_buffer")]
     recent_passed_events: [Option<input_event>; 64],
+    #[cfg(feature = "debug_ring_buffer")]
     recent_event_idx: usize,
     // Timestamp of the very first event processed, used for calculating total runtime.
     overall_first_event_us: Option<u64>,
@@ -38,7 +39,9 @@ impl BounceFilter {
     pub fn new() -> Self {
         BounceFilter {
             last_event_us: [[u64::MAX; 3]; 1024], // Initialize directly
+            #[cfg(feature = "debug_ring_buffer")]
             recent_passed_events: [(); 64].map(|_| None), // Initialize with None
+            #[cfg(feature = "debug_ring_buffer")]
             recent_event_idx: 0,
             overall_first_event_us: None,
             overall_last_event_us: None,
@@ -92,8 +95,11 @@ impl BounceFilter {
         if last_passed_us == u64::MAX {
             self.last_event_us[key_code_idx][key_value_idx] = event_us;
             // Record passed event in ring buffer
-            self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
-            self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+            #[cfg(feature = "debug_ring_buffer")]
+            {
+                self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
+                self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+            }
             return (false, None, None);
         }
 
@@ -111,8 +117,11 @@ impl BounceFilter {
         // If we reach here, the event is NOT a bounce. Record as passed.
         self.last_event_us[key_code_idx][key_value_idx] = event_us;
         // Record passed event in ring buffer
-        self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
-        self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+        #[cfg(feature = "debug_ring_buffer")]
+        {
+            self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
+            self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+        }
 
         // Return non-bounce, providing the timestamp of the previously passed event.
         (false, None, Some(last_passed_us))
