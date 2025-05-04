@@ -264,22 +264,32 @@ fn stats_json_output_structure() {
     assert!(s.contains("\"key_events_processed\":"));
     assert!(s.contains("\"key_events_passed\":"));
     assert!(s.contains("\"key_events_dropped\":"));
-    assert!(s.contains("\"per_key_stats\":"));
-    // Check if KEY_A (30) stats are present (since it had a bounce)
-    assert!(s.contains("\"30\":"));
-    assert!(s.contains("\"press\":"));
+    assert!(s.contains("\"per_key_stats\": [")); // Should be an array now
+    // Check if KEY_A (30) stats object is present within the array
+    assert!(s.contains("\"key_code\": 30"));
+    assert!(s.contains("\"key_name\": \"KEY_A\""));
+    assert!(s.contains("\"stats\": {")); // Nested stats object
+    assert!(s.contains("\"press\": {"));
     assert!(s.contains("\"count\": 1")); // Bounce count for press
     assert!(s.contains("\"timings_us\": ["));
     assert!(s.contains("500")); // Check bounce timing value
-    assert!(s.contains("\"per_key_passed_near_miss_timing\":"));
-    // Check if near miss for KEY_A, value 1 is present
-    assert!(s.contains("\"[30,1]\": ["));
+    assert!(s.contains("\"per_key_passed_near_miss_timing\": [")); // Should be an array now
+    // Check if near miss object for KEY_A, value 1 is present
+    assert!(s.contains("\"key_code\": 30"));
+    assert!(s.contains("\"key_value\": 1"));
+    assert!(s.contains("\"key_name\": \"KEY_A\""));
+    assert!(s.contains("\"value_name\": \"Press\""));
+    assert!(s.contains("\"count\": 1")); // Near miss count
+    assert!(s.contains("\"timings_us\": ["));
     // Check near miss timing value (difference between ev3 and ev1)
     assert!(s.contains("11000")); // 12000 (ev3_ts) - 1000 (ev1_ts) = 11000
+    assert!(s.contains("\"min_us\": 11000")); // Check calculated min
+    assert!(s.contains("\"avg_us\": 11000")); // Check calculated avg
+    assert!(s.contains("\"max_us\": 11000")); // Check calculated max
+
 
     // Ensure keys with no drops/near-misses are NOT present (e.g., key B=48)
-    assert!(!s.contains("\"48\":"));
-    assert!(!s.contains("\"[48,")); // Check no near miss for key 48
+    assert!(!s.contains("\"key_code\": 48")); // Check no object for key 48
 }
 
 #[test]

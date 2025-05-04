@@ -125,3 +125,13 @@ pub fn get_event_type_name(type_: u16) -> &'static str {
         _ => "Unknown",
     }
 }
+
+#[inline]
+pub fn get_value_name(value: i32) -> &'static str {
+    match value {
+        0 => "Release",
+        1 => "Press",
+        2 => "Repeat",
+        _ => "Unknown",
+    }
+}

@@ -1,11 +1,11 @@
 // This module defines the StatsCollector struct and related types
 // used by the logger thread to accumulate and report statistics.
 
-use crate::filter::keynames::get_key_name; // Keep keynames import
+use crate::filter::keynames::{get_key_name, get_value_name}; // Import new helper
 use crate::util; // Import the new util module
 use crate::logger::EventInfo; // Use EventInfo from logger module
 use serde::Serialize;
-use std::collections::HashMap;
+// Remove HashMap import, use Vec instead for JSON arrays
 use std::time::Duration; // Import Duration
 use std::io::Write; // Need Write for print_stats_json
 
@@ -310,22 +310,61 @@ impl StatsCollector {
         // let log_bounces = config.log_bounces;
         // let log_interval_us = config.log_interval_us();
 
-        let mut per_key_stats_map = HashMap::new();
-        for (key_code, stats) in self.per_key_stats.iter().enumerate() {
-            if stats.press.count > 0 || stats.release.count > 0 || stats.repeat.count > 0 {
-                per_key_stats_map.insert(key_code as u16, stats);
+        // --- Prepare Per-Key Drop Stats for JSON ---
+        let mut per_key_stats_json_vec = Vec::new();
+        for (key_code_usize, stats) in self.per_key_stats.iter().enumerate() {
+            let total_processed_for_key = stats.press.total_processed + stats.release.total_processed + stats.repeat.total_processed;
+            let total_dropped_for_key = stats.press.count + stats.release.count + stats.repeat.count;
+
+            if total_dropped_for_key > 0 { // Only include keys with drops
+                let key_code = key_code_usize as u16;
+                let key_name = get_key_name(key_code);
+                let drop_percentage = if total_processed_for_key > 0 {
+                    (total_dropped_for_key as f64 / total_processed_for_key as f64) * 100.0
+                } else {
+                    0.0
+                };
+
+                per_key_stats_json_vec.push(PerKeyStatsJson {
+                    key_code,
+                    key_name,
+                    total_processed: total_processed_for_key,
+                    total_dropped: total_dropped_for_key,
+                    drop_percentage,
+                    stats, // Include the detailed press/release/repeat stats
+                });
             }
         }
 
-        let mut near_miss_map = HashMap::new();
+        // --- Prepare Near-Miss Stats for JSON ---
+        let mut near_miss_json_vec = Vec::new();
         for (idx, timings) in self.per_key_passed_near_miss_timing.iter().enumerate() {
             if !timings.is_empty() {
                 let key_code = (idx / 3) as u16;
                 let key_value = (idx % 3) as i32;
-                let key_str = format!("[{},{}]", key_code, key_value);
-                near_miss_map.insert(key_str, timings);
+                let key_name = get_key_name(key_code);
+                let value_name = get_value_name(key_value);
+
+                // Calculate min/avg/max for near-miss timings
+                let min_us = timings.iter().min().copied().unwrap_or(0);
+                let max_us = timings.iter().max().copied().unwrap_or(0);
+                let sum: u64 = timings.iter().sum();
+                let avg_us = if !timings.is_empty() { sum / timings.len() as u64 } else { 0 }; // Integer average is fine here
+
+                near_miss_json_vec.push(NearMissJson {
+                    key_code,
+                    key_value,
+                    key_name,
+                    value_name,
+                    count: timings.len(),
+                    timings_us: timings, // Reference the original timings vector
+                    min_us,
+                    avg_us,
+                    max_us,
+                });
             }
         }
+
 
         #[derive(Serialize)]
         struct ReportData<'a> {
@@ -341,8 +380,9 @@ impl StatsCollector {
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            per_key_stats: HashMap<u16, &'a KeyStats>,
-            per_key_passed_near_miss_timing: HashMap<String, &'a Vec<u64>>,
+            // Use the new Vec types for serialization
+            per_key_stats: Vec<PerKeyStatsJson<'a>>,
+            per_key_passed_near_miss_timing: Vec<NearMissJson<'a>>,
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
@@ -361,8 +401,8 @@ impl StatsCollector {
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
-            per_key_stats: per_key_stats_map,
-            per_key_passed_near_miss_timing: near_miss_map,
+            per_key_stats: per_key_stats_json_vec, // Use the prepared Vec
+            per_key_passed_near_miss_timing: near_miss_json_vec, // Use the prepared Vec
         };
 
         // We are printing individual reports (cumulative or periodic) as separate JSON objects
