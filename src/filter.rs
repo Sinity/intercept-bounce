@@ -19,7 +19,13 @@ pub struct BounceFilter {
     // Stores the timestamp (in microseconds) of the last event that *passed* the filter
     // for a given key code (index 0..1023) and key value (index 0=release, 1=press, 2=repeat).
     // Initialized with u64::MAX to indicate no event has passed yet.
-    last_event_us: Box<[[u64; 3]; 1024]>,
+    last_event_us: [[u64; 3]; 1024],
+    // Ring buffer to store the last N *passed* events for debugging purposes.
+    // Needs input_event to derive Copy or Default, or use MaybeUninit.
+    // For now, let's assume input_event can be Default (it can't directly).
+    // We'll use Option<input_event> and initialize with None.
+    recent_passed_events: [Option<input_event>; 64],
+    recent_event_idx: usize,
     // Timestamp of the very first event processed, used for calculating total runtime.
     overall_first_event_us: Option<u64>,
     // Timestamp of the very last event processed, used for calculating total runtime.
@@ -31,7 +37,9 @@ impl BounceFilter {
     #[must_use]
     pub fn new() -> Self {
         BounceFilter {
-            last_event_us: Box::new([[u64::MAX; 3]; 1024]),
+            last_event_us: [[u64::MAX; 3]; 1024], // Initialize directly
+            recent_passed_events: [(); 64].map(|_| None), // Initialize with None
+            recent_event_idx: 0,
             overall_first_event_us: None,
             overall_last_event_us: None,
         }
@@ -60,50 +68,53 @@ impl BounceFilter {
     pub fn check_event(
         &mut self,
         event: &input_event,
-        debounce_time: Duration, // Use Duration
+        debounce_time: Duration,
     ) -> (bool, Option<u64>, Option<u64>) {
-        // Calculate timestamp and update overall tracking
         let event_us = event::event_microseconds(event);
-        if self.overall_first_event_us.is_none() {
-            self.overall_first_event_us = Some(event_us);
-        }
+
+        // Update overall timestamps
+        if self.overall_first_event_us.is_none() { self.overall_first_event_us = Some(event_us); }
         self.overall_last_event_us = Some(event_us);
 
-        // Only apply debounce logic to EV_KEY press (1) and release (0) events
-        if !is_key_event(event) || event.value == 2 {
-            return (false, None, None); // Not a bounce, pass through
-        }
+        // --- Early returns for non-debounced events ---
+        // Pass non-key events or key repeats immediately
+        if !is_key_event(event) || event.value == 2 { return (false, None, None); }
 
-        // Check if key code and value indices are within bounds
+        // Check bounds for key code/value indices
         let key_code_idx = event.code as usize;
         let key_value_idx = event.value as usize;
-        if !(key_code_idx < 1024 && key_value_idx < 3) {
-            // Should not happen with standard keyboards, but handle defensively
-            return (false, None, None); // Pass through if out of bounds
-        }
+        if !(key_code_idx < 1024 && key_value_idx < 3) { return (false, None, None); } // Out of bounds
 
-        // Get the timestamp of the last passed event for this specific key/value
+        // --- Debounce logic ---
         let last_passed_us = self.last_event_us[key_code_idx][key_value_idx];
 
-        // If no previous event passed for this key/value, it cannot be a bounce
+        // If no previous event passed for this key/value, it cannot be a bounce. Record and pass.
         if last_passed_us == u64::MAX {
-            self.last_event_us[key_code_idx][key_value_idx] = event_us; // Record as passed
-            return (false, None, None); // Not a bounce, no previous passed event
+            self.last_event_us[key_code_idx][key_value_idx] = event_us;
+            // Record passed event in ring buffer
+            self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
+            self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+            return (false, None, None);
         }
 
         // Calculate time difference if possible (handles time going backwards)
         if let Some(diff_us) = event_us.checked_sub(last_passed_us) {
-            // Check if the difference is less than the debounce time (and debounce > 0)
+            // Check if the difference is within the debounce window.
             if debounce_time > Duration::ZERO && Duration::from_micros(diff_us) < debounce_time {
-                // It's a bounce! Return bounce info. Do NOT update last_event_us.
+                // It's a bounce! Return bounce info. Do NOT update last_event_us or ring buffer.
                 return (true, Some(diff_us), Some(last_passed_us));
             }
         }
+        // If time went backwards (checked_sub returned None), it's not a bounce.
 
-        // If we reach here, the event is NOT a bounce (either diff >= debounce_time,
-        // debounce_time is zero, or time went backwards).
-        self.last_event_us[key_code_idx][key_value_idx] = event_us; // Record as passed
-                                                                    // Return non-bounce, providing the timestamp of the previously passed event
+        // --- Event Passed ---
+        // If we reach here, the event is NOT a bounce. Record as passed.
+        self.last_event_us[key_code_idx][key_value_idx] = event_us;
+        // Record passed event in ring buffer
+        self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
+        self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+
+        // Return non-bounce, providing the timestamp of the previously passed event.
         (false, None, Some(last_passed_us))
     }
 

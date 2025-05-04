@@ -54,15 +54,15 @@ pub struct KeyStats {
 #[derive(Debug, Clone)]
 pub struct StatsCollector {
     /// Total count of key events processed (passed or dropped).
-    pub key_events_processed: u64,
+    pub key_events_processed: u664,
     /// Total count of key events that passed the filter.
     pub key_events_passed: u64,
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
-    pub per_key_stats: Box<[KeyStats; 1024]>,
+    pub per_key_stats: [KeyStats; 1024],
     /// Holds near-miss timings for passed events. Indexed by `keycode * 3 + value`.
-    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; 3072]>,
+    pub per_key_passed_near_miss_timing: [Vec<u64>; 3072],
 }
 
 // Implement Default to allow std::mem::take in logger.
@@ -76,9 +76,13 @@ impl StatsCollector {
     /// Creates a new StatsCollector with pre-allocated storage.
     #[must_use]
     pub fn with_capacity() -> Self {
-        let per_key_stats = Box::new([(); 1024].map(|_| KeyStats::default()));
+        // Use std::array::from_fn for direct initialization if needed, or map if simpler
+        // For KeyStats, default initialization works directly:
+        let per_key_stats = [(); 1024].map(|_| KeyStats::default());
+        // For Vec, we need to initialize each element:
         let per_key_passed_near_miss_timing =
-            Box::new([(); 3072].map(|_| Vec::with_capacity(1024)));
+            [(); 3072].map(|_| Vec::with_capacity(1024)); // Assuming initial capacity is desired
+
         StatsCollector {
             key_events_processed: 0,
             key_events_passed: 0,

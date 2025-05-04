@@ -11,38 +11,41 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_and_test:
-    name: Build & Test
+  nix_checks:
+    name: Nix Checks (Format, Clippy, Test, Build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25 # Use a recent version
         with:
-          toolchain: stable
-          components: clippy, rustfmt
+          nix_path: nixpkgs=channel:nixos-unstable # Or your preferred channel/flake input
+          # Enable experimental features for flakes if needed by your flake.nix
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            experimental-features = nix-command flakes
 
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v14 # Use a recent version
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          name: nix-community # Example public cache, replace if you have a private one
+          # authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}' # Uncomment for private cache
 
-      - name: Check formatting
-        run: cargo fmt --check
+      - name: Check formatting (via Nix devShell)
+        run: nix develop --command cargo fmt --check
 
-      - name: Run Clippy
-        run: cargo clippy -- -D warnings
+      - name: Run Clippy (via Nix devShell)
+        # Pass --all-targets if you have benches/examples/tests
+        run: nix develop --command cargo clippy --all-targets -- -D warnings
 
-      - name: Run tests
-        run: cargo test
+      - name: Run tests (via Nix devShell)
+        # Pass --all-targets if needed
+        run: nix develop --command cargo test --all-targets
 
-      - name: Build release binary
-        run: cargo build --release --verbose
+      - name: Build release binary (via Nix devShell)
+        run: nix develop --command cargo build --release --verbose
 
+      - name: Build Nix package
+        run: nix build .#packages.${{ runner.os == 'Linux' && 'x86_64-linux' || 'aarch64-darwin' }}.default # Adjust target system as needed
