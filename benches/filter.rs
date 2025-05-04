@@ -1,9 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use crossbeam_channel::bounded;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
-use intercept_bounce::filter::BounceFilter; // Add this import
 use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
+use intercept_bounce::filter::BounceFilter; // Add this import
 use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -12,10 +11,9 @@ use std::time::Duration;
 
 // Conditionally import queue/channel types for benchmark
 #[cfg(not(feature = "use_lockfree_queue"))]
-use crossbeam_channel::{bounded, Sender, Receiver};
+use crossbeam_channel::{bounded, Receiver, Sender};
 #[cfg(feature = "use_lockfree_queue")]
 use crossbeam_queue::ArrayQueue;
-
 
 // Helper to create an input_event
 fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
@@ -405,9 +403,10 @@ fn bench_stats_collector_print(c: &mut Criterion) {
     c.bench_function("stats::print_human", |b| {
         b.iter(|| {
             let mut writer = std::io::sink(); // Discard output
-            // Call the new formatting function directly, passing the sink writer
-            stats.format_stats_human_readable(&config, "Benchmark", &mut writer)
-                 .expect("Formatting human-readable stats failed"); // Handle potential error
+                                              // Call the new formatting function directly, passing the sink writer
+            stats
+                .format_stats_human_readable(&config, "Benchmark", &mut writer)
+                .expect("Formatting human-readable stats failed"); // Handle potential error
             criterion::black_box(writer); // Prevent optimization
         })
     });
@@ -424,9 +423,12 @@ fn bench_logger_channel_send(c: &mut Criterion) {
     // --- Benchmark for crossbeam-channel (default) ---
     #[cfg(not(feature = "use_lockfree_queue"))]
     {
-        let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
+        let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) =
+            bounded(QUEUE_CAPACITY);
         let dummy_logger_handle = thread::spawn(move || {
-            while let Ok(_) = receiver.recv() { thread::yield_now(); }
+            while let Ok(_) = receiver.recv() {
+                thread::yield_now();
+            }
         });
 
         c.bench_function("logger::channel_send_burst [crossbeam-channel]", |b| {
@@ -447,7 +449,9 @@ fn bench_logger_channel_send(c: &mut Criterion) {
             )
         });
         drop(sender);
-        dummy_logger_handle.join().expect("Dummy logger thread panicked");
+        dummy_logger_handle
+            .join()
+            .expect("Dummy logger thread panicked");
     }
 
     // --- Benchmark for crossbeam-queue::ArrayQueue (feature-gated) ---
@@ -474,23 +478,23 @@ fn bench_logger_channel_send(c: &mut Criterion) {
         });
 
         c.bench_function("logger::channel_send_burst [crossbeam-queue]", |b| {
-             b.iter_batched(
-                 || Arc::clone(&sender_queue), // Clone the Arc sender
-                 |q| {
-                     let mut success_count = 0;
-                     let mut drop_count = 0;
-                     for _ in 0..BURST_SIZE {
-                         // ArrayQueue::push requires Clone, so clone the message here
-                         match q.push(message.clone()) {
-                             Ok(_) => success_count += 1,
-                             Err(_) => drop_count += 1, // push fails if full
-                         }
-                     }
-                     (success_count, drop_count)
-                 },
-                 criterion::BatchSize::SmallInput,
-             )
-         });
+            b.iter_batched(
+                || Arc::clone(&sender_queue), // Clone the Arc sender
+                |q| {
+                    let mut success_count = 0;
+                    let mut drop_count = 0;
+                    for _ in 0..BURST_SIZE {
+                        // ArrayQueue::push requires Clone, so clone the message here
+                        match q.push(message.clone()) {
+                            Ok(_) => success_count += 1,
+                            Err(_) => drop_count += 1, // push fails if full
+                        }
+                    }
+                    (success_count, drop_count)
+                },
+                criterion::BatchSize::SmallInput,
+            )
+        });
 
         // Drop the sender Arc reference. The receiver thread should eventually exit its loop.
         drop(sender_queue);
@@ -499,7 +503,6 @@ fn bench_logger_channel_send(c: &mut Criterion) {
         // dummy_logger_handle.join().expect("Dummy logger thread panicked");
     }
 }
-
 
 criterion_group!(
     benches,
