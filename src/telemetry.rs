@@ -1,6 +1,6 @@
 //! OpenTelemetry and Tracing initialization logic.
 
-use crate::{config::Config, util}; // Use crate path
+use crate::{config::Config, util};
 use opentelemetry::global as otel_global;
 use opentelemetry::metrics::{Meter, MeterProvider as _};
 use opentelemetry_otlp::WithExportConfig;

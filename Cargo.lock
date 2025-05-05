@@ -870,7 +870,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c46a63e038fcefd83620159161c131b5847cfa79a5072e69d6811cf0c546c22c"
 dependencies = [
  "libc",
- "nix",
+ "nix 0.9.0",
+]
+
+[[package]]
+name = "input-linux-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165d893a9c2a77bbb47aadb1a3815f133cd8ab39b6b80abb63c7df91a58a5031"
+dependencies = [
+ "libc",
+ "nix 0.18.0",
 ]
 
 [[package]]
@@ -888,7 +898,7 @@ dependencies = [
  "crossbeam-channel",
  "fastrand",
  "humantime",
- "input-linux-sys",
+ "input-linux-sys 0.1.5",
  "libc",
  "libfuzzer-sys",
  "opentelemetry",
@@ -900,6 +910,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
+ "test-helpers",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -911,7 +922,7 @@ name = "intercept-bounce-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
- "input-linux-sys",
+ "input-linux-sys 0.1.5",
  "intercept-bounce",
  "libfuzzer-sys",
 ]
@@ -1068,6 +1079,18 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "void",
+]
+
+[[package]]
+name = "nix"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
+dependencies = [
+ "bitflags 1.3.2",
+ "cc",
+ "cfg-if 0.1.10",
+ "libc",
 ]
 
 [[package]]
@@ -1740,7 +1763,11 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-helpers"
-version = "0.1.0"
+version = "0.6.0"
+dependencies = [
+ "input-linux-sys 0.4.0",
+ "intercept-bounce",
+]
 
 [[package]]
 name = "thiserror"

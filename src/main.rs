@@ -19,6 +19,9 @@ use event::{event_microseconds, list_input_devices, read_event_raw, write_event_
 use intercept_bounce::event;
 use intercept_bounce::logger;
 use intercept_bounce::{cli, config::Config, util};
+use intercept_bounce::telemetry::init_tracing;
+use intercept_bounce::filter::stats::StatsCollector;
+use intercept_bounce::filter::BounceFilter;
 use logger::{LogMessage, Logger};
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -28,10 +31,6 @@ use opentelemetry::{global as otel_global, metrics::Meter};
 const LOGGER_QUEUE_CAPACITY: usize = 1024;
 
 /// State for the main processing thread.
-mod telemetry; // Add telemetry module
-use telemetry::init_tracing; // Import init_tracing
-use crate::filter::stats::StatsCollector; // Use crate::filter path
-use crate::filter::BounceFilter; // Use crate::filter path
 struct MainState {
     log_sender: Sender<LogMessage>,
     warned_about_dropping: bool,
