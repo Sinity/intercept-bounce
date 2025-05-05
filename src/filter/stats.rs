@@ -149,7 +149,7 @@ struct PerKeyStatsJson<'a> {
     key_name: &'static str,
     total_processed: u64,
     total_dropped: u64,
-    drop_percentage: f64,
+    drop_percentage: f664,
     stats: KeyStatsJson<'a>, // Use the new struct holding detailed stats
 }
 
@@ -637,7 +637,7 @@ impl StatsCollector {
                 };
 
                 // Helper closure to create KeyValueStatsJson
-                let create_kv_stats_json = |kv_stats: &KeyValueStats| -> KeyValueStatsJson {
+                let create_kv_stats_json = |kv_stats: &'a KeyValueStats| -> KeyValueStatsJson<'a> {
                     let drop_rate = if kv_stats.total_processed > 0 {
                         (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
                     } else {
