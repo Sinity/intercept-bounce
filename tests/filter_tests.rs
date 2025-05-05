@@ -2,7 +2,7 @@
 
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::logger::EventInfo; // Import EventInfo
+use intercept_bounce::logger::EventInfo;
 use std::time::Duration;
 
 // --- Test Constants ---

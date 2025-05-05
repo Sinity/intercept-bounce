@@ -3,7 +3,7 @@
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
 use intercept_bounce::event;
 use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::logger::EventInfo; // Import EventInfo
+use intercept_bounce::logger::EventInfo;
 use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
