@@ -16,9 +16,13 @@
       system: let
         pkgs = import nixpkgs {inherit system;};
       in {
+        # Read version from Cargo.toml
+        cargoToml = pkgs.lib.importTOML ./Cargo.toml;
+        version = cargoToml.package.version;
+      in {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
-          version = "0.6.0"; # TODO: Consider deriving from Cargo.toml or git tag ANSWER: pls do that (from Cargo toml I guess)
+          inherit version; # Derive version from Cargo.toml
           src = ./.;
           cargoLock = {
             lockFile = ./Cargo.lock;
@@ -34,7 +38,6 @@
             fish
             powershell
             zsh
-            strace # Add strace for debugging
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
@@ -46,8 +49,7 @@
             # Build the helper binary (dev profile is faster for this)
             cargo build --quiet --package intercept-bounce --bin generate-cli-files
             # Run the helper binary
-            echo "Running generate-cli-files with strace..."
-            strace -f -e trace=file $(pwd)/target/debug/generate-cli-files
+            $(pwd)/target/debug/generate-cli-files
             echo "Finished generating docs."
           '';
 
@@ -84,8 +86,7 @@
             install_completion fish fish
             install_completion powershell ps1
             install_completion zsh zsh
-            # Nu shell completion is only available with unstable-dynamic-help feature
-            # install_completion nu nu
+            install_completion nu nu # Install Nushell completion
 
             echo "Finished installing docs."
           '';

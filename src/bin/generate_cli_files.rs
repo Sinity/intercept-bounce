@@ -1,6 +1,6 @@
 // src/bin/generate_cli_files.rs
 use clap::CommandFactory;
-use clap_complete::{generate_to, Shell};
+use clap_complete::{generate, Shell};
 use clap_mangen::Man;
 use std::{env, fs, io::Error, path::Path};
 
@@ -29,7 +29,6 @@ fn main() -> Result<(), Error> {
         Shell::Fish,
         Shell::PowerShell,
         Shell::Zsh,
-        #[cfg(feature = "unstable-dynamic-help")]
         Shell::Nu,
     ] {
         let ext = match shell {
@@ -38,7 +37,6 @@ fn main() -> Result<(), Error> {
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
-            #[cfg(feature = "unstable-dynamic-help")]
             Shell::Nu => "nu",
             _ => continue, // Should not happen with explicit list
         };
