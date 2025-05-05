@@ -15,7 +15,6 @@
     (
       system: let
         pkgs = import nixpkgs {inherit system;};
-      in {
         # Read version from Cargo.toml
         cargoToml = pkgs.lib.importTOML ./Cargo.toml;
         version = cargoToml.package.version;
