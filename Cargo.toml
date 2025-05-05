@@ -64,4 +64,4 @@ name = "filter"
 harness = false
 
 [workspace]
-members = [".", "xtask", "fuzz"]
+members = [".", "xtask", "fuzz", "test-helpers"]
