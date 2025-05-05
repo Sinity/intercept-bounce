@@ -32,7 +32,6 @@
             fish
             powershell
             zsh
-            nushell
             strace # Add strace for debugging
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
@@ -83,7 +82,8 @@
             install_completion fish fish
             install_completion powershell ps1
             install_completion zsh zsh
-            install_completion nu nu
+            # Nu shell completion is only available with unstable-dynamic-help feature
+            # install_completion nu nu
 
             echo "Finished installing docs."
           '';

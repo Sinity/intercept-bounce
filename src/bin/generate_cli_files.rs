@@ -29,6 +29,7 @@ fn main() -> Result<(), Error> {
         Shell::Fish,
         Shell::PowerShell,
         Shell::Zsh,
+        #[cfg(feature = "unstable-dynamic-help")]
         Shell::Nu,
     ] {
         let ext = match shell {
@@ -37,6 +38,7 @@ fn main() -> Result<(), Error> {
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
+            #[cfg(feature = "unstable-dynamic-help")]
             Shell::Nu => "nu",
             _ => continue, // Should not happen with explicit list
         };
