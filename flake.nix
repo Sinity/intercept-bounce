@@ -100,12 +100,75 @@
             openssl
             nixpkgs-fmt
 
+            # Core Rust tooling
             rustc
             cargo
             clippy
             rustfmt
             rust-analyzer
+
+            # Nix formatting
+            nixpkgs-fmt
+
+            # Fuzzing
+            cargo-fuzz
+
+            # Debugging
+            gdb
+
+            # Code analysis & quality
+            cargo-audit
+            cargo-udeps
+
+            # Runtime dependencies for testing
+            interception-tools
+
+            # Documentation viewing
+            man-db # Provides the 'man' command
+
+            # Version control & GitHub CLI
+            git
+            gh
+
+            # Direnv for automatic shell activation
+            direnv
           ];
+
+          # Commands run when entering the shell
+          shellHook = ''
+            # Set default log level for development
+            export RUST_LOG="intercept_bounce=debug,warn"
+
+            # Useful aliases
+            alias xt="cargo run --package xtask --"
+            alias cl="cargo clippy --all-targets --all-features -- -D warnings"
+            alias cf="cargo fmt --all"
+            alias ct="cargo test --all-targets --all-features"
+            alias ca="cargo audit"
+            alias cu="cargo udeps"
+            alias fuzz="cargo fuzz"
+
+            # Welcome message
+            echo ""
+            echo "Welcome to the intercept-bounce development shell!"
+            echo ""
+            echo "Useful aliases:"
+            echo "  xt <task> : Run an xtask (e.g., xt generate-docs)"
+            echo "  cl        : Run clippy (strict)"
+            echo "  cf        : Run cargo fmt"
+            echo "  ct        : Run cargo test"
+            echo "  ca        : Run cargo audit"
+            echo "  cu        : Run cargo udeps"
+            echo "  fuzz      : Run cargo fuzz commands (e.g., fuzz list, fuzz run <target>)"
+            echo ""
+            echo "Tools available: cargo, rustc, clippy, rustfmt, rust-analyzer, gdb,"
+            echo "  cargo-fuzz, cargo-audit, cargo-udeps, intercept, uinput, udevmon,"
+            echo "  man, git, gh, direnv, nixpkgs-fmt, etc."
+            echo ""
+            echo "Run 'man ./docs/man/intercept-bounce.1' to view the man page."
+            echo "Set RUST_LOG environment variable to override log level (current: $RUST_LOG)."
+            echo ""
+          '';
         };
       }
     );
