@@ -46,8 +46,8 @@ fn main() -> Result<(), Error> {
         println!("Generating completion file: {completions_path:?}");
         // Explicitly create the file first.
         let mut file = fs::File::create(&completions_path)?;
-        // Call generate_to with the file handle instead of the path.
-        generate_to(shell, &mut cmd.clone(), bin_name, &mut file)?;
+        // Call generate with the file handle (which implements Write).
+        generate(shell, &mut cmd.clone(), bin_name, &mut file)?;
     }
 
     println!(
