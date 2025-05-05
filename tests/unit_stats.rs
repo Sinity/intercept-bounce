@@ -276,8 +276,8 @@ fn stats_json_output_structure() {
     stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev1_ts)), &config);
 
     let mut buf = Vec::new();
-    let runtime_us = Some(ev3_ts + 1000); // Example runtime
-    stats.print_stats_json(&config, runtime_us, "Cumulative", &mut buf);
+    let runtime_us = ev3_ts + 1000; // Example runtime
+    stats.print_stats_json(&config, Some(runtime_us), "Cumulative", &mut buf);
     let s = String::from_utf8(buf).unwrap();
     println!("JSON Output:\n{}", s); // Print for debugging
 
