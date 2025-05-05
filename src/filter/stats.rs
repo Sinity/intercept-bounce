@@ -588,7 +588,8 @@ impl StatsCollector {
                 let key_code = (idx / NUM_KEY_STATES) as u16;
                 let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
-                let value_name = get_value_name(key_value);
+                // Removed unused variable declaration
+                // let value_name = get_value_name(key_value);
 
                 let timings = &near_miss_stats.timings_us;
                 let min = timings.iter().min().copied().unwrap_or(0);
