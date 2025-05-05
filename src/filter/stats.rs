@@ -586,7 +586,7 @@ impl StatsCollector {
     }
 
     /// Helper to create JSON representation of a TimingHistogram.
-    fn create_histogram_json<'a>(histogram: &'a TimingHistogram) -> TimingHistogramJson<'a> {
+    fn create_histogram_json(histogram: &TimingHistogram) -> TimingHistogramJson {
         let mut buckets_json = Vec::with_capacity(NUM_HISTOGRAM_BUCKETS);
         for i in 0..NUM_HISTOGRAM_BUCKETS {
             let min_ms = if i == 0 { 0 } else { HISTOGRAM_BUCKET_BOUNDARIES_MS[i-1] };
@@ -609,7 +609,7 @@ impl StatsCollector {
     /// Prints statistics in JSON format to the given writer.
     /// Includes runtime provided externally (calculated in main thread).
     pub fn print_stats_json(
-        &mut self, // Needs to be mutable to aggregate histograms
+        &mut self, // Needs to be mutable to aggregate histograms before printing
         config: &crate::config::Config,
         runtime_us: Option<u64>,
         report_type: &str,
@@ -637,7 +637,7 @@ impl StatsCollector {
                 };
 
                 // Helper closure to create KeyValueStatsJson
-                let create_kv_stats_json = |kv_stats: &KeyValueStats| {
+                let create_kv_stats_json = |kv_stats: &KeyValueStats| -> KeyValueStatsJson {
                     let drop_rate = if kv_stats.total_processed > 0 {
                         (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
                     } else {
@@ -654,7 +654,7 @@ impl StatsCollector {
                 };
 
                 // Populate the detailed stats structure for JSON
-                let detailed_stats_json = KeyStatsJson {
+                let detailed_stats_json = KeyStatsJson { // Add lifetime here
                     press: create_kv_stats_json(&stats.press),
                     release: create_kv_stats_json(&stats.release),
                     // Repeat stats are included for structure, rate will be 0.0
@@ -667,7 +667,7 @@ impl StatsCollector {
                     total_processed: total_processed_for_key,
                     total_dropped: total_dropped_for_key,
                     drop_percentage,
-                    stats: detailed_stats_json, // Use the new detailed struct
+                    stats: detailed_stats_json, // Use the new detailed struct // Add lifetime here
                 });
             }
         }
@@ -710,8 +710,8 @@ impl StatsCollector {
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            // Overall Histograms
-            overall_bounce_histogram: TimingHistogramJson<'a>,
+            // Overall Histograms // Remove lifetime here
+            overall_bounce_histogram: TimingHistogramJson,
             overall_near_miss_histogram: TimingHistogramJson<'a>,
             // Per-Key and Per-Near-Miss details
             per_key_stats: Vec<PerKeyStatsJson<'a>>, // Removed lifetime 'a
@@ -736,7 +736,7 @@ impl StatsCollector {
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
-            overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram),
+            overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram), // Remove lifetime here
             overall_near_miss_histogram: Self::create_histogram_json(&self.overall_near_miss_histogram),
             per_key_stats: per_key_stats_json_vec, // Use the prepared Vec
             per_key_near_miss_stats: near_miss_json_vec, // Use the prepared Vec
