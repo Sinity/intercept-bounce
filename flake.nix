@@ -7,11 +7,10 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     flake-utils,
     ...
-  } @ inputs:
+  }:
     flake-utils.lib.eachDefaultSystem
     (
       system: let
@@ -19,9 +18,12 @@
       in {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
-          version = "0.6.0"; # TODO: Consider deriving from Cargo.toml or git tag
+          version = "0.6.0"; # TODO: Consider deriving from Cargo.toml or git tag ANSWER: pls do that (from Cargo toml I guess)
           src = ./.;
-          cargoHash = "sha256-PASTE_THE_NEW_BASE64_HASH_HERE"; # Update this with the output from 'nix hash file Cargo.lock --type sha256 --base64'
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+            # cargoHash = "sha256-cf4WcslgG5uUdHXIGmta9Lp7lwEdOhs8wCLy9HrqqdE="; # Update this with the output from 'nix hash file Cargo.lock --type sha256 --base64'
+          };
 
           nativeBuildInputs = with pkgs; [
             pkg-config
