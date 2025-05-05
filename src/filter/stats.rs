@@ -161,7 +161,7 @@ struct KeyValueStatsJson<'a> {
     dropped_count: u64,
     drop_rate: f64,
     timings_us: &'a Vec<u64>, // Reference original timings
-    bounce_histogram: TimingHistogramJson<'a>,
+    bounce_histogram: TimingHistogramJson,
 }
 
 /// Structure for serializing detailed key stats in JSON.
@@ -174,7 +174,7 @@ struct KeyStatsJson<'a> {
 
 /// Structure for serializing histogram data in JSON.
 #[derive(Serialize, Debug)]
-struct TimingHistogramJson<'a> {
+struct TimingHistogramJson {
     buckets: Vec<HistogramBucketJson>,
     count: u64,
     avg_us: u64,
@@ -199,7 +199,7 @@ struct NearMissStatsJson<'a> {
     value_name: &'static str,
     count: usize,
     timings_us: &'a Vec<u64>, // Reference the original timings vector
-    near_miss_histogram: TimingHistogramJson<'a>,
+    near_miss_histogram: TimingHistogramJson,
 }
 
 /// Top-level statistics collector. Owned and managed by the logger thread.
@@ -710,12 +710,12 @@ impl StatsCollector {
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            // Overall Histograms // Remove lifetime here
+            // Overall Histograms
             overall_bounce_histogram: TimingHistogramJson,
-            overall_near_miss_histogram: TimingHistogramJson<'a>,
+            overall_near_miss_histogram: TimingHistogramJson,
             // Per-Key and Per-Near-Miss details
-            per_key_stats: Vec<PerKeyStatsJson<'a>>, // Removed lifetime 'a
-            per_key_near_miss_stats: Vec<NearMissStatsJson<'a>>, // Keep lifetime 'a here for timings_us ref
+            per_key_stats: Vec<PerKeyStatsJson<'a>>,
+            per_key_near_miss_stats: Vec<NearMissStatsJson<'a>>,
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
@@ -736,7 +736,7 @@ impl StatsCollector {
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
-            overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram), // Remove lifetime here
+            overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram),
             overall_near_miss_histogram: Self::create_histogram_json(&self.overall_near_miss_histogram),
             per_key_stats: per_key_stats_json_vec, // Use the prepared Vec
             per_key_near_miss_stats: near_miss_json_vec, // Use the prepared Vec
@@ -749,4 +749,3 @@ impl StatsCollector {
         let _ = writeln!(writer);
     }
 }
-
