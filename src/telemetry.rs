@@ -1,6 +1,6 @@
 //! OpenTelemetry and Tracing initialization logic.
 
-use crate::{config::Config, util};
+use intercept_bounce::{config::Config, util}; // Use library crate name
 use opentelemetry::global as otel_global;
 use opentelemetry::metrics::{Meter, MeterProvider as _};
 use opentelemetry_otlp::WithExportConfig;

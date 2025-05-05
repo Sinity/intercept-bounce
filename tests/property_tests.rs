@@ -1,6 +1,6 @@
 //! Property-based tests for the BounceFilter logic using proptest.
 
-use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN, KEY_MAX};
+use input_linux_sys::{EV_KEY, EV_REL, EV_SYN, KEY_MAX};
 use intercept_bounce::event;
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::EventInfo;
@@ -8,8 +8,8 @@ use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
-mod common; // Include the common module
-use common::key_ev; // Import specific helpers if needed, or use common::*
+// Use the dev-dependency crate for helpers
+use test_helpers::*;
 
 // --- Test Constants ---
 const MAX_EVENTS: usize = 1000; // Max number of events in a sequence
@@ -32,7 +32,7 @@ fn arb_event_sequence_data() -> impl Strategy<Value = Vec<(u64, u16, u16, i32)>>
             } else {
                 EV_REL as u16 // Or relative motion
             };
-            let code = fastrand::u16(0..=KEY_MAX); // Random key/axis code up to KEY_MAX
+            let code = fastrand::u16(0..=(KEY_MAX as u16)); // Cast KEY_MAX to u16 for range
             let value = fastrand::i32(0..3); // Random value (press/release/repeat or axis value)
 
             events.push((event_us, event_type, code, value));
@@ -58,7 +58,7 @@ proptest! {
         let mut last_passed_times: HashMap<(u16, i32), u64> = HashMap::new();
 
         for (event_us, type_, code, value) in event_data {
-            let event = common::key_ev(event_us, code, value); // Use common helper
+            let event = key_ev(event_us, code, value); // Use helper from test_helpers
 
             let info: EventInfo = filter.check_event(&event, debounce_time);
 
@@ -153,7 +153,7 @@ proptest! {
         let mut passed_events_ts = Vec::new();
 
         for (event_us, type_, code, value) in &event_data {
-            let event = common::key_ev(*event_us, *code, *value); // Use common helper
+            let event = key_ev(*event_us, *code, *value); // Use helper from test_helpers
 
             let info = filter.check_event(&event, debounce_time);
             if !info.is_bounce {

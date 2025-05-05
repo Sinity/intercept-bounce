@@ -16,8 +16,6 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use event::{event_microseconds, list_input_devices, read_event_raw, write_event_raw};
-use filter::stats::StatsCollector;
-use filter::BounceFilter;
 use intercept_bounce::event;
 use intercept_bounce::logger;
 use intercept_bounce::{cli, config::Config, util};
@@ -25,8 +23,6 @@ use logger::{LogMessage, Logger};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use opentelemetry::{global as otel_global, metrics::Meter};
-use opentelemetry_sdk::{metrics::SdkMeterProvider, runtime, trace as sdktrace, Resource};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // Capacity for the channel between the main event loop and the logger thread.
 const LOGGER_QUEUE_CAPACITY: usize = 1024;
@@ -34,6 +30,8 @@ const LOGGER_QUEUE_CAPACITY: usize = 1024;
 /// State for the main processing thread.
 mod telemetry; // Add telemetry module
 use telemetry::init_tracing; // Import init_tracing
+use crate::filter::stats::StatsCollector; // Use crate::filter path
+use crate::filter::BounceFilter; // Use crate::filter path
 struct MainState {
     log_sender: Sender<LogMessage>,
     warned_about_dropping: bool,

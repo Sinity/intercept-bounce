@@ -5,8 +5,8 @@ use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::EventInfo;
 use std::time::Duration;
 
-mod common; // Include the common module
-use common::*; // Import helpers
+// Use the dev-dependency crate for helpers
+use test_helpers::*;
 
 // --- Test Helpers ---
 

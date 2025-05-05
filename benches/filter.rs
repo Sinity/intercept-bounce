@@ -9,9 +9,8 @@ use std::time::Duration;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-// mod common; // Include the common module
-// use input_linux_sys::KEY_A;
-// use common::*; // Import helpers
+// Use the dev-dependency crate for helpers
+use test_helpers::*;
 
 fn bench_filter_check_event(c: &mut Criterion) {
     let debounce_time = Duration::from_millis(10); // 10ms debounce

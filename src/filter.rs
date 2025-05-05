@@ -5,7 +5,7 @@
 pub mod keynames;
 pub mod stats;
 
-use crate::event::{self, event_microseconds, is_key_event};
+use crate::event::{self, is_key_event};
 use crate::logger::EventInfo;
 use input_linux_sys::{input_event, KEY_MAX};
 use std::time::Duration;

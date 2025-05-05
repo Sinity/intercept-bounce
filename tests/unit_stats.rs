@@ -1,14 +1,13 @@
 //! Unit tests for the StatsCollector logic.
 
-use input_linux_sys::input_event;
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::logger::EventInfo;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-mod common; // Include the common module
-use common::*; // Import helpers
+// Use the dev-dependency crate for helpers
+use test_helpers::*;
 // --- Test Helpers ---
 
 // --- Test Cases ---
