@@ -1,6 +1,6 @@
 // src/bin/generate_cli_files.rs
 use clap::CommandFactory;
-use clap_complete_nushell::Nushell; // Moved import to top
+use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 use std::{env, fs, io::Error, path::Path};
 
@@ -53,11 +53,9 @@ fn main() -> Result<(), Error> {
     }
 
     // --- Generate Nushell Completion ---
-    // Nushell generator is imported at the top now
     let nu_path = out_path.join(format!("{bin_name}.nu"));
     println!("Generating Nushell completion file: {nu_path:?}");
     let mut nu_file = fs::File::create(&nu_path)?;
-    // Use the generate function from clap_complete with the Nushell generator struct
     clap_complete::generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
 
     println!(

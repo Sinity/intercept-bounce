@@ -36,7 +36,7 @@
             fish
             powershell
             zsh
-            nushell # Add nushell for completion generation/installation
+            nushell
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
@@ -46,7 +46,7 @@
             mkdir -p $OUT_DIR
             echo "Generating docs in $OUT_DIR using helper binary..."
             # Build the helper binary (dev profile is faster for this)
-            cargo build --quiet --package intercept-bounce --bin generate-cli-files # Removed --features shell_nu
+            cargo build --quiet --package intercept-bounce --bin generate-cli-files
             # Run the helper binary
             $(pwd)/target/debug/generate-cli-files
             echo "Finished generating docs."
