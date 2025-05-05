@@ -25,6 +25,8 @@ pub struct Meta {
 pub struct KeyValueStats {
     /// Total events processed (passed + dropped) for this specific key state.
     pub total_processed: u64,
+    /// Count of events that passed the filter for this specific key state.
+    pub passed_count: u64,
     pub count: u64,
     // Stores the microsecond difference between a dropped event and the previous passed event.
     pub timings_us: Vec<u64>,
@@ -164,8 +166,12 @@ impl StatsCollector {
         } else {
             // Event passed the filter.
             self.key_events_passed += 1;
+            // Increment passed count if we found valid stats
+            if let Some(value_stats) = maybe_value_stats.as_mut() {
+                value_stats.passed_count += 1;
+            }
             // Check for near-miss only on passed events if we found valid stats
-            if maybe_value_stats.is_some() {
+            if maybe_value_stats.is_some() { // This check is redundant now, but harmless
                 if let Some(last_us) = info.last_passed_us {
                     if let Some(diff) = info.event_us.checked_sub(last_us) {
                         // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
@@ -231,8 +237,8 @@ impl StatsCollector {
                     writeln!(writer, "\n--- Dropped Event Statistics Per Key ---")?;
                     writeln!(writer, "Format: Key [Name] (Code):")?;
                     writeln!(
-                        writer,
-                        "  State (Value): Drop Count (Bounce Time: Min / Avg / Max)"
+                        writer, // Updated format description
+                        "  State (Value): Processed: <count>, Passed: <count>, Dropped: <count> (<rate>%) (Bounce Time: Min / Avg / Max)"
                     )?;
                     any_drops = true;
                 }
@@ -240,17 +246,20 @@ impl StatsCollector {
                 let key_name = get_key_name(key_code as u16);
                 writeln!(writer, "\nKey [{key_name}] ({key_code}):")?;
                 // Calculate total processed for this key
-                let total_processed_for_key = stats.press.total_processed
-                    + stats.release.total_processed
-                    + stats.repeat.total_processed;
-                let key_drop_percentage = if total_processed_for_key > 0 {
+                let total_processed_for_key =
+                    stats.press.total_processed + stats.release.total_processed + stats.repeat.total_processed;
+                // Calculate total passed for this key
+                let total_passed_for_key =
+                    stats.press.passed_count + stats.release.passed_count + stats.repeat.passed_count;
+                // Calculate overall drop percentage for this key
+                let key_drop_percentage = if total_processed_for_key > 0 { // Base percentage on total processed
                     (total_drops_for_key as f64 / total_processed_for_key as f64) * 100.0
                 } else {
                     0.0
                 };
                 writeln!(
-                    writer,
-                    "  Total Processed: {total_processed_for_key}, Dropped: {total_drops_for_key} ({key_drop_percentage:.2}%)"
+                    writer, // Updated summary line format
+                    "  Total Processed: {total_processed_for_key}, Passed: {total_passed_for_key}, Dropped: {total_drops_for_key} ({key_drop_percentage:.2}%)"
                 )?;
 
                 // Use a closure that captures writer mutably
@@ -258,12 +267,18 @@ impl StatsCollector {
                                              value_code: i32,
                                              value_stats: &KeyValueStats|
                  -> std::io::Result<()> {
-                    if value_stats.count > 0 {
-                        write!( // Use write! instead of writeln! here
-                            writer,
-                            "  {:<7} ({}): {} drops",
-                            value_name, value_code, value_stats.count
-                        )?; // Clarify "drops"
+                    if value_stats.count > 0 || value_stats.passed_count > 0 { // Print if any events (passed or dropped) for this state
+                        // Calculate drop rate for this specific state
+                        let drop_rate = if value_stats.total_processed > 0 {
+                            (value_stats.count as f64 / value_stats.total_processed as f64) * 100.0
+                        } else {
+                            0.0
+                        };
+                        // Updated detail line format
+                        write!(
+                            writer, // Use write! not writeln!
+                            "  {:<7} ({}): Processed: {}, Passed: {}, Dropped: {} ({:.2}%)",
+                            value_name, value_code, value_stats.total_processed, value_stats.passed_count, value_stats.count, drop_rate)?;
                         if !value_stats.timings_us.is_empty() {
                             let timings = &value_stats.timings_us;
                             let min = timings.iter().min().copied().unwrap_or(0);
@@ -282,7 +297,7 @@ impl StatsCollector {
                                 util::format_us(max)
                             )?;
                         } else {
-                            writeln!(writer, " (No timing data)")?;
+                            writeln!(writer, "")?; // Newline if no timing data
                         }
                     }
                     Ok(()) // Return Ok from the closure
@@ -317,6 +332,7 @@ impl StatsCollector {
                 let key_code = (idx / NUM_KEY_STATES) as u16;
                 let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
+                let value_name = get_value_name(key_value);
 
                 let min = timings.iter().min().copied().unwrap_or(0);
                 let max = timings.iter().max().copied().unwrap_or(0);
@@ -372,6 +388,34 @@ impl StatsCollector {
         mut writer: impl Write,
     ) {
 
+        // --- Intermediate Structs for JSON Serialization ---
+        #[derive(Serialize)]
+        struct KeyValueStatsJson<'a> {
+            total_processed: u64,
+            passed_count: u64,
+            dropped_count: u64, // Renamed from 'count' for clarity in JSON
+            drop_rate: f64,
+            timings_us: &'a Vec<u64>, // Reference original timings
+        }
+
+        #[derive(Serialize)]
+        struct KeyStatsJson<'a> {
+            press: KeyValueStatsJson<'a>,
+            release: KeyValueStatsJson<'a>,
+            repeat: KeyValueStatsJson<'a>, // Keep repeat for structure consistency
+        }
+
+        // Modify PerKeyStatsJson to use KeyStatsJson and remove lifetime
+        #[derive(Serialize)]
+        struct PerKeyStatsJson {
+            key_code: u16,
+            key_name: &'static str,
+            total_processed: u64,
+            total_dropped: u64,
+            drop_percentage: f64, // Overall drop % for the key
+            stats: KeyStatsJson, // Use the new struct holding detailed stats
+        }
+
         // --- Prepare Per-Key Drop Stats for JSON ---
         let mut per_key_stats_json_vec = Vec::new();
         for (key_code_usize, stats) in self.per_key_stats.iter().enumerate() {
@@ -379,10 +423,9 @@ impl StatsCollector {
                 + stats.release.total_processed
                 + stats.repeat.total_processed;
             let total_dropped_for_key =
-                stats.press.count + stats.release.count + stats.repeat.count;
+                stats.press.count + stats.release.count + stats.repeat.count; // Include repeat drops here for overall key drop count
 
-            if total_dropped_for_key > 0 {
-                // Only include keys with drops
+            if total_processed_for_key > 0 { // Include keys with any activity (passed or dropped)
                 let key_code = key_code_usize as u16;
                 let key_name = get_key_name(key_code);
                 let drop_percentage = if total_processed_for_key > 0 {
@@ -391,13 +434,37 @@ impl StatsCollector {
                     0.0
                 };
 
+                // Helper closure to create KeyValueStatsJson
+                let create_kv_stats_json = |kv_stats: &KeyValueStats| -> KeyValueStatsJson {
+                    let drop_rate = if kv_stats.total_processed > 0 {
+                        (kv_stats.count as f64 / kv_stats.total_processed as f64) * 100.0
+                    } else {
+                        0.0
+                    };
+                    KeyValueStatsJson {
+                        total_processed: kv_stats.total_processed,
+                        passed_count: kv_stats.passed_count,
+                        dropped_count: kv_stats.count, // Use original drop count field
+                        drop_rate,
+                        timings_us: &kv_stats.timings_us,
+                    }
+                };
+
+                // Populate the detailed stats structure for JSON
+                let detailed_stats_json = KeyStatsJson {
+                    press: create_kv_stats_json(&stats.press),
+                    release: create_kv_stats_json(&stats.release),
+                    // Repeat stats are included for structure, rate will be 0.0
+                    repeat: create_kv_stats_json(&stats.repeat),
+                };
+
                 per_key_stats_json_vec.push(PerKeyStatsJson {
                     key_code,
                     key_name,
                     total_processed: total_processed_for_key,
                     total_dropped: total_dropped_for_key,
                     drop_percentage,
-                    stats, // Include the detailed press/release/repeat stats
+                    stats: detailed_stats_json, // Use the new detailed struct
                 });
             }
         }
@@ -443,6 +510,10 @@ impl StatsCollector {
             #[serde(skip_serializing_if = "Option::is_none")]
             runtime_human: Option<String>,
             // Add human-readable config values to JSON output
+            // Add raw config values as well for machine readability
+            debounce_time_us: u64,
+            near_miss_threshold_us: u64,
+            log_interval_us: u64,
             debounce_time_human: String,
             near_miss_threshold_human: String,
             log_interval_human: String,
@@ -450,8 +521,8 @@ impl StatsCollector {
             key_events_passed: u64,
             key_events_dropped: u64,
             // Use the new Vec types for serialization
-            per_key_stats: Vec<PerKeyStatsJson<'a>>,
-            per_key_passed_near_miss_timing: Vec<NearMissJson<'a>>,
+            per_key_stats: Vec<PerKeyStatsJson>, // Removed lifetime 'a
+            per_key_passed_near_miss_timing: Vec<NearMissJson<'a>>, // Keep lifetime 'a here for timings_us ref
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
@@ -463,6 +534,9 @@ impl StatsCollector {
             report_type,
             runtime_us, // Will be None for periodic reports
             runtime_human,
+            debounce_time_us: config.debounce_us(), // Add raw value
+            near_miss_threshold_us: config.near_miss_threshold_us(), // Add raw value
+            log_interval_us: config.log_interval_us(), // Add raw value
             debounce_time_human: debounce_human,
             near_miss_threshold_human: near_miss_human,
             log_interval_human,

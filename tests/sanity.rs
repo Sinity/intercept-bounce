@@ -340,12 +340,12 @@ fn stats_output_human_readable() {
         .stderr(predicate::str::contains("Key Events Passed:   3")) // e1, e3, e5
         .stderr(predicate::str::contains("Key Events Dropped:  2")) // e2, e4
         .stderr(predicate::str::contains("Key [KEY_A] (30):"))
-        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e2
+        .stderr(predicate::str::contains("Press   (1): Processed: 2, Passed: 1, Dropped: 1 (50.00%)")) // Check detail line for A press
         .stderr(predicate::str::contains(
             "Bounce Time: 3.0 ms / 3.0 ms / 3.0 ms", // Timing for e2
         ))
         .stderr(predicate::str::contains("Key [KEY_B] (48):"))
-        .stderr(predicate::str::contains("Press   (1): 1 drops")) // e4
+        .stderr(predicate::str::contains("Press   (1): Processed: 2, Passed: 1, Dropped: 1 (50.00%)")) // Check detail line for B press
         .stderr(predicate::str::contains(
             "Bounce Time: 2.0 ms / 2.0 ms / 2.0 ms", // Timing for e4
         ));
@@ -387,6 +387,12 @@ fn stats_output_json() {
     assert_eq!(stats_json["key_events_passed"], 1);
     assert_eq!(stats_json["key_events_dropped"], 1);
 
+    // Assert raw config values
+    assert_eq!(stats_json["debounce_time_us"], 5000); // 5ms
+    assert!(stats_json["near_miss_threshold_us"].is_u64()); // Check default value if needed
+    assert!(stats_json["log_interval_us"].is_u64()); // Check default value if needed
+
+
     // Assert that per_key_stats is an array
     assert!(
         stats_json["per_key_stats"].is_array(),
@@ -404,8 +410,30 @@ fn stats_output_json() {
     // Assertions on the found object
     assert!(key_a_stats.is_object());
     assert_eq!(key_a_stats["key_name"], "KEY_A");
-    assert_eq!(key_a_stats["stats"]["press"]["count"], 1);
-    assert_eq!(key_a_stats["stats"]["press"]["timings_us"], json!([3000]));
+    assert_eq!(key_a_stats["total_processed"], 2); // e1, e2
+    assert_eq!(key_a_stats["total_dropped"], 1); // e2
+    assert!((key_a_stats["drop_percentage"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON); // 1 drop / 2 processed = 50%
+
+    // Check detailed stats within the key entry
+    let detailed_stats = &key_a_stats["stats"];
+    assert_eq!(detailed_stats["press"]["total_processed"], 2); // e1, e2
+    assert_eq!(detailed_stats["press"]["passed_count"], 1); // e1 passed
+    assert_eq!(detailed_stats["press"]["dropped_count"], 1); // e2 dropped
+    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON); // 1 drop / 2 processed = 50%
+    assert_eq!(detailed_stats["press"]["timings_us"], json!([3000]));
+
+    assert_eq!(detailed_stats["release"]["total_processed"], 0);
+    assert_eq!(detailed_stats["release"]["passed_count"], 0);
+    assert_eq!(detailed_stats["release"]["dropped_count"], 0);
+    assert!((detailed_stats["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
+
+    assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
+    assert_eq!(detailed_stats["repeat"]["passed_count"], 0);
+    assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
+    assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
+
 
     // Ensure KEY_B (48) is not present in the array
     let key_b_present = stats_json["per_key_stats"]

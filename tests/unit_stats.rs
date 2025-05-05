@@ -34,15 +34,29 @@ fn stats_basic_counts() {
     assert_eq!(stats.key_events_dropped, 2); // ev2, ev4
 
     let key_a_stats = &stats.per_key_stats[KEY_A as usize];
+    assert_eq!(key_a_stats.press.total_processed, 2); // ev1, ev2
+    assert_eq!(key_a_stats.press.passed_count, 1); // ev1
     assert_eq!(key_a_stats.press.count, 1); // ev2 dropped
     assert_eq!(key_a_stats.press.timings_us, vec![1000]);
+
+    assert_eq!(key_a_stats.release.total_processed, 2); // ev3, ev4
+    assert_eq!(key_a_stats.release.passed_count, 1); // ev3
     assert_eq!(key_a_stats.release.count, 1); // ev4 dropped
     assert_eq!(key_a_stats.release.timings_us, vec![1000]);
+
+    assert_eq!(key_a_stats.repeat.total_processed, 0);
+    assert_eq!(key_a_stats.repeat.passed_count, 0);
     assert_eq!(key_a_stats.repeat.count, 0);
 
     let key_b_stats = &stats.per_key_stats[KEY_B as usize];
-    assert_eq!(key_b_stats.press.count, 0); // ev5 passed
+    assert_eq!(key_b_stats.press.total_processed, 1); // ev5
+    assert_eq!(key_b_stats.press.passed_count, 1); // ev5
+    assert_eq!(key_b_stats.press.count, 0);
+    assert_eq!(key_b_stats.release.total_processed, 0);
+    assert_eq!(key_b_stats.release.passed_count, 0);
     assert_eq!(key_b_stats.release.count, 0);
+    assert_eq!(key_b_stats.repeat.total_processed, 0);
+    assert_eq!(key_b_stats.repeat.passed_count, 0);
     assert_eq!(key_b_stats.repeat.count, 0);
 }
 
@@ -86,6 +100,11 @@ fn stats_near_miss_default_threshold() {
     assert_eq!(stats.key_events_passed, 4);
     assert_eq!(stats.key_events_dropped, 1);
 
+    let key_a_stats = &stats.per_key_stats[KEY_A as usize];
+    assert_eq!(key_a_stats.press.total_processed, 5); // All 5 events for A,1
+    assert_eq!(key_a_stats.press.passed_count, 4); // ev1, ev2, ev3, ev4
+    assert_eq!(key_a_stats.press.count, 1); // ev5 dropped
+
     // Check near miss stats for KEY_A, value 1 (press).
     let near_miss_idx = KEY_A as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
@@ -98,8 +117,6 @@ fn stats_near_miss_default_threshold() {
     ); // ev4 is not a near miss relative to ev3.
 
     // Check bounce stats.
-    let key_a_stats = &stats.per_key_stats[KEY_A as usize];
-    assert_eq!(key_a_stats.press.count, 1);
     assert_eq!(key_a_stats.press.timings_us, vec![bounce_diff]);
 }
 
@@ -133,6 +150,11 @@ fn stats_near_miss_custom_threshold() {
     assert_eq!(stats.key_events_passed, 4);
     assert_eq!(stats.key_events_dropped, 0);
 
+    let key_a_stats = &stats.per_key_stats[KEY_A as usize];
+    assert_eq!(key_a_stats.press.total_processed, 4);
+    assert_eq!(key_a_stats.press.passed_count, 4);
+    assert_eq!(key_a_stats.press.count, 0);
+
     // Check near miss stats for KEY_A, value 1 (press).
     let near_miss_idx = KEY_A as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
@@ -164,6 +186,11 @@ fn stats_ignores_non_key_events() {
     assert_eq!(stats.key_events_processed, 1); // Only ev1 should be counted
     assert_eq!(stats.key_events_passed, 1);
     assert_eq!(stats.key_events_dropped, 0);
+
+    let key_a_stats = &stats.per_key_stats[KEY_A as usize];
+    assert_eq!(key_a_stats.press.total_processed, 1);
+    assert_eq!(key_a_stats.press.passed_count, 1);
+    assert_eq!(key_a_stats.press.count, 0);
 }
 
 #[test]
@@ -212,16 +239,44 @@ fn stats_json_output_structure() {
     assert_eq!(json_value["key_events_passed"], 2); // ev1, ev3
     assert_eq!(json_value["key_events_dropped"], 1); // ev2
 
+    // Check raw config values
+    assert_eq!(json_value["debounce_time_us"], DEBOUNCE_TIME.as_micros() as u64);
+    assert_eq!(json_value["near_miss_threshold_us"], Duration::from_millis(100).as_micros() as u64);
+    assert_eq!(json_value["log_interval_us"], Duration::ZERO.as_micros() as u64);
+
+
     // Check per_key_stats array
     let per_key_stats = json_value["per_key_stats"]
         .as_array()
         .expect("per_key_stats is not an array");
-    assert_eq!(per_key_stats.len(), 1); // Only KEY_A should have entries with drops
+    assert_eq!(per_key_stats.len(), 1); // Only KEY_A should have entries with drops or passes
     let key_a_stats = &per_key_stats[0];
     assert_eq!(key_a_stats["key_code"], KEY_A);
     assert_eq!(key_a_stats["key_name"], "KEY_A");
-    assert_eq!(key_a_stats["stats"]["press"]["count"], 1); // Bounce count
-    assert_eq!(key_a_stats["stats"]["press"]["timings_us"], json!([500])); // Bounce timing
+    assert_eq!(key_a_stats["total_processed"], 3); // ev1, ev2, ev3
+    assert_eq!(key_a_stats["total_dropped"], 1); // ev2
+    assert!((key_a_stats["drop_percentage"].as_f64().unwrap() - (1.0/3.0)*100.0).abs() < f64::EPSILON);
+
+    // Check detailed stats within the key entry
+    let detailed_stats = &key_a_stats["stats"];
+    assert_eq!(detailed_stats["press"]["total_processed"], 3); // ev1, ev2, ev3
+    assert_eq!(detailed_stats["press"]["passed_count"], 2); // ev1, ev3
+    assert_eq!(detailed_stats["press"]["dropped_count"], 1); // ev2
+    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - (1.0/3.0)*100.0).abs() < f64::EPSILON);
+    assert_eq!(detailed_stats["press"]["timings_us"], json!([500])); // Bounce timing
+
+    assert_eq!(detailed_stats["release"]["total_processed"], 0);
+    assert_eq!(detailed_stats["release"]["passed_count"], 0);
+    assert_eq!(detailed_stats["release"]["dropped_count"], 0);
+    assert!((detailed_stats["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
+
+    assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
+    assert_eq!(detailed_stats["repeat"]["passed_count"], 0);
+    assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
+    assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
+
 
     // Check near_miss array
     let near_miss_stats = json_value["per_key_passed_near_miss_timing"]
@@ -270,11 +325,18 @@ fn stats_only_passed() {
     assert_eq!(stats.key_events_passed, 3);
     assert_eq!(stats.key_events_dropped, 0);
 
-    // Check bounce counts for KEY_C are zero.
+    // Check counts for KEY_C.
     let key_c_stats = &stats.per_key_stats[KEY_C as usize];
+    assert_eq!(key_c_stats.press.total_processed, 2); // ev1, ev3
+    assert_eq!(key_c_stats.press.passed_count, 2); // ev1, ev3
     assert_eq!(key_c_stats.press.count, 0);
+    assert_eq!(key_c_stats.release.total_processed, 1); // ev2
+    assert_eq!(key_c_stats.release.passed_count, 1); // ev2
     assert_eq!(key_c_stats.release.count, 0);
+    assert_eq!(key_c_stats.repeat.total_processed, 0);
+    assert_eq!(key_c_stats.repeat.passed_count, 0);
     assert_eq!(key_c_stats.repeat.count, 0);
+
 
     // Check near miss stats for KEY_C press (value 1).
     let near_miss_idx = KEY_C as usize * 3 + 1;
@@ -315,8 +377,73 @@ fn stats_only_dropped() {
 
     // Check bounce stats for KEY_B press.
     let key_b_stats = &stats.per_key_stats[KEY_B as usize];
-    assert_eq!(key_b_stats.press.count, 2);
+    assert_eq!(key_b_stats.press.total_processed, 3); // ev1, ev2, ev3
+    assert_eq!(key_b_stats.press.passed_count, 1); // ev1
+    assert_eq!(key_b_stats.press.count, 2); // ev2, ev3 dropped
+    assert_eq!(key_b_stats.release.total_processed, 0);
+    assert_eq!(key_b_stats.release.passed_count, 0);
     assert_eq!(key_b_stats.release.count, 0);
+    assert_eq!(key_b_stats.repeat.total_processed, 0);
+    assert_eq!(key_b_stats.repeat.passed_count, 0);
     assert_eq!(key_b_stats.repeat.count, 0);
+
     assert_eq!(key_b_stats.press.timings_us, vec![diff2, diff3]);
 }
+
+#[test]
+fn stats_passed_counts_and_drop_rates() {
+    let mut stats = StatsCollector::with_capacity();
+    let config = dummy_config_no_arc(DEBOUNCE_TIME, Duration::from_millis(100));
+    let debounce_us = DEBOUNCE_TIME.as_micros() as u64;
+
+    // Sequence for KEY_A Press (1): Pass, Drop, Pass
+    let ev_a1 = key_ev(0, KEY_A, 1); // Pass
+    let ev_a2 = key_ev(debounce_us / 2, KEY_A, 1); // Drop
+    let ev_a3 = key_ev(debounce_us * 2, KEY_A, 1); // Pass
+
+    // Sequence for KEY_A Release (0): Pass, Drop, Drop
+    let ev_a4 = key_ev(debounce_us * 3, KEY_A, 0); // Pass
+    let ev_a5 = key_ev(debounce_us * 3 + debounce_us / 2, KEY_A, 0); // Drop
+    let ev_a6 = key_ev(debounce_us * 3 + debounce_us / 2 + 1, KEY_A, 0); // Drop
+
+    // Sequence for KEY_B Press (1): Pass only
+    let ev_b1 = key_ev(debounce_us * 4, KEY_B, 1); // Pass
+
+    stats.record_event_info_with_config(&passed_event_info(ev_a1, 0, None), &config);
+    stats.record_event_info_with_config(&bounced_event_info(ev_a2, debounce_us / 2, debounce_us / 2, Some(0)), &config);
+    stats.record_event_info_with_config(&passed_event_info(ev_a3, debounce_us * 2, Some(0)), &config); // Pass relative to ev_a1
+
+    stats.record_event_info_with_config(&passed_event_info(ev_a4, debounce_us * 3, None), &config);
+    stats.record_event_info_with_config(&bounced_event_info(ev_a5, debounce_us * 3 + debounce_us / 2, debounce_us / 2, Some(debounce_us * 3)), &config);
+    stats.record_event_info_with_config(&bounced_event_info(ev_a6, debounce_us * 3 + debounce_us / 2 + 1, debounce_us / 2 + 1, Some(debounce_us * 3)), &config);
+
+    stats.record_event_info_with_config(&passed_event_info(ev_b1, debounce_us * 4, None), &config);
+
+    // --- Assertions ---
+    let key_a_stats = &stats.per_key_stats[KEY_A as usize];
+    let key_b_stats = &stats.per_key_stats[KEY_B as usize];
+
+    // KEY_A Press (1)
+    assert_eq!(key_a_stats.press.total_processed, 3, "KEY_A Press total");
+    assert_eq!(key_a_stats.press.passed_count, 2, "KEY_A Press passed"); // ev_a1, ev_a3
+    assert_eq!(key_a_stats.press.count, 1, "KEY_A Press dropped"); // ev_a2
+    // Drop rate: 1 / 3 = 33.33...%
+
+    // KEY_A Release (0)
+    assert_eq!(key_a_stats.release.total_processed, 3, "KEY_A Release total");
+    assert_eq!(key_a_stats.release.passed_count, 1, "KEY_A Release passed"); // ev_a4
+    assert_eq!(key_a_stats.release.count, 2, "KEY_A Release dropped"); // ev_a5, ev_a6
+    // Drop rate: 2 / 3 = 66.66...%
+
+    // KEY_B Press (1)
+    assert_eq!(key_b_stats.press.total_processed, 1, "KEY_B Press total");
+    assert_eq!(key_b_stats.press.passed_count, 1, "KEY_B Press passed"); // ev_b1
+    assert_eq!(key_b_stats.press.count, 0, "KEY_B Press dropped");
+    // Drop rate: 0 / 1 = 0%
+
+    // Overall Counts
+    assert_eq!(stats.key_events_processed, 7);
+    assert_eq!(stats.key_events_passed, 4); // a1, a3, a4, b1
+    assert_eq!(stats.key_events_dropped, 3); // a2, a5, a6
+}
+
