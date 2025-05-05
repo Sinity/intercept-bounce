@@ -25,23 +25,21 @@ struct ArbitraryEventData {
 }
 
 fuzz_target!(|data: &[u8]| {
-    // Create a dummy input_event (only type, code, value are used by EventInfo)
-    let dummy_event = input_event {
-        time: input_linux_sys::timeval {
-            tv_sec: 0,
-            tv_usec: 0,
-        }, // Time not used by EventInfo directly
-        type_: arb_data.event_type,
-        code: arb_data.event_code, // Use arbitrary code directly
-        value: arb_data.event_value,
-    };
-
     // Create an Unstructured instance from the raw data
     let mut u = Unstructured::new(data);
+
     // Generate ArbitraryEventData using the Unstructured instance
     let arb_data = match ArbitraryEventData::arbitrary(&mut u) {
         Ok(d) => d,
         Err(_) => return, // Not enough data or invalid data for arbitrary generation
+    };
+
+    // Create a dummy input_event using the generated arb_data
+    let dummy_event = input_event {
+        time: input_linux_sys::timeval { tv_sec: 0, tv_usec: 0 }, // Time not used by EventInfo directly
+        type_: arb_data.event_type,
+        code: arb_data.event_code,
+        value: arb_data.event_value,
     };
 
     // Construct EventInfo from arbitrary data

@@ -87,7 +87,7 @@ fn generate_docs() -> Result<()> {
 
     // --- Generate Man Page ---
     let man_path = man_dir.join(format!("{bin_name}.1"));
-    println!("Generating man page: {:?}", man_path);
+    println!("Generating man page: {man_path:?}");
     generate_man_page(&cmd, &man_path)?;
 
     // --- Generate Shell Completions ---
@@ -550,10 +550,7 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     writeln!(
         // Keep explicit args for .TH format
         buffer,
-        r#".TH "{}" 1 "{}" "{}" "User Commands""#,
-        app_name_uppercase,
-        date,
-        version
+        r#".TH "{app_name_uppercase}" 1 "{date}" "{version}" "User Commands""#
     )?;
     Man::new(cmd.clone()).render(&mut buffer)?;
 
@@ -587,7 +584,7 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     // AUTHOR section is included by clap_mangen's render method.
 
     // Write the complete buffer (standard sections + custom sections) to the file
-    fs::write(path, buffer).with_context(|| format!("Failed to write man page to {:?}", path))?;
+    fs::write(path, buffer).with_context(|| format!("Failed to write man page to {path:?}"))?;
     Ok(())
 }
 
@@ -613,17 +610,17 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
             _ => continue, // Should not happen
         };
         let completions_path = completions_dir.join(format!("{bin_name}.{ext}"));
-        println!("Generating completion file: {:?}", completions_path);
+        println!("Generating completion file: {completions_path:?}");
         let mut file = fs::File::create(&completions_path)
-            .with_context(|| format!("Failed to create completion file: {:?}", completions_path))?;
+            .with_context(|| format!("Failed to create completion file: {completions_path:?}"))?;
         generate(shell, &mut cmd.clone(), bin_name, &mut file);
     }
 
     // Generate Nushell Completion
     let nu_path = completions_dir.join(format!("{bin_name}.nu"));
-    println!("Generating Nushell completion file: {:?}", nu_path);
+    println!("Generating Nushell completion file: {nu_path:?}");
     let mut nu_file = fs::File::create(&nu_path)
-        .with_context(|| format!("Failed to create Nushell completion file: {:?}", nu_path))?;
+        .with_context(|| format!("Failed to create Nushell completion file: {nu_path:?}"))?;
     generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
 
     Ok(())
