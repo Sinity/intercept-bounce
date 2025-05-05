@@ -1,6 +1,7 @@
 // src/bin/generate_cli_files.rs
 use clap::CommandFactory;
 use clap_complete::{generate, Shell};
+use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 use std::{env, fs, io::Error, path::Path};
 
@@ -30,10 +31,8 @@ fn main() -> Result<(), Error> {
         Shell::Fish,
         Shell::PowerShell,
         Shell::Zsh,
-        #[cfg(feature = "shell_nu")]
-        Shell::Nu,
     ];
-    
+
     for shell in shells {
         let ext = match shell {
             Shell::Bash => "bash",
@@ -41,8 +40,6 @@ fn main() -> Result<(), Error> {
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
-            #[cfg(feature = "shell_nu")]
-            Shell::Nu => "nu",
             _ => continue, // Should not happen with explicit list
         };
         let completions_path = out_path.join(format!("{bin_name}.{ext}"));
