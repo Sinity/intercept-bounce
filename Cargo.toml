@@ -38,6 +38,7 @@ tracing-opentelemetry = "0.24"
 [features]
 default = []
 debug_ring_buffer = [] # Optional feature for debugging
+shell_nu = [] # Feature flag for Nushell completion support
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }

@@ -23,20 +23,25 @@ fn main() -> Result<(), Error> {
 
     // --- Generate Shell Completions ---
     let bin_name = "intercept-bounce";
-    for shell in [
+    // Define shells to generate completions for
+    let shells = [
         Shell::Bash,
         Shell::Elvish,
         Shell::Fish,
         Shell::PowerShell,
         Shell::Zsh,
+        #[cfg(feature = "shell_nu")]
         Shell::Nu,
-    ] {
+    ];
+    
+    for shell in shells {
         let ext = match shell {
             Shell::Bash => "bash",
             Shell::Elvish => "elv",
             Shell::Fish => "fish",
             Shell::PowerShell => "ps1",
             Shell::Zsh => "zsh",
+            #[cfg(feature = "shell_nu")]
             Shell::Nu => "nu",
             _ => continue, // Should not happen with explicit list
         };
