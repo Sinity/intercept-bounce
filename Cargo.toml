@@ -26,7 +26,7 @@ crossbeam-channel = "0.5"
 tracing         = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 humantime       = "2.1"
-clap_complete = "4.5"
+clap_complete = "4.5.1"
 clap_mangen = "0.2"
 
 # --- OpenTelemetry Dependencies ---
@@ -42,7 +42,7 @@ debug_ring_buffer = [] # Optional feature for debugging
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }
 clap = { version = "4.5", features = ["derive"] }
-clap_complete = "4.5"
+clap_complete = "4.5.1"
 clap_mangen = "0.2"
 
 [dev-dependencies]
