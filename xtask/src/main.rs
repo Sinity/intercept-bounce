@@ -89,9 +89,7 @@ directory")?;
 completions directory")?;                                            
                                                                      
     let cmd = Args::command();                                       
-    let bin_name = cmd.get_name().to_string(); // Get bin name from  
-clap command                                                         
-                                                                     
+    let bin_name = cmd.get_name().to_string(); // Get bin name from clap
     // --- Generate Man Page ---                                     
     let man_path = man_dir.join(format!("{}.1", bin_name));          
     let mut man_file = fs::File::create(&man_path)                   
