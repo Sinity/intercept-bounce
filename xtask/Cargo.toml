@@ -11,3 +11,4 @@ clap_complete = "4.5"
 clap_mangen = "0.2"
 clap_complete_nushell = "4.5.5"
 anyhow = "1.0"                                             # For easier error handling in xtask
+chrono = "0.4"                                             # For date formatting in man page
