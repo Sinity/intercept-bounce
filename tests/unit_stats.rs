@@ -55,27 +55,27 @@ fn stats_near_miss_default_threshold() {
 
     // Timings relative to previous *passed* event
     let near_miss_diff1 = debounce_us + 500; // 10.5ms (near miss)
-    let near_miss_diff2 = debounce_us + near_miss_threshold_us - 1; // 109.999ms (near miss)
+    let not_near_miss_diff2 = debounce_us + near_miss_threshold_us - 1; // 109.999ms (NOT a near miss, > 100ms threshold)
     let far_diff = debounce_us + near_miss_threshold_us; // 110ms (not near miss)
     let bounce_diff = debounce_us - 1; // 9.999ms (bounce)
 
     let ev1_ts = 0;
     let ev2_ts = ev1_ts + near_miss_diff1;
-    let ev3_ts = ev2_ts + near_miss_diff2;
+    let ev3_ts = ev2_ts + not_near_miss_diff2;
     let ev4_ts = ev3_ts + far_diff;
     let ev5_ts = ev4_ts + bounce_diff;
 
-    let ev1 = key_ev(ev1_ts, KEY_A, 1); // Pass
-    let ev2 = key_ev(ev2_ts, KEY_A, 1); // Pass (Near miss 1)
-    let ev3 = key_ev(ev3_ts, KEY_A, 1); // Pass (Near miss 2)
-    let ev4 = key_ev(ev4_ts, KEY_A, 1); // Pass (Far)
-    let ev5 = key_ev(ev5_ts, KEY_A, 1); // Bounce
+    let ev1 = key_ev(ev1_ts, KEY_A, 1); // Pass (ts=0)
+    let ev2 = key_ev(ev2_ts, KEY_A, 1); // Pass (ts=10500, diff=10500 -> Near miss 1)
+    let ev3 = key_ev(ev3_ts, KEY_A, 1); // Pass (ts=120499, diff=109999 -> NOT near miss)
+    let ev4 = key_ev(ev4_ts, KEY_A, 1); // Pass (ts=230499, diff=110000 -> Far)
+    let ev5 = key_ev(ev5_ts, KEY_A, 1); // Bounce (ts=240498, diff=9999 -> Bounce)
 
     let config = dummy_config_no_arc(DEBOUNCE_TIME, near_miss_threshold);
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev2, ev2_ts, Some(ev1_ts)), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev2_ts)), &config);
+    stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev2_ts)), &config); // ev3 diff = 109999us > 100000us threshold
     stats.record_event_info_with_config(&passed_event_info(ev4, ev4_ts, Some(ev3_ts)), &config);
     stats.record_event_info_with_config(
         &bounced_event_info(ev5, ev5_ts, bounce_diff, Some(ev4_ts)),
@@ -89,20 +89,13 @@ fn stats_near_miss_default_threshold() {
     // Check near miss stats for KEY_A, value 1 (press).
     let near_miss_idx = KEY_A as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
-    // assert_eq!(near_misses.len(), 2); // OBSERVED: 1. Expected 2 based on ev2 and ev3 diffs.
-    // assert_eq!(near_misses[0], near_miss_diff1); // ev2 diff relative to ev1
-    // assert_eq!(near_misses[1], near_miss_diff2); // ev3 diff relative to ev2
-    // TODO: Investigate why only one near miss (ev2 or ev3?) is recorded when both seem to qualify.
-    assert_eq!(
-        near_misses.len(),
-        1,
-        "Expected 1 near miss (Observed behavior)"
-    );
+    // Only ev2 should be a near miss (diff 10500us <= 100000us threshold).
+    // ev3's diff (109999us) is > 100000us threshold.
+    assert_eq!(near_misses.len(), 1, "Expected exactly 1 near miss");
     assert_eq!(
         near_misses[0], near_miss_diff1,
         "Expected near miss timing for ev2"
-    ); // Assuming ev2's near miss is the one recorded.
-       // ev4 is not a near miss relative to ev3.
+    ); // ev4 is not a near miss relative to ev3.
 
     // Check bounce stats.
     let key_a_stats = &stats.per_key_stats[KEY_A as usize];
@@ -117,17 +110,17 @@ fn stats_near_miss_custom_threshold() {
     let debounce_us = DEBOUNCE_TIME.as_micros() as u64;
 
     let ev1_ts = 0;
-    let diff1 = debounce_us + 1000; // 11ms (within 50ms)
+    let diff1 = debounce_us + 1000; // 11ms (within 50ms threshold)
     let ev2_ts = ev1_ts + diff1;
-    let diff2 = 40_000; // 40ms (within 50ms)
+    let diff2 = 40_000; // 40ms (within 50ms threshold)
     let ev3_ts = ev2_ts + diff2;
-    let diff3 = 60_000; // 60ms (outside 50ms)
+    let diff3 = 60_000; // 60ms (outside 50ms threshold)
     let ev4_ts = ev3_ts + diff3;
 
-    let ev1 = key_ev(ev1_ts, KEY_A, 1); // Pass
-    let ev2 = key_ev(ev2_ts, KEY_A, 1); // Pass (Near miss 1)
-    let ev3 = key_ev(ev3_ts, KEY_A, 1); // Pass (Near miss 2)
-    let ev4 = key_ev(ev4_ts, KEY_A, 1); // Pass (Far)
+    let ev1 = key_ev(ev1_ts, KEY_A, 1); // Pass (ts=0)
+    let ev2 = key_ev(ev2_ts, KEY_A, 1); // Pass (ts=11000, diff=11000 -> Near miss 1)
+    let ev3 = key_ev(ev3_ts, KEY_A, 1); // Pass (ts=51000, diff=40000 -> Near miss 2)
+    let ev4 = key_ev(ev4_ts, KEY_A, 1); // Pass (ts=111000, diff=60000 -> Far)
 
     let config = dummy_config_no_arc(DEBOUNCE_TIME, custom_threshold);
 
@@ -143,9 +136,11 @@ fn stats_near_miss_custom_threshold() {
     // Check near miss stats for KEY_A, value 1 (press).
     let near_miss_idx = KEY_A as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
-    assert_eq!(near_misses.len(), 2); // ev2 and ev3 are near misses
-    assert_eq!(near_misses[0], diff1); // Diff between ev2 and ev1
-    assert_eq!(near_misses[1], diff2); // Diff between ev3 and ev2
+    // ev2 (diff 11000us) and ev3 (diff 40000us) are within the 50000us threshold.
+    // ev4 (diff 60000us) is outside.
+    assert_eq!(near_misses.len(), 2, "Expected 2 near misses");
+    assert_eq!(near_misses[0], diff1, "Expected near miss timing for ev2"); // Diff between ev2 and ev1
+    assert_eq!(near_misses[1], diff2, "Expected near miss timing for ev3"); // Diff between ev3 and ev2
 }
 
 #[test]
@@ -177,7 +172,7 @@ fn stats_json_output_structure() {
     let debounce_us = DEBOUNCE_TIME.as_micros() as u64;
     let ev1_ts = 1000;
     let ev2_ts = ev1_ts + 500; // Bounce (diff 500)
-    let ev3_ts = ev1_ts + debounce_us + 2000; // Near miss (diff 11000 relative to ev1)
+    let ev3_ts = ev1_ts + debounce_us + 2000; // Pass (diff 11000 relative to ev1)
 
     let ev1 = key_ev(ev1_ts, KEY_A, 1);
     let ev2 = key_ev(ev2_ts, KEY_A, 1);
@@ -185,7 +180,7 @@ fn stats_json_output_structure() {
 
     let config = Config::new(
         DEBOUNCE_TIME,
-        Duration::from_millis(100), // near_miss_threshold
+        Duration::from_millis(100), // near_miss_threshold (100000us)
         Duration::ZERO,             // log_interval
         true,                       // log_all_events
         false,                      // log_bounces
@@ -200,7 +195,7 @@ fn stats_json_output_structure() {
         &bounced_event_info(ev2, ev2_ts, 500, Some(ev1_ts)),
         &config,
     );
-    stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev1_ts)), &config);
+    stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev1_ts)), &config); // ev3 diff = 11000us <= 100000us threshold -> Near miss
 
     let mut buf = Vec::new();
     let runtime_us = ev3_ts + 1000; // Example runtime
@@ -221,7 +216,7 @@ fn stats_json_output_structure() {
     let per_key_stats = json_value["per_key_stats"]
         .as_array()
         .expect("per_key_stats is not an array");
-    assert_eq!(per_key_stats.len(), 1); // Only KEY_A should have entries
+    assert_eq!(per_key_stats.len(), 1); // Only KEY_A should have entries with drops
     let key_a_stats = &per_key_stats[0];
     assert_eq!(key_a_stats["key_code"], KEY_A);
     assert_eq!(key_a_stats["key_name"], "KEY_A");
@@ -253,12 +248,12 @@ fn stats_json_output_structure() {
 fn stats_only_passed() {
     let mut stats = StatsCollector::with_capacity();
     let debounce_us = DEBOUNCE_TIME.as_micros() as u64;
-    let near_miss_threshold = Duration::from_millis(100);
+    let near_miss_threshold = Duration::from_millis(100); // 100000us
     let near_miss_threshold_us = near_miss_threshold.as_micros() as u64;
 
     let ev1_ts = 0;
     let ev2_ts = ev1_ts + debounce_us + 1; // Pass (Release)
-    let diff3 = debounce_us + near_miss_threshold_us - 1; // Pass (Press, near miss relative to ev1)
+    let diff3 = debounce_us + near_miss_threshold_us - 1; // 109_999us. Pass (Press, NOT near miss relative to ev1, > 100ms threshold)
     let ev3_ts = ev1_ts + diff3;
 
     let ev1 = key_ev(ev1_ts, KEY_C, 1);
@@ -284,14 +279,9 @@ fn stats_only_passed() {
     // Check near miss stats for KEY_C press (value 1).
     let near_miss_idx = KEY_C as usize * 3 + 1;
     let near_misses = &stats.per_key_passed_near_miss_timing[near_miss_idx];
-    // assert_eq!(near_misses.len(), 1); // OBSERVED: 0. Expected 1 based on ev3 diff.
-    // assert_eq!(near_misses[0], diff3); // Diff between ev3 and ev1
-    // TODO: Investigate why ev3 (diff 109999us) isn't recorded as a near miss.
-    assert_eq!(
-        near_misses.len(),
-        0,
-        "Expected 0 near misses (Observed behavior)"
-    );
+    // ev3's diff relative to ev1 is 109999us, which is > near_miss_threshold (100000us).
+    // Therefore, ev3 is NOT a near miss.
+    assert_eq!(near_misses.len(), 0, "Expected 0 near misses");
 }
 
 #[test]
