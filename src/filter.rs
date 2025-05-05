@@ -19,17 +19,13 @@ pub const NUM_KEY_STATES: usize = 3;
 /// Holds the minimal state required for bounce filtering decisions.
 ///
 /// This struct only stores the timestamp (in microseconds) of the last *passed* event
-/// for each key code and value combination. It does not store historical
+/// for each key code and value combination.
 pub struct BounceFilter {
     // Stores the timestamp (in microseconds) of the last event that *passed* the filter
-    // for a given key code (index 0..1023) and key value (index 0=release, 1=press, 2=repeat).
+    // for a given key code (index 0..KEY_MAX) and key value (index 0=release, 1=press, 2=repeat).
     // Initialized with u64::MAX to indicate no event has passed yet.
-    // Use constants for array dimensions.
-    // Size is KEY_MAX + 1 because key codes are 0-based up to KEY_MAX.
     last_event_us: [[u64; NUM_KEY_STATES]; FILTER_MAP_SIZE],
     // Ring buffer to store the last N *passed* events for debugging purposes.
-    // Needs input_event to derive Copy or Default, or use MaybeUninit.
-    // We'll use Option<input_event> and initialize with None.
     #[cfg(feature = "debug_ring_buffer")]
     recent_passed_events: [Option<input_event>; 64],
     #[cfg(feature = "debug_ring_buffer")]
@@ -73,12 +69,7 @@ impl BounceFilter {
     /// * `debounce_time`: The debounce threshold as a `Duration`.
     ///
     /// # Returns
-    /// A tuple: `(is_bounce, diff_us_if_bounce, last_passed_us_before_this)`
-    /// * `is_bounce`: `true` if the event should be dropped, `false` otherwise.
-    /// * `diff_us_if_bounce`: If `is_bounce` is true, contains the time difference (µs)
-    ///   between this event and the last passed event. Otherwise `None`.
-    ///   of the same key code and value that passed the filter. This is needed
-    ///   by the logger thread.
+    /// An `EventInfo` struct containing the result of the check and relevant timestamps.
     pub fn check_event(&mut self, event: &input_event, debounce_time: Duration) -> EventInfo {
         let event_us = event::event_microseconds(event);
 

@@ -10,9 +10,9 @@ use std::time::Duration;
 #[derive(Arbitrary, Debug)]
 struct ArbitraryEventData {
     // EventInfo fields
-    event_type: u16,  // Keep it simple, maybe focus on EV_KEY?
-    event_code: u16,  // Limit range? e.g., 0..1024
-    event_value: i32, // Limit range? e.g., 0..3
+    event_type: u16,
+    event_code: u16,
+    event_value: i32,
     event_us: u64,
     is_bounce: bool,
     diff_us_present: bool, // Control if diff_us is Some or None
@@ -20,8 +20,8 @@ struct ArbitraryEventData {
     last_passed_us_present: bool, // Control if last_passed_us is Some or None
     last_passed_us_value: u64,
     // Config fields relevant to stats recording
-    debounce_ms: u64,  // Use ms for easier arbitrary generation
-    near_miss_ms: u64, // Use ms for easier arbitrary generation
+    debounce_ms: u64,
+    near_miss_ms: u64,
 }
 
 fuzz_target!(|data: &[u8]| {

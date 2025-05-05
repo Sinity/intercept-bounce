@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::info;
-use tracing::{instrument, Span}; // Import instrument and Span
+use tracing::{instrument, Span};
 
 /// Represents a message sent from the main thread to the logger thread.
 pub enum LogMessage {
@@ -85,7 +85,6 @@ impl Logger {
     ///
     /// Returns the final cumulative statistics upon exit.
     pub fn run(&mut self) -> StatsCollector {
-        // Use tracing for logger thread startup message
         tracing::debug!("Logger thread started");
         let log_interval = self.config.log_interval();
         let check_interval = Duration::from_millis(100); // Used for periodic checks
@@ -123,7 +122,7 @@ impl Logger {
             match self.receiver.recv_timeout(check_interval) {
                 Ok(msg) => {
                     tracing::trace!("Logger thread received message from channel");
-                    self.process_message(msg, &near_miss_counter); // Pass counter
+                    self.process_message(msg, &near_miss_counter);
                     tracing::trace!("Logger thread finished processing message");
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -152,9 +151,8 @@ impl Logger {
 
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
-    #[instrument(name = "logger_process_message", skip(self, msg, near_miss_counter), fields(otel.kind = "internal", event_type=tracing::field::Empty, is_bounce=tracing::field::Empty))]
+    #[instrument(name = "logger_process_message", skip(self, msg, near_miss_counter), fields(event_type=tracing::field::Empty, is_bounce=tracing::field::Empty))]
     pub fn process_message(&mut self, msg: LogMessage, near_miss_counter: &Option<Counter<u64>>) {
-        // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
                 // Log EventInfo fields individually at trace level
@@ -241,11 +239,10 @@ impl Logger {
 
     /// Adapts logic from the old BounceFilter::log_event.
     /// Logs details of a single event (passed or dropped) using tracing.
-    #[instrument(name = "log_event_detailed", skip(self, data), fields(otel.kind = "internal", status=tracing::field::Empty, key_code=data.event.code))]
+    #[instrument(name = "log_event_detailed", skip(self, data), fields(status=tracing::field::Empty, key_code=data.event.code))]
     fn log_event_detailed(&self, data: &EventInfo) {
         let status = if data.is_bounce { "DROP" } else { "PASS" };
 
-        // Use saturating_sub for manual_saturating_arithmetic
         let relative_us = data
             .event_us
             .saturating_sub(self.first_event_us.unwrap_or(data.event_us));
@@ -267,7 +264,7 @@ impl Logger {
 
         let bounce_info_str = if data.is_bounce && event::is_key_event(&data.event) {
             if let Some(diff) = data.diff_us {
-                format!(" (Bounce Time: {})", util::format_us(diff)) // Keep util::format_us
+                format!(" (Bounce Time: {})", util::format_us(diff))
             } else {
                 " (Bounce Time: N/A)".to_string()
             }
@@ -283,7 +280,6 @@ impl Logger {
                         && Duration::from_micros(diff) <= self.config.near_miss_threshold()
                     {
                         format!(" (Diff since last passed: {})", util::format_us(diff))
-                    // Keep util::format_us
                     } else {
                         "".to_string()
                     }
@@ -307,7 +303,7 @@ impl Logger {
 
         // Use info! macro for event logging
         info!(
-            status, // Field name is the same as variable name
+            status,
             relative_us = relative_us,
             relative_human = %format_relative_us(relative_us),
             event_type = data.event.type_,
@@ -322,13 +318,13 @@ impl Logger {
             near_miss_diff_us = if !data.is_bounce && event::is_key_event(&data.event) { data.event_us.checked_sub(data.last_passed_us.unwrap_or(0)) } else { None },
             near_miss_info = %near_miss_info_str,
             "[{status}] {relative_human} {type_name} ({}, {value_name_str} {}){key_info_str}{bounce_info_str}{near_miss_info_str}",
-            data.event.code, data.event.value // Arguments for the format string
+            data.event.code, data.event.value
         );
     }
 
     /// Adapts logic from the old BounceFilter::log_simple_bounce.
     /// This is used when only `--log-bounces` is enabled. Logs only dropped key events.
-    #[instrument(name = "log_simple_bounce_detailed", skip(self, data), fields(otel.kind = "internal", key_code=data.event.code))]
+    #[instrument(name = "log_simple_bounce_detailed", skip(self, data), fields(key_code=data.event.code))]
     fn log_simple_bounce_detailed(&self, data: &EventInfo) {
         // This function is only called if data.is_bounce is true and it's a key event.
         let code = data.event.code;
@@ -343,13 +339,12 @@ impl Logger {
             _ => "Unknown",
         };
 
-        // Use saturating_sub for manual_saturating_arithmetic
         let relative_us = data
             .event_us
             .saturating_sub(self.first_event_us.unwrap_or(data.event_us));
 
         let bounce_info_str = if let Some(diff) = data.diff_us {
-            format!(" (Bounce Time: {})", util::format_us(diff)) // Keep util::format_us
+            format!(" (Bounce Time: {})", util::format_us(diff))
         } else {
             " (Bounce Time: N/A)".to_string()
         };

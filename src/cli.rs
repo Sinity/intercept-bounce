@@ -29,14 +29,14 @@ EXAMPLES:\n\
   # udevmon integration (YAML):\n\
   - JOB: \"intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE\"\n\
     DEVICE:\n\
-      LINK: \"/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd\"\n\
+      LINK: \"/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd\" # Replace this!\n\
 \n\
 See README for more details and advanced usage."
 )]
 pub struct Args {
     /// Debounce time threshold (milliseconds). Duplicate key events (same keycode and value)
     /// occurring faster than this threshold are discarded. (Default: 25ms).
-    /// The "value" refers to the state of the key: 1 for press, 0 for release, 2 for repeat.
+    /// The "value" refers to the state of the key: `1` for press, `0` for release, `2` for repeat.
     /// Only press and release events are debounced. Accepts values like "10ms", "0.5s".
     #[arg(short = 't', long, default_value = "25ms", value_parser = humantime::parse_duration)]
     pub debounce_time: Duration,

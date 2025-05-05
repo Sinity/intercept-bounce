@@ -110,11 +110,10 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
     let sec = event.time.tv_sec as u64;
-    let usec = event.time.tv_usec as u64; // tv_usec should be non-negative, cast is okay
-                                          // Use checked arithmetic to prevent overflow panics from fuzzed/invalid inputs
+    let usec = event.time.tv_usec as u64;
     sec.checked_mul(1_000_000)
         .and_then(|s| s.checked_add(usec))
-        .unwrap_or(u64::MAX)
+        .unwrap_or(u64::MAX) // Return max on overflow
 }
 
 /// Checks if the event type is EV_KEY.
@@ -154,7 +153,6 @@ pub fn list_input_devices() -> io::Result<()> {
         {
             Ok(f) => f,
             Err(e) => {
-                // Check error type without intermediate formatting
                 if e.kind() == ErrorKind::PermissionDenied {
                     eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
                     continue;

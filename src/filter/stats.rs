@@ -25,8 +25,8 @@ pub struct TimingHistogram {
     // Sum of all timings recorded (in microseconds) for calculating average.
     pub sum_us: u64,
     // Optional: Store min/max directly if needed, otherwise calculate from raw data if kept.
-    // min_us: u64,
-    // max_us: u64,
+    // pub min_us: u64,
+    // pub max_us: u64,
 }
 
 impl Default for TimingHistogram {
@@ -94,7 +94,7 @@ pub struct KeyValueStats {
     /// Count of events that passed the filter for this specific key state.
     pub passed_count: u64,
     /// Count of events that were dropped (bounced) for this specific key state.
-    pub dropped_count: u64, // Renamed from 'count' for clarity
+    pub dropped_count: u64,
     // Stores the microsecond difference between a dropped event and the previous passed event.
     // Keeping raw timings for now, alongside histogram.
     pub timings_us: Vec<u64>,
@@ -149,7 +149,7 @@ struct PerKeyStatsJson<'this> {
     key_name: &'static str,
     total_processed: u64,
     total_dropped: u64,
-    drop_percentage: f64,       // Fixed typo here
+    drop_percentage: f64,
     stats: KeyStatsJson<'this>, // Use the new struct holding detailed stats
 }
 
@@ -588,8 +588,7 @@ impl StatsCollector {
                 let key_code = (idx / NUM_KEY_STATES) as u16;
                 let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
-                // Remove unused variable declaration
-                // let value_name = get_value_name(key_value);
+                let value_name = get_value_name(key_value);
 
                 let timings = &near_miss_stats.timings_us;
                 let min = timings.iter().min().copied().unwrap_or(0);

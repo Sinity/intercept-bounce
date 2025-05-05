@@ -8,6 +8,7 @@ use std::time::Duration;
 pub const KEY_A: u16 = 30;
 pub const KEY_B: u16 = 48;
 pub const KEY_C: u16 = 46;
+pub const KEY_D: u16 = 32; // Added KEY_D for tests
 pub const DEBOUNCE_TIME: Duration = Duration::from_millis(10); // Standard debounce time for tests
 
 // --- Event Creation Helpers ---
@@ -87,11 +88,11 @@ pub fn dummy_config(
         debounce_time,
         near_miss_threshold,
         log_interval,
-        log_all, // log_all_events
+        log_all,
         log_bounces,
         stats_json,
         verbose,
-        "info".to_string(), // log_filter (default for tests)
+        "info".to_string(), // Default log_filter for tests
         None,               // otel_endpoint
     ))
 }

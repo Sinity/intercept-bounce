@@ -10,14 +10,12 @@ use std::time::Duration;
 // Use the dev-dependency crate for helpers
 use test_helpers::*;
 
-// --- Test Helpers ---
-
 // --- Test Cases ---
 
 #[test]
 fn timing_histogram_record() {
     let mut hist = TimingHistogram::default();
-    let boundaries_ms = HISTOGRAM_BUCKET_BOUNDARIES_MS; // [1, 2, 4, 8, 16, 32, 64, 128]
+    let boundaries_ms = HISTOGRAM_BUCKET_BOUNDARIES_MS;
 
     hist.record(500); // 0.5ms -> <1ms bucket (0)
     hist.record(1000); // 1ms -> 1-2ms bucket (1)
