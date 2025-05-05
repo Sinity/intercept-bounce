@@ -46,7 +46,7 @@
             mkdir -p $OUT_DIR
             echo "Generating docs in $OUT_DIR using helper binary..."
             # Build the helper binary (dev profile is faster for this)
-            cargo build --quiet --package intercept-bounce --bin generate-cli-files --features shell_nu
+            cargo build --quiet --package intercept-bounce --bin generate-cli-files # Removed --features shell_nu
             # Run the helper binary
             $(pwd)/target/debug/generate-cli-files
             echo "Finished generating docs."
@@ -85,10 +85,8 @@
             install_completion fish fish
             install_completion powershell ps1
             install_completion zsh zsh
-            # Only install Nushell completion if the file exists
-            if [ -f target/generated/intercept-bounce.nu ]; then
-              install_completion nu nu
-            fi
+            # Install Nushell completion unconditionally
+            install_completion nu nu
 
             echo "Finished installing docs."
           '';
