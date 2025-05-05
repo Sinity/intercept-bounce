@@ -375,7 +375,7 @@ fn main() -> io::Result<()> {
 /// Returns Ok(()) on success, or a MainLoopError if the loop should terminate.
 #[instrument(skip_all, fields(ev.type = ev.type_, ev.code = ev.code, ev.value = ev.value))]
 fn process_event(
-    ev: &input_event::input_event,
+    ev: &event::input_event, // Use the correct path via the event module
     ctx: &MainLoopContext,
     main_state: &mut MainState,
     otel_counters: &OtelCounters,
