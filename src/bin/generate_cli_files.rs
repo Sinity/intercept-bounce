@@ -1,7 +1,5 @@
 // src/bin/generate_cli_files.rs
 use clap::CommandFactory;
-use clap_complete::{generate, Shell};
-use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 use std::{env, fs, io::Error, path::Path};
 
@@ -24,6 +22,9 @@ fn main() -> Result<(), Error> {
 
     // --- Generate Shell Completions ---
     let bin_name = "intercept-bounce";
+    // Import items needed for standard shell generation
+    use clap_complete::{generate, Shell};
+
     // Define shells to generate completions for
     let shells = [
         Shell::Bash,
@@ -48,6 +49,18 @@ fn main() -> Result<(), Error> {
         let mut file = fs::File::create(&completions_path)?;
         // Call generate with the file handle (which implements Write).
         generate(shell, &mut cmd.clone(), bin_name, &mut file);
+    }
+
+    // --- Generate Nushell Completion (conditionally) ---
+    #[cfg(feature = "shell_nu")]
+    {
+        // Import Nushell generator specifically
+        use clap_complete_nushell::Nushell;
+        let nu_path = out_path.join(format!("{bin_name}.nu"));
+        println!("Generating Nushell completion file: {nu_path:?}");
+        let mut nu_file = fs::File::create(&nu_path)?;
+        // Use the generate function from clap_complete with the Nushell generator struct
+        clap_complete::generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
     }
 
     println!(

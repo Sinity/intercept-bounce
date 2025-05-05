@@ -36,6 +36,7 @@
             fish
             powershell
             zsh
+            nushell # Add nushell for completion generation/installation
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
