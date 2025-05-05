@@ -23,7 +23,7 @@ pub struct TimingHistogram {
     // Total count of events recorded in this histogram.
     pub(crate) count: u64,
     // Sum of all timings recorded (in microseconds) for calculating average.
-    pub(crate) sum_us: u664,
+    pub(crate) sum_us: u64,
     // Optional: Store min/max directly if needed, otherwise calculate from raw data if kept.
     // min_us: u64,
     // max_us: u64,
@@ -149,7 +149,7 @@ struct PerKeyStatsJson<'this> {
     key_name: &'static str,
     total_processed: u64,
     total_dropped: u64,
-    drop_percentage: f64, // Fixed typo here
+    drop_percentage: f64,       // Fixed typo here
     stats: KeyStatsJson<'this>, // Use the new struct holding detailed stats
 }
 
@@ -209,7 +209,7 @@ pub struct StatsCollector {
     /// Total count of key events processed (passed or dropped).
     pub key_events_processed: u64,
     /// Total count of key events that passed the filter.
-    pub key_events_passed: u664,
+    pub key_events_passed: u64,
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
@@ -325,14 +325,23 @@ impl StatsCollector {
 
         for key_stats in self.per_key_stats.iter() {
             // Aggregate bounce histograms
-            Self::accumulate_histogram(&mut self.overall_bounce_histogram, &key_stats.press.bounce_histogram);
-            Self::accumulate_histogram(&mut self.overall_bounce_histogram, &key_stats.release.bounce_histogram);
+            Self::accumulate_histogram(
+                &mut self.overall_bounce_histogram,
+                &key_stats.press.bounce_histogram,
+            );
+            Self::accumulate_histogram(
+                &mut self.overall_bounce_histogram,
+                &key_stats.release.bounce_histogram,
+            );
             // Ignore repeat histogram for bounces (repeat events are not debounced)
         }
 
         for near_miss_stats in self.per_key_near_miss_stats.iter() {
             // Aggregate near_miss histograms
-            Self::accumulate_histogram(&mut self.overall_near_miss_histogram, &near_miss_stats.histogram);
+            Self::accumulate_histogram(
+                &mut self.overall_near_miss_histogram,
+                &near_miss_stats.histogram,
+            );
         }
     }
 
@@ -362,7 +371,11 @@ impl StatsCollector {
 
         // Determine max bucket count for scaling the bar
         let max_bucket_count = histogram.buckets.iter().copied().max().unwrap_or(0);
-        let bar_scale = if max_bucket_count > 0 { 50.0 / max_bucket_count as f64 } else { 0.0 }; // Max bar width 50 chars
+        let bar_scale = if max_bucket_count > 0 {
+            50.0 / max_bucket_count as f64
+        } else {
+            0.0
+        }; // Max bar width 50 chars
 
         for i in 0..NUM_HISTOGRAM_BUCKETS {
             let bucket_count = histogram.buckets[i];
@@ -375,9 +388,16 @@ impl StatsCollector {
             let label = if i == 0 {
                 format!("< {}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[0])
             } else if i == NUM_HISTOGRAM_BUCKETS - 1 {
-                format!(">= {}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[NUM_HISTOGRAM_BUCKETS - 2])
+                format!(
+                    ">= {}ms",
+                    HISTOGRAM_BUCKET_BOUNDARIES_MS[NUM_HISTOGRAM_BUCKETS - 2]
+                )
             } else {
-                format!("{}-{}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[i-1], HISTOGRAM_BUCKET_BOUNDARIES_MS[i])
+                format!(
+                    "{}-{}ms",
+                    HISTOGRAM_BUCKET_BOUNDARIES_MS[i - 1],
+                    HISTOGRAM_BUCKET_BOUNDARIES_MS[i]
+                )
             };
 
             let bar_width = (bucket_count as f64 * bar_scale).round() as usize;
@@ -390,11 +410,14 @@ impl StatsCollector {
         }
 
         let avg_us = histogram.average_us();
-        output.push_str(&format!("  Total: {}, Avg: {}\n", total_count, util::format_us(avg_us)));
+        output.push_str(&format!(
+            "  Total: {}, Avg: {}\n",
+            total_count,
+            util::format_us(avg_us)
+        ));
 
         output
     }
-
 
     /// Formats human-readable statistics summary and writes it to the provided writer.
     /// Returns an io::Result to handle potential write errors.
@@ -404,7 +427,6 @@ impl StatsCollector {
         report_type: &str,
         mut writer: impl Write, // Accept a generic writer
     ) -> std::io::Result<()> {
-
         // Aggregate histograms before reporting
         self.aggregate_histograms();
 
@@ -425,20 +447,37 @@ impl StatsCollector {
 
         // Overall Bounce Histogram
         writeln!(writer, "\n--- Overall Bounce Timing Histogram ---")?;
-        write!(writer, "{}", Self::format_histogram_human(&self.overall_bounce_histogram))?;
+        write!(
+            writer,
+            "{}",
+            Self::format_histogram_human(&self.overall_bounce_histogram)
+        )?;
 
         // Overall Near-Miss Histogram
-        writeln!(writer, "\n--- Overall Near-Miss Timing Histogram (Passed within {}) ---", util::format_duration(config.near_miss_threshold()))?;
-        write!(writer, "{}", Self::format_histogram_human(&self.overall_near_miss_histogram))?;
-
+        writeln!(
+            writer,
+            "\n--- Overall Near-Miss Timing Histogram (Passed within {}) ---",
+            util::format_duration(config.near_miss_threshold())
+        )?;
+        write!(
+            writer,
+            "{}",
+            Self::format_histogram_human(&self.overall_near_miss_histogram)
+        )?;
 
         let mut any_drops = false;
         for key_code in 0..self.per_key_stats.len() {
             let stats = &self.per_key_stats[key_code];
-            let total_drops_for_key = stats.press.dropped_count + stats.release.dropped_count + stats.repeat.dropped_count;
+            let total_drops_for_key = stats.press.dropped_count
+                + stats.release.dropped_count
+                + stats.repeat.dropped_count;
 
-            if total_drops_for_key > 0 || stats.press.total_processed > 0 || stats.release.total_processed > 0 || stats.repeat.total_processed > 0 {
-                 // Only print key if it had any activity (passed or dropped)
+            if total_drops_for_key > 0
+                || stats.press.total_processed > 0
+                || stats.release.total_processed > 0
+                || stats.repeat.total_processed > 0
+            {
+                // Only print key if it had any activity (passed or dropped)
                 if !any_drops {
                     writeln!(writer, "\n--- Dropped Event Statistics Per Key ---")?;
                     writeln!(writer, "Format: Key [Name] (Code):")?;
@@ -452,13 +491,16 @@ impl StatsCollector {
                 let key_name = get_key_name(key_code as u16);
                 writeln!(writer, "\nKey [{key_name}] ({key_code}):")?;
                 // Calculate total processed for this key
-                let total_processed_for_key =
-                    stats.press.total_processed + stats.release.total_processed + stats.repeat.total_processed;
+                let total_processed_for_key = stats.press.total_processed
+                    + stats.release.total_processed
+                    + stats.repeat.total_processed;
                 // Calculate total passed for this key
-                let total_passed_for_key =
-                    stats.press.passed_count + stats.release.passed_count + stats.repeat.passed_count;
+                let total_passed_for_key = stats.press.passed_count
+                    + stats.release.passed_count
+                    + stats.repeat.passed_count;
                 // Calculate overall drop percentage for this key
-                let key_drop_percentage = if total_processed_for_key > 0 { // Base percentage on total processed
+                let key_drop_percentage = if total_processed_for_key > 0 {
+                    // Base percentage on total processed
                     (total_drops_for_key as f64 / total_processed_for_key as f64) * 100.0
                 } else {
                     0.0
@@ -473,10 +515,12 @@ impl StatsCollector {
                                              value_code: i32,
                                              value_stats: &KeyValueStats|
                  -> std::io::Result<()> {
-                    if value_stats.total_processed > 0 { // Print if any events (passed or dropped) for this state
+                    if value_stats.total_processed > 0 {
+                        // Print if any events (passed or dropped) for this state
                         // Calculate drop rate for this specific state
                         let drop_rate = if value_stats.total_processed > 0 {
-                            (value_stats.dropped_count as f64 / value_stats.total_processed as f64) * 100.0
+                            (value_stats.dropped_count as f64 / value_stats.total_processed as f64)
+                                * 100.0
                         } else {
                             0.0
                         };
@@ -484,7 +528,13 @@ impl StatsCollector {
                         write!(
                             writer, // Use write! not writeln!
                             "  {:<7} ({}): Processed: {}, Passed: {}, Dropped: {} ({:.2}%)",
-                            value_name, value_code, value_stats.total_processed, value_stats.passed_count, value_stats.dropped_count, drop_rate)?;
+                            value_name,
+                            value_code,
+                            value_stats.total_processed,
+                            value_stats.passed_count,
+                            value_stats.dropped_count,
+                            drop_rate
+                        )?;
                         if !value_stats.timings_us.is_empty() {
                             let timings = &value_stats.timings_us;
                             let min = timings.iter().min().copied().unwrap_or(0);
@@ -590,8 +640,16 @@ impl StatsCollector {
     fn create_histogram_json(histogram: &TimingHistogram) -> TimingHistogramJson {
         let mut buckets_json = Vec::with_capacity(NUM_HISTOGRAM_BUCKETS);
         for i in 0..NUM_HISTOGRAM_BUCKETS {
-            let min_ms = if i == 0 { 0 } else { HISTOGRAM_BUCKET_BOUNDARIES_MS[i-1] };
-            let max_ms = if i == NUM_HISTOGRAM_BUCKETS - 1 { None } else { Some(HISTOGRAM_BUCKET_BOUNDARIES_MS[i]) };
+            let min_ms = if i == 0 {
+                0
+            } else {
+                HISTOGRAM_BUCKET_BOUNDARIES_MS[i - 1]
+            };
+            let max_ms = if i == NUM_HISTOGRAM_BUCKETS - 1 {
+                None
+            } else {
+                Some(HISTOGRAM_BUCKET_BOUNDARIES_MS[i])
+            };
             buckets_json.push(HistogramBucketJson {
                 min_ms,
                 max_ms,
@@ -609,7 +667,8 @@ impl StatsCollector {
 
     /// Prints statistics in JSON format to the given writer.
     /// Includes runtime provided externally (calculated in main thread).
-    pub fn print_stats_json<'this>( // Renamed lifetime to 'this
+    pub fn print_stats_json<'this>(
+        // Renamed lifetime to 'this
         &'this mut self, // Explicitly tie lifetime to &mut self
         config: &crate::config::Config,
         runtime_us: Option<u64>,
@@ -625,10 +684,12 @@ impl StatsCollector {
             let total_processed_for_key = stats.press.total_processed
                 + stats.release.total_processed
                 + stats.repeat.total_processed;
-            let total_dropped_for_key =
-                stats.press.dropped_count + stats.release.dropped_count + stats.repeat.dropped_count;
+            let total_dropped_for_key = stats.press.dropped_count
+                + stats.release.dropped_count
+                + stats.repeat.dropped_count;
 
-            if total_processed_for_key > 0 { // Include keys with any activity (passed or dropped)
+            if total_processed_for_key > 0 {
+                // Include keys with any activity (passed or dropped)
                 let key_code = key_code_usize as u16;
                 let key_name = get_key_name(key_code);
                 let drop_percentage = if total_processed_for_key > 0 {
@@ -638,24 +699,29 @@ impl StatsCollector {
                 };
 
                 // Helper closure to create KeyValueStatsJson
-                let create_kv_stats_json = |kv_stats: &'this KeyValueStats| -> KeyValueStatsJson<'this> {
-                    let drop_rate = if kv_stats.total_processed > 0 {
-                        (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
-                    } else {
-                        0.0
+                let create_kv_stats_json =
+                    |kv_stats: &'this KeyValueStats| -> KeyValueStatsJson<'this> {
+                        let drop_rate = if kv_stats.total_processed > 0 {
+                            (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64)
+                                * 100.0
+                        } else {
+                            0.0
+                        };
+                        KeyValueStatsJson {
+                            total_processed: kv_stats.total_processed,
+                            passed_count: kv_stats.passed_count,
+                            dropped_count: kv_stats.dropped_count,
+                            drop_rate,
+                            timings_us: &kv_stats.timings_us,
+                            bounce_histogram: Self::create_histogram_json(
+                                &kv_stats.bounce_histogram,
+                            ),
+                        }
                     };
-                    KeyValueStatsJson {
-                        total_processed: kv_stats.total_processed,
-                        passed_count: kv_stats.passed_count,
-                        dropped_count: kv_stats.dropped_count,
-                        drop_rate,
-                        timings_us: &kv_stats.timings_us,
-                        bounce_histogram: Self::create_histogram_json(&kv_stats.bounce_histogram),
-                    }
-                };
 
                 // Populate the detailed stats structure for JSON
-                let detailed_stats_json = KeyStatsJson { // Add lifetime here
+                let detailed_stats_json = KeyStatsJson {
+                    // Add lifetime here
                     press: create_kv_stats_json(&stats.press),
                     release: create_kv_stats_json(&stats.release),
                     // Repeat stats are included for structure, rate will be 0.0
@@ -695,7 +761,8 @@ impl StatsCollector {
         }
 
         #[derive(Serialize)]
-        struct ReportData<'this> { // Renamed lifetime to 'this
+        struct ReportData<'this> {
+            // Renamed lifetime to 'this
             report_type: &'this str,
             #[serde(skip_serializing_if = "Option::is_none")]
             runtime_us: Option<u64>,
@@ -738,7 +805,9 @@ impl StatsCollector {
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
             overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram),
-            overall_near_miss_histogram: Self::create_histogram_json(&self.overall_near_miss_histogram),
+            overall_near_miss_histogram: Self::create_histogram_json(
+                &self.overall_near_miss_histogram,
+            ),
             per_key_stats: per_key_stats_json_vec, // Use the prepared Vec
             per_key_near_miss_stats: near_miss_json_vec, // Use the prepared Vec
         };
