@@ -547,10 +547,13 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     // Render the standard sections (NAME, SYNOPSIS, DESCRIPTION, OPTIONS, AUTHOR) using clap_mangen
     // Note: clap_mangen uses the command's `about` for NAME and `long_about` (or `about`) for DESCRIPTION.
     // It doesn't include the .TH header automatically, so we add it manually first.
-    writeln!( // Keep explicit args for .TH format
+    writeln!(
+        // Keep explicit args for .TH format
         buffer,
         r#".TH "{}" 1 "{}" "{}" "User Commands""#,
-        app_name_uppercase, date, version
+        app_name_uppercase,
+        date,
+        version
     )?;
     Man::new(cmd.clone()).render(&mut buffer)?;
 

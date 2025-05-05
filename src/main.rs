@@ -17,15 +17,15 @@ use std::time::Duration;
 
 use event::{event_microseconds, list_input_devices, read_event_raw, write_event_raw};
 use intercept_bounce::event;
-use intercept_bounce::logger;
-use intercept_bounce::{cli, config::Config, util};
-use intercept_bounce::telemetry::init_tracing;
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::filter::BounceFilter;
+use intercept_bounce::logger;
+use intercept_bounce::telemetry::init_tracing;
+use intercept_bounce::{cli, config::Config, util};
 use logger::{LogMessage, Logger};
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use opentelemetry::{global as otel_global, metrics::Meter};
+use opentelemetry::global as otel_global;
 
 // Capacity for the channel between the main event loop and the logger thread.
 const LOGGER_QUEUE_CAPACITY: usize = 1024;
@@ -159,7 +159,7 @@ fn main() -> io::Result<()> {
     thread::spawn(move || {
         if let Some(sig) = signals.forever().next() {
             // `sig` is used in format string
-            let reason = format!("Received signal {}", sig);
+            let reason = format!("Received signal {sig}");
             // Ensure final stats are printed by the signal handler if it triggers shutdown.
             final_stats_printed_signal.store(true, Ordering::SeqCst);
             trigger_shutdown(&reason, &main_running_signal, &logger_running_signal);

@@ -152,7 +152,7 @@ fn stats_near_miss_custom_threshold() {
 fn stats_ignores_non_key_events() {
     let mut stats = StatsCollector::with_capacity();
     let ev1 = key_ev(1000, KEY_A, 1); // Key event
-    let ev2 = syn_ev(2000); // SYN event
+    let ev2 = non_key_ev(2000); // SYN event
     let syn_info = EventInfo {
         event: ev2,
         event_us: 2000,

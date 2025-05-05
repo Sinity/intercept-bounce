@@ -6,8 +6,6 @@ use std::io::Write;
 use std::mem::size_of;
 use std::process::Output;
 
-const EV_SYN: u16 = 0; // For SYN_REPORT events
-
 // Use the dev-dependency crate for helpers
 use test_helpers::*;
 
@@ -183,8 +181,10 @@ fn filters_key_repeat() {
 fn window_zero_passes_all() {
     let e1 = key_ev(0, KEY_A, 1);
     let e2 = key_ev(1_000, KEY_A, 1); // Would be bounce with window > 1ms
-    let input_events = vec![e1, e2];
-    let expected_events = vec![e1, e2]; // Both pass with window 0
+    let e3 = key_ev(2_000, KEY_A, 0);
+    let e4 = key_ev(3_000, KEY_A, 0); // Would be bounce if window > 1ms
+    let input_events = vec![e1, e2, e3, e4];
+    let expected_events = vec![e1, e2, e3, e4]; // All pass with window 0
 
     let input_bytes = events_to_bytes(&input_events);
     let expected_output_bytes = events_to_bytes(&expected_events);
@@ -195,10 +195,14 @@ fn window_zero_passes_all() {
         .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
-    let output: Output = cmd.output().unwrap();
+    let output: Output = cmd
+        .output()
+        .expect("Failed to run command with 0ms debounce");
+    assert!(output.status.success(), "Command failed with 0ms debounce");
+
     assert_eq!(
         output.stdout, expected_output_bytes,
-        "Events were filtered when window was 0"
+        "Events were filtered when debounce window was 0ms"
     );
 }
 
@@ -239,7 +243,7 @@ fn filters_just_below_window_boundary() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS))
+        .arg(format!("{WINDOW_MS}ms"))
         .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
@@ -264,7 +268,7 @@ fn passes_at_window_boundary() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS))
+        .arg(format!("{WINDOW_MS}ms"))
         .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
@@ -299,7 +303,7 @@ fn test_complex_sequence() {
 
     let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
     cmd.arg("--debounce-time")
-        .arg(format!("{}ms", WINDOW_MS))
+        .arg(format!("{WINDOW_MS}ms"))
         .env("RUST_LOG", "warn")
         .write_stdin(input_bytes);
 
@@ -374,8 +378,7 @@ fn stats_output_json() {
 
     let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
         panic!(
-            "Failed to parse JSON from stderr: {}\nStderr:\n{}",
-            e, stderr_str
+            "Failed to parse JSON from stderr: {e}\nStderr:\n{stderr_str}"
         )
     });
 
@@ -539,8 +542,7 @@ fn test_only_non_key_events() {
 
     let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
         panic!(
-            "Failed to parse JSON from non-key event stderr: {}\nStderr:\n{}",
-            e, stderr_str
+            "Failed to parse JSON from non-key event stderr: {e}\nStderr:\n{stderr_str}"
         )
     });
 

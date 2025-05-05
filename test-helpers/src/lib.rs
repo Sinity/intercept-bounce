@@ -1,5 +1,5 @@
 //! Common helper functions for tests and benchmarks.
-use input_linux_sys::{EV_KEY, EV_SYN, input_event, timeval};
+use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::{config::Config, logger::EventInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,21 +9,6 @@ pub const KEY_A: u16 = 30;
 pub const KEY_B: u16 = 48;
 pub const KEY_C: u16 = 46;
 pub const DEBOUNCE_TIME: Duration = Duration::from_millis(10); // Standard debounce time for tests
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
 
 // --- Event Creation Helpers ---
 
