@@ -478,7 +478,7 @@ fn bench_logger_channel_send(c: &mut Criterion) {
     // Benchmark only crossbeam-channel
     let (sender, receiver): (Sender<LogMessage>, Receiver<LogMessage>) = bounded(QUEUE_CAPACITY);
     let dummy_logger_handle = thread::spawn(move || {
-        while let Ok(_) = receiver.recv() {
+        while receiver.recv().is_ok() {
             thread::yield_now();
         }
     });

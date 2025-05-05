@@ -38,7 +38,7 @@ fn non_key_ev(ts: u64) -> input_event {
 
 // Helper to serialize events into bytes
 fn events_to_bytes(events: &[input_event]) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(events.len() * size_of::<input_event>());
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(events));
     for ev in events {
         // Safety: input_event is POD and the slice points to valid memory owned by ev.
         unsafe {
@@ -585,13 +585,13 @@ fn test_only_non_key_events() {
     assert!(
         stats_json["per_key_stats"]
             .as_array() // Check if it's an array
-            .map_or(true, |a| a.is_empty()), // Check if the array is empty
+            .is_none_or(|a| a.is_empty()), // Check if the array is empty
         "Per-key stats should be empty"
     );
     assert!(
         stats_json["per_key_passed_near_miss_timing"]
             .as_array() // Check if it's an array
-            .map_or(true, |a| a.is_empty()), // Check if the array is empty
+            .is_none_or(|a| a.is_empty()), // Check if the array is empty
         "Near-miss stats should be empty"
     );
 }

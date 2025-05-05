@@ -285,7 +285,7 @@ fn stats_json_output_structure() {
     let json_value: Value = serde_json::from_str(&s).expect("Failed to parse JSON output");
 
     assert_eq!(json_value["report_type"], "Cumulative");
-    assert_eq!(json_value["runtime_us"], runtime_us.unwrap());
+    assert_eq!(json_value["runtime_us"], runtime_us);
     assert_eq!(json_value["key_events_processed"], 3);
     assert_eq!(json_value["key_events_passed"], 2); // ev1, ev3
     assert_eq!(json_value["key_events_dropped"], 1); // ev2

@@ -1,6 +1,5 @@
 //! Property-based tests for the BounceFilter logic using proptest.
 
-use fastrand;
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
 use intercept_bounce::event;
 use intercept_bounce::filter::BounceFilter;
@@ -24,12 +23,10 @@ fn arb_event_sequence_data() -> impl Strategy<Value = Vec<(u64, u16, u16, i32)>>
             let event_us = current_time.saturating_add(time_delta);
             let event_type = if fastrand::bool() {
                 EV_KEY as u16 // Bias towards key events
+            } else if fastrand::bool() {
+                EV_SYN as u16
             } else {
-                if fastrand::bool() {
-                    EV_SYN as u16
-                } else {
-                    EV_REL as u16 // Or relative motion
-                }
+                EV_REL as u16 // Or relative motion
             };
             let code = fastrand::u16(0..256); // Random key/axis code
             let value = fastrand::i32(0..3); // Random value (press/release/repeat or axis value)
