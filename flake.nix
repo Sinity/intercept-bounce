@@ -130,8 +130,6 @@
             git
             gh
 
-            # Direnv for automatic shell activation
-            direnv
           ];
 
           # Commands run when entering the shell
@@ -161,12 +159,20 @@
             echo "  cu        : Run cargo udeps"
             echo "  fuzz      : Run cargo fuzz commands (e.g., fuzz list, fuzz run <target>)"
             echo ""
+            echo "Build:"
+            echo "  cargo build              # Debug build"
+            echo "  cargo build --release    # Release build"
+            echo ""
             echo "Tools available: cargo, rustc, clippy, rustfmt, rust-analyzer, gdb,"
             echo "  cargo-fuzz, cargo-audit, cargo-udeps, intercept, uinput, udevmon,"
-            echo "  man, git, gh, direnv, nixpkgs-fmt, etc."
+            echo "  man, git, gh, nixpkgs-fmt, etc."
             echo ""
             echo "Run 'man ./docs/man/intercept-bounce.1' to view the man page."
             echo "Set RUST_LOG environment variable to override log level (current: $RUST_LOG)."
+            echo ""
+            echo "Note: If you have 'direnv' installed and hooked into your shell,"
+            echo "  run 'direnv allow' once to automatically enter this environment"
+            echo "  when you 'cd' into the project directory."
             echo ""
           '';
         };
