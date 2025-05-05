@@ -1,8 +1,8 @@
 //! Unit tests for the StatsCollector logic.
 
+use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
-use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::logger::EventInfo;
 use serde_json::{json, Value}; // Added import
 use std::time::Duration;
@@ -166,9 +166,16 @@ fn stats_near_miss_default_threshold() {
     // assert_eq!(near_misses[0], near_miss_diff1); // ev2 diff relative to ev1
     // assert_eq!(near_misses[1], near_miss_diff2); // ev3 diff relative to ev2
     // TODO: Investigate why only one near miss (ev2 or ev3?) is recorded when both seem to qualify.
-    assert_eq!(near_misses.len(), 1, "Expected 1 near miss (Observed behavior)");
-    assert_eq!(near_misses[0], near_miss_diff1, "Expected near miss timing for ev2"); // Assuming ev2's near miss is the one recorded.
-                                                 // ev4 is not a near miss relative to ev3.
+    assert_eq!(
+        near_misses.len(),
+        1,
+        "Expected 1 near miss (Observed behavior)"
+    );
+    assert_eq!(
+        near_misses[0], near_miss_diff1,
+        "Expected near miss timing for ev2"
+    ); // Assuming ev2's near miss is the one recorded.
+       // ev4 is not a near miss relative to ev3.
 
     // Check bounce stats.
     let key_a_stats = &stats.per_key_stats[KEY_A as usize];
@@ -218,7 +225,7 @@ fn stats_near_miss_custom_threshold() {
 fn stats_ignores_non_key_events() {
     let mut stats = StatsCollector::with_capacity();
     let ev1 = key_ev(1000, KEY_A, 1); // Key event
-    let ev2 = syn_ev(2000);           // SYN event
+    let ev2 = syn_ev(2000); // SYN event
     let syn_info = EventInfo {
         event: ev2,
         event_us: 2000,
@@ -262,7 +269,10 @@ fn stats_json_output_structure() {
     );
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev2, ev2_ts, 500, Some(ev1_ts)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev2, ev2_ts, 500, Some(ev1_ts)),
+        &config,
+    );
     stats.record_event_info_with_config(&passed_event_info(ev3, ev3_ts, Some(ev1_ts)), &config);
 
     let mut buf = Vec::new();
@@ -281,7 +291,9 @@ fn stats_json_output_structure() {
     assert_eq!(json_value["key_events_dropped"], 1); // ev2
 
     // Check per_key_stats array
-    let per_key_stats = json_value["per_key_stats"].as_array().expect("per_key_stats is not an array");
+    let per_key_stats = json_value["per_key_stats"]
+        .as_array()
+        .expect("per_key_stats is not an array");
     assert_eq!(per_key_stats.len(), 1); // Only KEY_A should have entries
     let key_a_stats = &per_key_stats[0];
     assert_eq!(key_a_stats["key_code"], KEY_A);
@@ -290,7 +302,9 @@ fn stats_json_output_structure() {
     assert_eq!(key_a_stats["stats"]["press"]["timings_us"], json!([500])); // Bounce timing
 
     // Check near_miss array
-    let near_miss_stats = json_value["per_key_passed_near_miss_timing"].as_array().expect("near_miss is not an array");
+    let near_miss_stats = json_value["per_key_passed_near_miss_timing"]
+        .as_array()
+        .expect("near_miss is not an array");
     assert_eq!(near_miss_stats.len(), 1); // Only ev3 near miss
     let key_a_near_miss = &near_miss_stats[0];
     assert_eq!(key_a_near_miss["key_code"], KEY_A);
@@ -299,7 +313,10 @@ fn stats_json_output_structure() {
     assert_eq!(key_a_near_miss["value_name"], "Press");
     assert_eq!(key_a_near_miss["count"], 1);
     let expected_near_miss_diff = ev3_ts - ev1_ts; // 11000
-    assert_eq!(key_a_near_miss["timings_us"], json!([expected_near_miss_diff]));
+    assert_eq!(
+        key_a_near_miss["timings_us"],
+        json!([expected_near_miss_diff])
+    );
     assert_eq!(key_a_near_miss["min_us"], expected_near_miss_diff);
     assert_eq!(key_a_near_miss["avg_us"], expected_near_miss_diff);
     assert_eq!(key_a_near_miss["max_us"], expected_near_miss_diff);
@@ -343,7 +360,11 @@ fn stats_only_passed() {
     // assert_eq!(near_misses.len(), 1); // OBSERVED: 0. Expected 1 based on ev3 diff.
     // assert_eq!(near_misses[0], diff3); // Diff between ev3 and ev1
     // TODO: Investigate why ev3 (diff 109999us) isn't recorded as a near miss.
-    assert_eq!(near_misses.len(), 0, "Expected 0 near misses (Observed behavior)");
+    assert_eq!(
+        near_misses.len(),
+        0,
+        "Expected 0 near misses (Observed behavior)"
+    );
 }
 
 #[test]
@@ -362,8 +383,14 @@ fn stats_only_dropped() {
     let config = dummy_config(DEBOUNCE_TIME, Duration::from_millis(100));
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev2, ev2_ts, diff2, Some(ev1_ts)), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev3, ev3_ts, diff3, Some(ev1_ts)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev2, ev2_ts, diff2, Some(ev1_ts)),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev3, ev3_ts, diff3, Some(ev1_ts)),
+        &config,
+    );
 
     assert_eq!(stats.key_events_processed, 3);
     assert_eq!(stats.key_events_passed, 1); // Only ev1

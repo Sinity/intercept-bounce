@@ -117,9 +117,9 @@ fn drops_just_below_window_boundary() {
 fn filters_different_keys_independently() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
-    let e1 = key_ev(0, KEY_A, 1);         // Pass
-    let e2 = key_ev(t / 3, KEY_B, 1);     // Pass
-    let e3 = key_ev(t / 2, KEY_A, 1);     // Drop (bounce of e1)
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(t / 3, KEY_B, 1); // Pass
+    let e3 = key_ev(t / 2, KEY_A, 1); // Drop (bounce of e1)
     let e4 = key_ev(t * 2 / 3, KEY_B, 1); // Drop (bounce of e2)
     let results = check_sequence(&mut filter, &[e1, e2, e3, e4], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,1) passes
@@ -132,9 +132,9 @@ fn filters_different_keys_independently() {
 fn filters_press_release_independently() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
-    let e1 = key_ev(0, KEY_A, 1);         // Pass
-    let e2 = key_ev(t / 4, KEY_A, 0);     // Pass (different value)
-    let e3 = key_ev(t / 2, KEY_A, 1);     // Drop (bounce of e1)
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(t / 4, KEY_A, 0); // Pass (different value)
+    let e3 = key_ev(t / 2, KEY_A, 1); // Drop (bounce of e1)
     let e4 = key_ev(t * 3 / 4, KEY_A, 0); // Drop (bounce of e2)
     let results = check_sequence(&mut filter, &[e1, e2, e3, e4], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,1) passes
@@ -147,7 +147,7 @@ fn filters_press_release_independently() {
 fn filters_release_press_independently() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
-    let e1 = key_ev(0, KEY_A, 0);     // Pass (first event)
+    let e1 = key_ev(0, KEY_A, 0); // Pass (first event)
     let e2 = key_ev(t / 2, KEY_A, 1); // Pass (different value)
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,0) passes
@@ -159,9 +159,9 @@ fn independent_filtering_allows_release_after_dropped_press() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
     // Press A (Pass) -> Press A (Drop) -> Release A (Pass)
-    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e1 = key_ev(0, KEY_A, 1); // Pass
     let e2 = key_ev(t / 2, KEY_A, 1); // Drop (bounce of e1)
-    let e3 = key_ev(t, KEY_A, 0);     // Pass (first release event)
+    let e3 = key_ev(t, KEY_A, 0); // Pass (first release event)
     let results = check_sequence(&mut filter, &[e1, e2, e3], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,1) passes
     assert_eq!(results[1], (true, Some(t / 2), Some(0))); // e2 (A,1) drops
@@ -174,10 +174,10 @@ fn independent_filtering_allows_release_after_dropped_press() {
 fn passes_non_key_events() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
-    let e1 = key_ev(0, KEY_A, 1);         // Pass
-    let e2 = non_key_ev(t / 4);           // Pass (SYN)
-    let e3 = key_ev(t / 2, KEY_A, 1);     // Drop (bounce of e1)
-    let e4 = non_key_ev(t * 3 / 4);       // Pass (SYN)
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = non_key_ev(t / 4); // Pass (SYN)
+    let e3 = key_ev(t / 2, KEY_A, 1); // Drop (bounce of e1)
+    let e4 = non_key_ev(t * 3 / 4); // Pass (SYN)
     let results = check_sequence(&mut filter, &[e1, e2, e3, e4], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,1) passes
     assert_eq!(results[1], (false, None, None)); // e2 (SYN) passes
@@ -190,8 +190,8 @@ fn passes_key_repeats() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
     // Key repeats (value 2) are not debounced.
-    let e1 = key_ev(0, KEY_A, 1);               // Pass
-    let e2 = key_ev(500_000, KEY_A, 2);         // Pass (Repeat)
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(500_000, KEY_A, 2); // Pass (Repeat)
     let e3 = key_ev(500_000 + t / 2, KEY_A, 2); // Pass (Repeat)
     let results = check_sequence(&mut filter, &[e1, e2, e3], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 (A,1) passes
@@ -220,10 +220,10 @@ fn handles_time_going_backwards() {
     let mut filter = BounceFilter::new();
     let t = DEBOUNCE_TIME.as_micros() as u64;
     let e1 = key_ev(t * 2, KEY_A, 1); // Pass @ 20ms
-    let e2 = key_ev(t, KEY_A, 1);     // Pass @ 10ms (time went back)
+    let e2 = key_ev(t, KEY_A, 1); // Pass @ 10ms (time went back)
     let results = check_sequence(&mut filter, &[e1, e2], DEBOUNCE_TIME);
     assert_eq!(results[0], (false, None, None)); // e1 passes
-    // e2 passes because event_us < last_passed_us results in checked_sub returning None.
+                                                 // e2 passes because event_us < last_passed_us results in checked_sub returning None.
     assert_eq!(results[1], (false, None, Some(t * 2)));
 }
 

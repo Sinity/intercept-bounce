@@ -300,22 +300,21 @@ fn passes_at_window_boundary() {
     );
 }
 
-
 #[test]
 fn test_complex_sequence() {
     const WINDOW_MS: u64 = 10;
     let window_us = WINDOW_MS * 1_000;
 
-    let e1 = key_ev(0, KEY_A, 1);                                // Pass (A Press)
-    let e2 = key_ev(window_us / 2, KEY_A, 1);                    // Bounce (A Press)
-    let e3 = key_ev(window_us + 1, KEY_A, 0);                    // Pass (A Release)
-    let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0);    // Bounce (A Release)
-    let e5 = non_key_ev(window_us * 2);                          // Pass (SYN)
-    let e6 = key_ev(window_us * 2 + 1, KEY_B, 1);                // Pass (B Press)
+    let e1 = key_ev(0, KEY_A, 1); // Pass (A Press)
+    let e2 = key_ev(window_us / 2, KEY_A, 1); // Bounce (A Press)
+    let e3 = key_ev(window_us + 1, KEY_A, 0); // Pass (A Release)
+    let e4 = key_ev(window_us + 1 + window_us / 2, KEY_A, 0); // Bounce (A Release)
+    let e5 = non_key_ev(window_us * 2); // Pass (SYN)
+    let e6 = key_ev(window_us * 2 + 1, KEY_B, 1); // Pass (B Press)
     let e7 = key_ev(window_us * 2 + 1 + window_us / 4, KEY_B, 2); // Pass (B Repeat)
-    let e8 = key_ev(window_us * 3, KEY_A, 1);                    // Pass (A Press)
-    let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1);    // Bounce (A Press)
-    let e10 = key_ev(window_us * 4, KEY_B, 2);                   // Pass (B Repeat)
+    let e8 = key_ev(window_us * 3, KEY_A, 1); // Pass (A Press)
+    let e9 = key_ev(window_us * 3 + window_us / 2, KEY_A, 1); // Bounce (A Press)
+    let e10 = key_ev(window_us * 4, KEY_B, 2); // Pass (B Repeat)
 
     let input_events = vec![e1, e2, e3, e4, e5, e6, e7, e8, e9, e10];
     let expected_events = vec![e1, e3, e5, e6, e7, e8, e10]; // Bounces e2, e4, e9 dropped
@@ -339,10 +338,10 @@ fn test_complex_sequence() {
 
 #[test]
 fn stats_output_human_readable() {
-    let e1 = key_ev(0, KEY_A, 1);       // Pass
-    let e2 = key_ev(3_000, KEY_A, 1);   // Bounce
-    let e3 = key_ev(10_000, KEY_B, 1);  // Pass
-    let e4 = key_ev(12_000, KEY_B, 1);  // Bounce
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(3_000, KEY_A, 1); // Bounce
+    let e3 = key_ev(10_000, KEY_B, 1); // Pass
+    let e4 = key_ev(12_000, KEY_B, 1); // Bounce
     let e5 = key_ev(100_000, KEY_A, 0); // Pass (Release)
     let input_events = vec![e1, e2, e3, e4, e5];
     let input_bytes = events_to_bytes(&input_events);
@@ -375,7 +374,7 @@ fn stats_output_human_readable() {
 
 #[test]
 fn stats_output_json() {
-    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e1 = key_ev(0, KEY_A, 1); // Pass
     let e2 = key_ev(3_000, KEY_A, 1); // Bounce
     let input_events = vec![e1, e2];
     let input_bytes = events_to_bytes(&input_events);
@@ -393,11 +392,17 @@ fn stats_output_json() {
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
 
     // Find the start of the JSON block and parse from there.
-    let json_start_index = stderr_str.find('{').expect("No JSON block start '{' found in stderr");
+    let json_start_index = stderr_str
+        .find('{')
+        .expect("No JSON block start '{' found in stderr");
     let json_part = &stderr_str[json_start_index..];
 
-    let stats_json: Value = serde_json::from_str(json_part)
-        .unwrap_or_else(|e| panic!("Failed to parse JSON from stderr: {}\nStderr:\n{}", e, stderr_str));
+    let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON from stderr: {}\nStderr:\n{}",
+            e, stderr_str
+        )
+    });
 
     assert_eq!(stats_json["report_type"], "Cumulative");
     assert_eq!(stats_json["key_events_processed"], 2);
@@ -438,7 +443,7 @@ fn stats_output_json() {
 
 #[test]
 fn log_bounces_flag() {
-    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e1 = key_ev(0, KEY_A, 1); // Pass
     let e2 = key_ev(3_000, KEY_A, 1); // Bounce
     let input_events = vec![e1, e2];
     let input_bytes = events_to_bytes(&input_events);
@@ -462,9 +467,9 @@ fn log_bounces_flag() {
 
 #[test]
 fn log_all_events_flag() {
-    let e1 = key_ev(0, KEY_A, 1);     // Pass
+    let e1 = key_ev(0, KEY_A, 1); // Pass
     let e2 = key_ev(3_000, KEY_A, 1); // Bounce
-    let e3 = non_key_ev(4_000);       // SYN (Pass)
+    let e3 = non_key_ev(4_000); // SYN (Pass)
     let input_events = vec![e1, e2, e3];
     let input_bytes = events_to_bytes(&input_events);
 
@@ -552,13 +557,17 @@ fn test_only_non_key_events() {
     let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
 
     // Find the start of the JSON block and parse from there.
-    let json_start_index = stderr_str.find('{')
+    let json_start_index = stderr_str
+        .find('{')
         .expect("No JSON block start '{' found in stderr for non-key event test");
     let json_part = &stderr_str[json_start_index..];
 
-    let stats_json: Value = serde_json::from_str(json_part)
-        .unwrap_or_else(|e| panic!("Failed to parse JSON from non-key event stderr: {}\nStderr:\n{}", e, stderr_str));
-
+    let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON from non-key event stderr: {}\nStderr:\n{}",
+            e, stderr_str
+        )
+    });
 
     // Assert that key event counts are zero.
     assert_eq!(

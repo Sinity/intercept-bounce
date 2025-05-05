@@ -181,7 +181,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 debounce_time.as_micros() as u64,
@@ -206,7 +206,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // No logging, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 15_000,
@@ -231,7 +231,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 debounce_time.as_micros() as u64,
@@ -256,7 +256,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log bounces, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 15_000,
@@ -281,7 +281,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 15_000,
@@ -306,7 +306,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg =
                 LogMessage::Event(create_event_info(25_000, 30, 1, false, None, Some(10_000)));
@@ -325,7 +325,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             false,
         ); // Log all, not verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_syn_info(30_000));
             logger.process_message(msg, &None); // Add &None for near_miss_counter
@@ -344,7 +344,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             true,
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 debounce_time.as_micros() as u64,
@@ -369,7 +369,7 @@ fn bench_logger_process_message(c: &mut Criterion) {
             true,
         ); // Log all, verbose
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
-        // Recreate the EventInfo inside the closure for each iteration
+                                                                                    // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
             let msg = LogMessage::Event(create_event_info(
                 15_000,

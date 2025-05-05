@@ -15,13 +15,12 @@
     (
       system: let
         pkgs = import nixpkgs {inherit system;};
-        # Read version from Cargo.toml
         cargoToml = pkgs.lib.importTOML ./Cargo.toml;
         version = cargoToml.package.version;
       in {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
-          inherit version; # Derive version from Cargo.toml
+          inherit version;
           src = ./.;
           cargoLock = {
             lockFile = ./Cargo.lock;
@@ -40,14 +39,12 @@
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
-          # Use xtask to generate docs before installation
           preBuild = ''
             echo "Generating docs using xtask..."
             cargo run --package xtask -- generate-docs
             echo "Finished generating docs."
           '';
 
-          # Phase to install generated files alongside the main binary
           installPhase = ''
             runHook preInstall
             mkdir -p $out/bin
@@ -80,9 +77,8 @@
             install_completion fish fish
             install_completion powershell ps1
             install_completion zsh zsh
-            # Install Nushell completion unconditionally
             install_completion nu nu
-            
+
             # Ensure all completions are installed
             echo "Verifying completion files were installed..."
             find $out/share -type f -name "*intercept-bounce*" | sort
@@ -92,25 +88,23 @@
 
           meta = {
             description = "Interception Tools bounce filter with statistics";
-            license = pkgs.lib.licenses.mit; # Or Apache-2.0? Check Cargo.toml
-            maintainers = with pkgs.lib.maintainers; [sinity]; # Add your handle if desired
+            license = pkgs.lib.licenses.mit;
+            maintainers = with pkgs.lib.maintainers; [sinity];
           };
         };
 
         devShells.default = pkgs.mkShell {
           name = "intercept-bounce-dev";
           buildInputs = with pkgs; [
+            pkg-config
+            openssl
+            nixpkgs-fmt
+
             rustc
             cargo
             clippy
             rustfmt
             rust-analyzer
-
-            # System dependencies needed for build/runtime
-            pkg-config
-            openssl
-
-            nixpkgs-fmt # For formatting Nix files
           ];
         };
       }

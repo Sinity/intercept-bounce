@@ -103,19 +103,19 @@ fn generate_docs() -> Result<()> {
 // --- Man Page Content Constants ---
 // Note: Using roff formatting. \fB...\fR = bold, \fI...\fR = italic, \- = hyphen, \(bu = bullet
 
-const MAN_DESCRIPTION: &str = r#"
-\fB{bin_name}\fR is an Interception Tools filter designed to eliminate keyboard chatter (also known as switch bounce).
-It reads Linux \fBinput_event\fR(5) structs from standard input, filters out rapid duplicate key events below a configurable time threshold, and writes the filtered events to standard output.
-Statistics are printed to standard error on exit or periodically.
-
-Keyboard chatter occurs when a single physical key press or release generates multiple electrical signals due to the mechanical contacts bouncing. This can result in unintended duplicate characters or actions. \fB{bin_name}\fR addresses this by ignoring subsequent identical key events (same key code and same state \- press or release) that occur within the specified \fB\-\-debounce\-time\fR.
-.PP
-The filter maintains state independently for each key code (0-1023) and for each state (press=1, release=0). Key repeat events (value=2) are never filtered. Non-key events (e.g., mouse movements, synchronization events) are passed through unmodified.
-.PP
-It is designed for the Linux environment using the \fBevdev\fR input system and integrates seamlessly with the Interception Tools ecosystem, typically placed in a pipeline between \fBintercept\fR(1) (to capture events) and \fBuinput\fR(1) (to create a filtered virtual device).
-.PP
-Performance is critical for input filtering. \fB{bin_name}\fR uses a mutex to protect the core filter state and a separate thread for logging and statistics to minimize latency impact on the main event processing path. See the PERFORMANCE section for more details.
-"#;
+// const MAN_DESCRIPTION: &str = r#"
+// \fB{bin_name}\fR is an Interception Tools filter designed to eliminate keyboard chatter (also known as switch bounce).
+// It reads Linux \fBinput_event\fR(5) structs from standard input, filters out rapid duplicate key events below a configurable time threshold, and writes the filtered events to standard output.
+// Statistics are printed to standard error on exit or periodically.
+//
+// Keyboard chatter occurs when a single physical key press or release generates multiple electrical signals due to the mechanical contacts bouncing. This can result in unintended duplicate characters or actions. \fB{bin_name}\fR addresses this by ignoring subsequent identical key events (same key code and same state \- press or release) that occur within the specified \fB\-\-debounce\-time\fR.
+// .PP
+// The filter maintains state independently for each key code (0-1023) and for each state (press=1, release=0). Key repeat events (value=2) are never filtered. Non-key events (e.g., mouse movements, synchronization events) are passed through unmodified.
+// .PP
+// It is designed for the Linux environment using the \fBevdev\fR input system and integrates seamlessly with the Interception Tools ecosystem, typically placed in a pipeline between \fBintercept\fR(1) (to capture events) and \fBuinput\fR(1) (to create a filtered virtual device).
+// .PP
+// Performance is critical for input filtering. \fB{bin_name}\fR uses a mutex to protect the core filter state and a separate thread for logging and statistics to minimize latency impact on the main event processing path. See the PERFORMANCE section for more details.
+// "#;
 
 const MAN_DEBOUNCING: &str = r#"
 .B Mechanism
@@ -547,7 +547,11 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     // Render the standard sections (NAME, SYNOPSIS, DESCRIPTION, OPTIONS, AUTHOR) using clap_mangen
     // Note: clap_mangen uses the command's `about` for NAME and `long_about` (or `about`) for DESCRIPTION.
     // It doesn't include the .TH header automatically, so we add it manually first.
-    writeln!(buffer, r#".TH "{}" 1 "{}" "{}" "User Commands""#, app_name_uppercase, date, version)?;
+    writeln!(
+        buffer,
+        r#".TH "{}" 1 "{}" "{}" "User Commands""#,
+        app_name_uppercase, date, version
+    )?;
     Man::new(cmd.clone()).render(&mut buffer)?;
 
     // --- Append Custom Sections ---
@@ -555,7 +559,7 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     let custom_sections = [
         // ("DESCRIPTION", MAN_DESCRIPTION), // clap_mangen handles DESCRIPTION based on cmd.about/long_about
         ("DEBOUNCING", MAN_DEBOUNCING), // How debounce works, choosing time
-        ("NEAR-MISS", MAN_NEAR_MISS), // How near-miss works, interpretation
+        ("NEAR-MISS", MAN_NEAR_MISS),   // How near-miss works, interpretation
         ("EXAMPLES", MAN_EXAMPLES),
         ("INTEGRATION", MAN_INTEGRATION),
         ("STATISTICS", MAN_STATISTICS),
@@ -609,7 +613,7 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
         println!("Generating completion file: {:?}", completions_path);
         let mut file = fs::File::create(&completions_path)
             .with_context(|| format!("Failed to create completion file: {:?}", completions_path))?;
-        generate(shell, &mut cmd.clone(), bin_name.clone(), &mut file);
+        generate(shell, &mut cmd.clone(), bin_name, &mut file);
     }
 
     // --- Generate Nushell Completion ---
@@ -617,7 +621,7 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
     println!("Generating Nushell completion file: {:?}", nu_path);
     let mut nu_file = fs::File::create(&nu_path)
         .with_context(|| format!("Failed to create Nushell completion file: {:?}", nu_path))?;
-    generate(Nushell, &mut cmd.clone(), bin_name.clone(), &mut nu_file);
+    generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
 
     Ok(())
 }

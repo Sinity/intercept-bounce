@@ -501,12 +501,7 @@ fn main() -> io::Result<()> {
         if cfg.stats_json {
             debug!("Printing final stats in JSON format");
             info!(target: "stats", stats_kind = "cumulative", format = "json", "Emitting final statistics");
-            final_stats.print_stats_json(
-                &cfg,
-                runtime_us,
-                "Cumulative",
-                &mut io::stderr().lock(),
-            );
+            final_stats.print_stats_json(&cfg, runtime_us, "Cumulative", &mut io::stderr().lock());
             debug!("Finished printing final stats in JSON format");
         } else {
             debug!("Printing final stats in human-readable format");
