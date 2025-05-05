@@ -9,6 +9,72 @@ use serde::Serialize;
 use std::io::Write;
 use std::time::Duration;
 
+// Define histogram bucket boundaries in milliseconds.
+// These represent the *upper bounds* of the buckets.
+// Example: [1, 2, 4] means buckets are <1ms, 1-2ms, 2-4ms, >=4ms.
+const HISTOGRAM_BUCKET_BOUNDARIES_MS: &[u64] = &[1, 2, 4, 8, 16, 32, 64, 128];
+const NUM_HISTOGRAM_BUCKETS: usize = HISTOGRAM_BUCKET_BOUNDARIES_MS.len() + 1;
+
+/// Represents a histogram of timing values.
+#[derive(Debug, Serialize, Clone)]
+pub struct TimingHistogram {
+    // Counts per bucket. Index 0 is for values < boundary[0], index N is for values >= boundary[N-1].
+    buckets: [u64; NUM_HISTOGRAM_BUCKETS],
+    // Total count of events recorded in this histogram.
+    count: u64,
+    // Sum of all timings recorded (in microseconds) for calculating average.
+    sum_us: u64,
+    // Optional: Store min/max directly if needed, otherwise calculate from raw data if kept.
+    // min_us: u64,
+    // max_us: u64,
+}
+
+impl Default for TimingHistogram {
+    fn default() -> Self {
+        Self {
+            buckets: [0; NUM_HISTOGRAM_BUCKETS],
+            count: 0,
+            sum_us: 0,
+            // min_us: u64::MAX,
+            // max_us: 0,
+        }
+    }
+}
+
+impl TimingHistogram {
+    /// Records a timing value (in microseconds) into the correct bucket.
+    #[inline]
+    pub fn record(&mut self, timing_us: u64) {
+        let timing_ms = timing_us / 1000; // Convert to ms for bucket comparison
+        let mut bucket_index = NUM_HISTOGRAM_BUCKETS - 1; // Default to the last bucket (>= last boundary)
+
+        for (i, &boundary_ms) in HISTOGRAM_BUCKET_BOUNDARIES_MS.iter().enumerate() {
+            if timing_ms < boundary_ms {
+                bucket_index = i;
+                break;
+            }
+        }
+
+        self.buckets[bucket_index] += 1;
+        self.count += 1;
+        self.sum_us = self.sum_us.saturating_add(timing_us); // Use saturating_add
+                                                             // Optional: Update min/max
+                                                             // self.min_us = self.min_us.min(timing_us);
+                                                             // self.max_us = self.max_us.max(timing_us);
+    }
+
+    /// Calculates the average timing in microseconds. Returns 0 if count is 0.
+    pub fn average_us(&self) -> u64 {
+        if self.count > 0 {
+            self.sum_us / self.count
+        } else {
+            0
+        }
+    }
+
+    // Add methods like get_buckets(), get_count() if needed externally.
+}
+
 /// Metadata included in JSON statistics output, providing context.
 #[derive(Serialize, Clone, Debug)]
 pub struct Meta {
@@ -27,19 +93,44 @@ pub struct KeyValueStats {
     pub total_processed: u64,
     /// Count of events that passed the filter for this specific key state.
     pub passed_count: u64,
-    pub count: u64,
+    /// Count of events that were dropped (bounced) for this specific key state.
+    pub dropped_count: u64, // Renamed from 'count' for clarity
     // Stores the microsecond difference between a dropped event and the previous passed event.
+    // Keeping raw timings for now, alongside histogram.
     pub timings_us: Vec<u64>,
+    /// Histogram of bounce timings for this specific key state.
+    pub bounce_histogram: TimingHistogram,
 }
 
 impl KeyValueStats {
-    /// Adds a timing value to the vector, resizing if necessary.
+    /// Adds a timing value to the vector and records it in the histogram.
     #[inline]
     pub fn push_timing(&mut self, value: u64) {
         if self.timings_us.len() == self.timings_us.capacity() {
-            self.timings_us.reserve(1);
+            self.timings_us.reserve(1); // Or a larger number
         }
         self.timings_us.push(value);
+        self.bounce_histogram.record(value); // Record in histogram
+    }
+}
+
+/// Statistics for passed events that were near misses for a specific key value state.
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct NearMissStats {
+    // Keep raw timings for now (useful for potential future percentile calc or detailed analysis)
+    pub timings_us: Vec<u64>,
+    pub histogram: TimingHistogram,
+}
+
+impl NearMissStats {
+    /// Adds a timing value, resizing if necessary, and records it in the histogram.
+    #[inline]
+    pub fn push_timing(&mut self, value: u64) {
+        if self.timings_us.len() == self.timings_us.capacity() {
+            self.timings_us.reserve(1); // Or a larger number
+        }
+        self.timings_us.push(value);
+        self.histogram.record(value); // Record in histogram as well
     }
 }
 
@@ -59,22 +150,56 @@ struct PerKeyStatsJson<'a> {
     total_processed: u64,
     total_dropped: u64,
     drop_percentage: f64,
-    stats: &'a KeyStats, // Contains press/release/repeat details
+    stats: KeyStatsJson<'a>, // Use the new struct holding detailed stats
+}
+
+/// Structure for serializing detailed key value stats in JSON.
+#[derive(Serialize, Debug)]
+struct KeyValueStatsJson<'a> {
+    total_processed: u64,
+    passed_count: u64,
+    dropped_count: u64,
+    drop_rate: f64,
+    timings_us: &'a Vec<u64>, // Reference original timings
+    bounce_histogram: TimingHistogramJson<'a>,
+}
+
+/// Structure for serializing detailed key stats in JSON.
+#[derive(Serialize, Debug)]
+struct KeyStatsJson<'a> {
+    press: KeyValueStatsJson<'a>,
+    release: KeyValueStatsJson<'a>,
+    repeat: KeyValueStatsJson<'a>, // Keep repeat for structure consistency
+}
+
+/// Structure for serializing histogram data in JSON.
+#[derive(Serialize, Debug)]
+struct TimingHistogramJson<'a> {
+    buckets: Vec<HistogramBucketJson>,
+    count: u64,
+    avg_us: u64,
+    // min_us: u64, // Optional
+    // max_us: u64, // Optional
+}
+
+/// Structure for serializing a single histogram bucket in JSON.
+#[derive(Serialize, Debug)]
+struct HistogramBucketJson {
+    min_ms: u64,
+    max_ms: Option<u64>, // None for the last bucket (>= max boundary)
+    count: u64,
 }
 
 /// Structure for serializing near-miss statistics in JSON.
 #[derive(Serialize, Debug)]
-struct NearMissJson<'a> {
+struct NearMissStatsJson<'a> {
     key_code: u16,
     key_value: i32,
     key_name: &'static str,
     value_name: &'static str,
     count: usize,
-    timings_us: &'a Vec<u64>,
-    // Add min/avg/max directly to JSON object
-    min_us: u64,
-    avg_us: u64,
-    max_us: u64,
+    timings_us: &'a Vec<u64>, // Reference the original timings vector
+    near_miss_histogram: TimingHistogramJson<'a>,
 }
 
 /// Top-level statistics collector. Owned and managed by the logger thread.
@@ -89,8 +214,12 @@ pub struct StatsCollector {
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
     pub per_key_stats: Box<[KeyStats; FILTER_MAP_SIZE]>,
-    /// Holds near-miss timings for passed events. Indexed by `keycode * 3 + value`.
-    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
+    /// Holds near-miss stats per key code and value. Indexed by `keycode * 3 + value`.
+    pub per_key_near_miss_stats: Box<[NearMissStats; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
+    /// Overall histogram for all bounce timings. Aggregated before reporting.
+    overall_bounce_histogram: TimingHistogram,
+    /// Overall histogram for all near-miss timings. Aggregated before reporting.
+    overall_near_miss_histogram: TimingHistogram,
 }
 
 // Implement Default to allow std::mem::take in logger.
@@ -106,15 +235,17 @@ impl StatsCollector {
     pub fn with_capacity() -> Self {
         // Allocate the arrays on the heap using Box::new
         let per_key_stats = Box::new([(); FILTER_MAP_SIZE].map(|_| KeyStats::default()));
-        let per_key_passed_near_miss_timing =
-            Box::new([(); FILTER_MAP_SIZE * NUM_KEY_STATES].map(|_| Vec::with_capacity(1024))); // Assuming initial capacity is desired
+        let per_key_near_miss_stats =
+            Box::new([(); FILTER_MAP_SIZE * NUM_KEY_STATES].map(|_| NearMissStats::default()));
 
         StatsCollector {
             key_events_processed: 0,
             key_events_passed: 0,
             key_events_dropped: 0,
             per_key_stats,
-            per_key_passed_near_miss_timing,
+            per_key_near_miss_stats,
+            overall_bounce_histogram: TimingHistogram::default(),
+            overall_near_miss_histogram: TimingHistogram::default(),
         }
     }
 
@@ -138,79 +269,144 @@ impl StatsCollector {
         // Get mutable access to the specific KeyValueStats for this event, if valid
         let key_code_idx = info.event.code as usize;
         let key_value_idx = info.event.value as usize;
-        let mut maybe_value_stats = if key_code_idx < FILTER_MAP_SIZE && key_value_idx < NUM_KEY_STATES {
-            Some(match info.event.value {
-                1 => &mut self.per_key_stats[key_code_idx].press,
-                0 => &mut self.per_key_stats[key_code_idx].release,
-                _ => &mut self.per_key_stats[key_code_idx].repeat,
-            })
-        } else {
-            None
+
+        // Check bounds before accessing arrays
+        if key_code_idx >= FILTER_MAP_SIZE || key_value_idx >= NUM_KEY_STATES {
+            // Out of bounds - ignore for stats accumulation
+            return;
+        }
+
+        let value_stats = match info.event.value {
+            1 => &mut self.per_key_stats[key_code_idx].press,
+            0 => &mut self.per_key_stats[key_code_idx].release,
+            _ => &mut self.per_key_stats[key_code_idx].repeat,
         };
 
-        // Increment total processed count if we found valid stats
-        if let Some(value_stats) = maybe_value_stats.as_mut() {
-            value_stats.total_processed += 1;
-        }
+        // Increment total processed count
+        value_stats.total_processed += 1;
 
         // Handle bounce/pass logic
         if info.is_bounce {
             self.key_events_dropped += 1;
-            // Increment drop count and record timing if we found valid stats
-            if let Some(value_stats) = maybe_value_stats {
-                if let Some(diff) = info.diff_us {
-                    value_stats.count += 1; // Increment drop count for this state
-                    value_stats.push_timing(diff);
-                }
+            // Increment drop count and record timing
+            value_stats.dropped_count += 1; // Increment drop count for this state
+            if let Some(diff) = info.diff_us {
+                value_stats.push_timing(diff); // Records in Vec and Histogram
             }
         } else {
             // Event passed the filter.
             self.key_events_passed += 1;
-            // Increment passed count if we found valid stats
-            if let Some(value_stats) = maybe_value_stats.as_mut() {
-                value_stats.passed_count += 1;
-            }
-            // Check for near-miss only on passed events if we found valid stats
-            if maybe_value_stats.is_some() { // This check is redundant now, but harmless
-                if let Some(last_us) = info.last_passed_us {
-                    if let Some(diff) = info.event_us.checked_sub(last_us) {
-                        // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
-                        // The filter ensures diff >= debounce_time for passed events.
-                        // Here, we check against the near-miss threshold.
-                        if diff <= config.near_miss_threshold_us() {
-                            self.record_near_miss((info.event.code, info.event.value), diff);
-                        }
+            // Increment passed count
+            value_stats.passed_count += 1;
+
+            // Check for near-miss on passed events
+            if let Some(last_us) = info.last_passed_us {
+                if let Some(diff) = info.event_us.checked_sub(last_us) {
+                    // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
+                    // The filter ensures diff >= debounce_time for passed events.
+                    // Here, we check against the near-miss threshold.
+                    if diff <= config.near_miss_threshold_us() {
+                        // Calculate the flat index for the per_key_near_miss_stats array.
+                        let idx = key_code_idx * NUM_KEY_STATES + key_value_idx;
+                        // Bounds check is already done at the start of the function
+                        self.per_key_near_miss_stats[idx].push_timing(diff); // Records in Vec and Histogram
                     }
                 }
             }
         }
     }
 
-    /// Records the timing difference for a passed event that was a near miss.
-    /// Called internally by `record_event_info`.
-    fn record_near_miss(&mut self, key: (u16, i32), diff: u64) {
-        let (key_code, key_value) = key;
-        // Check bounds before calculating index.
-        if (key_code as usize) < FILTER_MAP_SIZE && (key_value as usize) < NUM_KEY_STATES {
-            // Calculate the flat index for the per_key_passed_near_miss_timing array.
-            let idx = key_code as usize * NUM_KEY_STATES + key_value as usize;
-            let vec = &mut self.per_key_passed_near_miss_timing[idx];
-            // Use reserve(1) for potentially better allocation strategy than doubling.
-            if vec.len() == vec.capacity() {
-                vec.reserve(1);
-            }
-            vec.push(diff);
+    /// Aggregates per-key histograms into the overall histograms.
+    /// Should be called before generating reports.
+    fn aggregate_histograms(&mut self) {
+        // Reset overall histograms (important if called multiple times, e.g., periodic)
+        self.overall_bounce_histogram = TimingHistogram::default();
+        self.overall_near_miss_histogram = TimingHistogram::default();
+
+        for key_stats in self.per_key_stats.iter() {
+            // Aggregate bounce histograms
+            Self::accumulate_histogram(&mut self.overall_bounce_histogram, &key_stats.press.bounce_histogram);
+            Self::accumulate_histogram(&mut self.overall_bounce_histogram, &key_stats.release.bounce_histogram);
+            // Ignore repeat histogram for bounces (repeat events are not debounced)
+        }
+
+        for near_miss_stats in self.per_key_near_miss_stats.iter() {
+            // Aggregate near-miss histograms
+            Self::accumulate_histogram(&mut self.overall_near_miss_histogram, &near_miss_stats.histogram);
         }
     }
+
+    /// Helper to add counts from a source histogram to a destination histogram.
+    #[inline]
+    fn accumulate_histogram(dest: &mut TimingHistogram, source: &TimingHistogram) {
+        if source.count > 0 {
+            dest.count += source.count;
+            dest.sum_us = dest.sum_us.saturating_add(source.sum_us);
+            for i in 0..NUM_HISTOGRAM_BUCKETS {
+                dest.buckets[i] += source.buckets[i];
+            }
+            // Optional: Update overall min/max if stored directly
+            // dest.min_us = dest.min_us.min(source.min_us);
+            // dest.max_us = dest.max_us.max(source.max_us);
+        }
+    }
+
+    /// Formats a `TimingHistogram` into a human-readable string representation.
+    fn format_histogram_human(histogram: &TimingHistogram) -> String {
+        if histogram.count == 0 {
+            return "No data".to_string();
+        }
+
+        let mut output = String::new();
+        let total_count = histogram.count;
+
+        // Determine max bucket count for scaling the bar
+        let max_bucket_count = histogram.buckets.iter().copied().max().unwrap_or(0);
+        let bar_scale = if max_bucket_count > 0 { 50.0 / max_bucket_count as f64 } else { 0.0 }; // Max bar width 50 chars
+
+        for i in 0..NUM_HISTOGRAM_BUCKETS {
+            let bucket_count = histogram.buckets[i];
+            let percentage = if total_count > 0 {
+                (bucket_count as f64 / total_count as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            let label = if i == 0 {
+                format!("< {}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[0])
+            } else if i == NUM_HISTOGRAM_BUCKETS - 1 {
+                format!(">= {}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[NUM_HISTOGRAM_BUCKETS - 2])
+            } else {
+                format!("{}-{}ms", HISTOGRAM_BUCKET_BOUNDARIES_MS[i-1], HISTOGRAM_BUCKET_BOUNDARIES_MS[i])
+            };
+
+            let bar_width = (bucket_count as f64 * bar_scale).round() as usize;
+            let bar = "#".repeat(bar_width);
+
+            output.push_str(&format!(
+                "  {:<10}: {:<5} ({:>5.1}%) [{}]\n",
+                label, bucket_count, percentage, bar
+            ));
+        }
+
+        let avg_us = histogram.average_us();
+        output.push_str(&format!("  Total: {}, Avg: {}\n", total_count, util::format_us(avg_us)));
+
+        output
+    }
+
 
     /// Formats human-readable statistics summary and writes it to the provided writer.
     /// Returns an io::Result to handle potential write errors.
     pub fn format_stats_human_readable(
-        &self,
+        &mut self, // Needs to be mutable to aggregate histograms
         config: &crate::config::Config,
         report_type: &str,
         mut writer: impl Write, // Accept a generic writer
     ) -> std::io::Result<()> {
+
+        // Aggregate histograms before reporting
+        self.aggregate_histograms();
 
         writeln!(writer, "\n--- Overall Statistics ({report_type}) ---")?;
         writeln!(
@@ -227,17 +423,27 @@ impl StatsCollector {
         };
         writeln!(writer, "Percentage Dropped:  {percentage:.2}%")?;
 
+        // Overall Bounce Histogram
+        writeln!(writer, "\n--- Overall Bounce Timing Histogram ---")?;
+        write!(writer, "{}", self.format_histogram_human(&self.overall_bounce_histogram))?;
+
+        // Overall Near-Miss Histogram
+        writeln!(writer, "\n--- Overall Near-Miss Timing Histogram (Passed within {}) ---", util::format_duration(config.near_miss_threshold()))?;
+        write!(writer, "{}", self.format_histogram_human(&self.overall_near_miss_histogram))?;
+
+
         let mut any_drops = false;
         for key_code in 0..self.per_key_stats.len() {
             let stats = &self.per_key_stats[key_code];
-            let total_drops_for_key = stats.press.count + stats.release.count + stats.repeat.count;
+            let total_drops_for_key = stats.press.dropped_count + stats.release.dropped_count + stats.repeat.dropped_count;
 
-            if total_drops_for_key > 0 {
+            if total_drops_for_key > 0 || stats.press.total_processed > 0 || stats.release.total_processed > 0 || stats.repeat.total_processed > 0 {
+                 // Only print key if it had any activity (passed or dropped)
                 if !any_drops {
                     writeln!(writer, "\n--- Dropped Event Statistics Per Key ---")?;
                     writeln!(writer, "Format: Key [Name] (Code):")?;
                     writeln!(
-                        writer, // Updated format description
+                        writer,
                         "  State (Value): Processed: <count>, Passed: <count>, Dropped: <count> (<rate>%) (Bounce Time: Min / Avg / Max)"
                     )?;
                     any_drops = true;
@@ -267,10 +473,10 @@ impl StatsCollector {
                                              value_code: i32,
                                              value_stats: &KeyValueStats|
                  -> std::io::Result<()> {
-                    if value_stats.count > 0 || value_stats.passed_count > 0 { // Print if any events (passed or dropped) for this state
+                    if value_stats.total_processed > 0 { // Print if any events (passed or dropped) for this state
                         // Calculate drop rate for this specific state
                         let drop_rate = if value_stats.total_processed > 0 {
-                            (value_stats.count as f64 / value_stats.total_processed as f64) * 100.0
+                            (value_stats.dropped_count as f64 / value_stats.total_processed as f64) * 100.0
                         } else {
                             0.0
                         };
@@ -278,7 +484,7 @@ impl StatsCollector {
                         write!(
                             writer, // Use write! not writeln!
                             "  {:<7} ({}): Processed: {}, Passed: {}, Dropped: {} ({:.2}%)",
-                            value_name, value_code, value_stats.total_processed, value_stats.passed_count, value_stats.count, drop_rate)?;
+                            value_name, value_code, value_stats.total_processed, value_stats.passed_count, value_stats.dropped_count, drop_rate)?;
                         if !value_stats.timings_us.is_empty() {
                             let timings = &value_stats.timings_us;
                             let min = timings.iter().min().copied().unwrap_or(0);
@@ -305,7 +511,7 @@ impl StatsCollector {
 
                 print_value_stats("Press", 1, &stats.press)?;
                 print_value_stats("Release", 0, &stats.release)?;
-                print_value_stats("Repeat", 2, &stats.repeat)?;
+                print_value_stats("Repeat", 2, &stats.repeat)?; // Include repeat stats line if processed
             }
         }
         if !any_drops {
@@ -313,9 +519,9 @@ impl StatsCollector {
         }
 
         let mut any_near_miss = false;
-        for idx in 0..self.per_key_passed_near_miss_timing.len() {
-            let timings = &self.per_key_passed_near_miss_timing[idx];
-            if !timings.is_empty() {
+        for idx in 0..self.per_key_near_miss_stats.len() {
+            let near_miss_stats = &self.per_key_near_miss_stats[idx];
+            if !near_miss_stats.timings_us.is_empty() {
                 if !any_near_miss {
                     writeln!(
                         writer,
@@ -334,6 +540,7 @@ impl StatsCollector {
                 let key_name = get_key_name(key_code);
                 let value_name = get_value_name(key_value);
 
+                let timings = &near_miss_stats.timings_us;
                 let min = timings.iter().min().copied().unwrap_or(0);
                 let max = timings.iter().max().copied().unwrap_or(0);
                 let sum: u64 = timings.iter().sum();
@@ -372,49 +579,44 @@ impl StatsCollector {
     }
 
     /// Prints human-readable statistics summary to stderr by calling format_stats_human_readable.
-    pub fn print_stats_to_stderr(&self, config: &crate::config::Config, report_type: &str) {
+    pub fn print_stats_to_stderr(&mut self, config: &crate::config::Config, report_type: &str) {
         // Ignore potential write errors when writing to stderr, as there's not much we can do.
         let _ =
             self.format_stats_human_readable(config, report_type, &mut std::io::stderr().lock());
     }
 
+    /// Helper to create JSON representation of a TimingHistogram.
+    fn create_histogram_json<'a>(histogram: &'a TimingHistogram) -> TimingHistogramJson<'a> {
+        let mut buckets_json = Vec::with_capacity(NUM_HISTOGRAM_BUCKETS);
+        for i in 0..NUM_HISTOGRAM_BUCKETS {
+            let min_ms = if i == 0 { 0 } else { HISTOGRAM_BUCKET_BOUNDARIES_MS[i-1] };
+            let max_ms = if i == NUM_HISTOGRAM_BUCKETS - 1 { None } else { Some(HISTOGRAM_BUCKET_BOUNDARIES_MS[i]) };
+            buckets_json.push(HistogramBucketJson {
+                min_ms,
+                max_ms,
+                count: histogram.buckets[i],
+            });
+        }
+        TimingHistogramJson {
+            buckets: buckets_json,
+            count: histogram.count,
+            avg_us: histogram.average_us(),
+            // min_us: histogram.min_us, // Optional
+            // max_us: histogram.max_us, // Optional
+        }
+    }
+
     /// Prints statistics in JSON format to the given writer.
     /// Includes runtime provided externally (calculated in main thread).
     pub fn print_stats_json(
-        &self,
+        &mut self, // Needs to be mutable to aggregate histograms
         config: &crate::config::Config,
         runtime_us: Option<u64>,
         report_type: &str,
         mut writer: impl Write,
     ) {
-
-        // --- Intermediate Structs for JSON Serialization ---
-        #[derive(Serialize)]
-        struct KeyValueStatsJson<'a> {
-            total_processed: u64,
-            passed_count: u64,
-            dropped_count: u64, // Renamed from 'count' for clarity in JSON
-            drop_rate: f64,
-            timings_us: &'a Vec<u64>, // Reference original timings
-        }
-
-        #[derive(Serialize)]
-        struct KeyStatsJson<'a> {
-            press: KeyValueStatsJson<'a>,
-            release: KeyValueStatsJson<'a>,
-            repeat: KeyValueStatsJson<'a>, // Keep repeat for structure consistency
-        }
-
-        // Modify PerKeyStatsJson to use KeyStatsJson and remove lifetime
-        #[derive(Serialize)]
-        struct PerKeyStatsJson {
-            key_code: u16,
-            key_name: &'static str,
-            total_processed: u64,
-            total_dropped: u64,
-            drop_percentage: f64, // Overall drop % for the key
-            stats: KeyStatsJson, // Use the new struct holding detailed stats
-        }
+        // Aggregate histograms before reporting
+        self.aggregate_histograms();
 
         // --- Prepare Per-Key Drop Stats for JSON ---
         let mut per_key_stats_json_vec = Vec::new();
@@ -423,7 +625,7 @@ impl StatsCollector {
                 + stats.release.total_processed
                 + stats.repeat.total_processed;
             let total_dropped_for_key =
-                stats.press.count + stats.release.count + stats.repeat.count; // Include repeat drops here for overall key drop count
+                stats.press.dropped_count + stats.release.dropped_count + stats.repeat.dropped_count;
 
             if total_processed_for_key > 0 { // Include keys with any activity (passed or dropped)
                 let key_code = key_code_usize as u16;
@@ -437,16 +639,17 @@ impl StatsCollector {
                 // Helper closure to create KeyValueStatsJson
                 let create_kv_stats_json = |kv_stats: &KeyValueStats| -> KeyValueStatsJson {
                     let drop_rate = if kv_stats.total_processed > 0 {
-                        (kv_stats.count as f64 / kv_stats.total_processed as f64) * 100.0
+                        (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
                     } else {
                         0.0
                     };
                     KeyValueStatsJson {
                         total_processed: kv_stats.total_processed,
                         passed_count: kv_stats.passed_count,
-                        dropped_count: kv_stats.count, // Use original drop count field
+                        dropped_count: kv_stats.dropped_count,
                         drop_rate,
                         timings_us: &kv_stats.timings_us,
+                        bounce_histogram: Self::create_histogram_json(&kv_stats.bounce_histogram),
                     }
                 };
 
@@ -471,33 +674,21 @@ impl StatsCollector {
 
         // --- Prepare Near-Miss Stats for JSON ---
         let mut near_miss_json_vec = Vec::new();
-        for (idx, timings) in self.per_key_passed_near_miss_timing.iter().enumerate() {
-            if !timings.is_empty() {
+        for (idx, near_miss_stats) in self.per_key_near_miss_stats.iter().enumerate() {
+            if !near_miss_stats.timings_us.is_empty() {
                 let key_code = (idx / NUM_KEY_STATES) as u16;
                 let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
                 let value_name = get_value_name(key_value);
 
-                // Calculate min/avg/max for near-miss timings
-                let min_us = timings.iter().min().copied().unwrap_or(0);
-                let max_us = timings.iter().max().copied().unwrap_or(0);
-                let sum: u64 = timings.iter().sum();
-                let avg_us = if !timings.is_empty() {
-                    sum / timings.len() as u64
-                } else {
-                    0
-                }; // Integer average is fine here
-
-                near_miss_json_vec.push(NearMissJson {
+                near_miss_json_vec.push(NearMissStatsJson {
                     key_code,
                     key_value,
                     key_name,
                     value_name,
-                    count: timings.len(),
-                    timings_us: timings, // Reference the original timings vector
-                    min_us,
-                    avg_us,
-                    max_us,
+                    count: near_miss_stats.timings_us.len(),
+                    timings_us: &near_miss_stats.timings_us, // Reference the original timings vector
+                    near_miss_histogram: Self::create_histogram_json(&near_miss_stats.histogram),
                 });
             }
         }
@@ -509,7 +700,6 @@ impl StatsCollector {
             runtime_us: Option<u64>,
             #[serde(skip_serializing_if = "Option::is_none")]
             runtime_human: Option<String>,
-            // Add human-readable config values to JSON output
             // Add raw config values as well for machine readability
             debounce_time_us: u64,
             near_miss_threshold_us: u64,
@@ -520,9 +710,12 @@ impl StatsCollector {
             key_events_processed: u64,
             key_events_passed: u64,
             key_events_dropped: u64,
-            // Use the new Vec types for serialization
-            per_key_stats: Vec<PerKeyStatsJson>, // Removed lifetime 'a
-            per_key_passed_near_miss_timing: Vec<NearMissJson<'a>>, // Keep lifetime 'a here for timings_us ref
+            // Overall Histograms
+            overall_bounce_histogram: TimingHistogramJson<'a>,
+            overall_near_miss_histogram: TimingHistogramJson<'a>,
+            // Per-Key and Per-Near-Miss details
+            per_key_stats: Vec<PerKeyStatsJson<'a>>, // Removed lifetime 'a
+            per_key_near_miss_stats: Vec<NearMissStatsJson<'a>>, // Keep lifetime 'a here for timings_us ref
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
@@ -543,8 +736,10 @@ impl StatsCollector {
             key_events_processed: self.key_events_processed,
             key_events_passed: self.key_events_passed,
             key_events_dropped: self.key_events_dropped,
+            overall_bounce_histogram: Self::create_histogram_json(&self.overall_bounce_histogram),
+            overall_near_miss_histogram: Self::create_histogram_json(&self.overall_near_miss_histogram),
             per_key_stats: per_key_stats_json_vec, // Use the prepared Vec
-            per_key_passed_near_miss_timing: near_miss_json_vec, // Use the prepared Vec
+            per_key_near_miss_stats: near_miss_json_vec, // Use the prepared Vec
         };
 
         // We are printing individual reports (cumulative or periodic) as separate JSON objects

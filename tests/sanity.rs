@@ -419,20 +419,25 @@ fn stats_output_json() {
     assert_eq!(detailed_stats["press"]["total_processed"], 2); // e1, e2
     assert_eq!(detailed_stats["press"]["passed_count"], 1); // e1 passed
     assert_eq!(detailed_stats["press"]["dropped_count"], 1); // e2 dropped
-    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON); // 1 drop / 2 processed = 50%
-    assert_eq!(detailed_stats["press"]["timings_us"], json!([3000]));
+    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSilon); // 1 drop / 2 processed = 50%
+    assert_eq!(detailed_stats["press"]["timings_us"], json!([3000])); // Bounce timing
+    assert!(detailed_stats["press"]["bounce_histogram"].is_object());
+
 
     assert_eq!(detailed_stats["release"]["total_processed"], 0);
     assert_eq!(detailed_stats["release"]["passed_count"], 0);
     assert_eq!(detailed_stats["release"]["dropped_count"], 0);
     assert!((detailed_stats["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
+    assert!(detailed_stats["release"]["bounce_histogram"].is_object());
+
 
     assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
     assert_eq!(detailed_stats["repeat"]["passed_count"], 0);
     assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
     assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
+    assert!(detailed_stats["repeat"]["bounce_histogram"].is_object());
 
 
     // Ensure KEY_B (48) is not present in the array
@@ -445,6 +450,16 @@ fn stats_output_json() {
         !key_b_present,
         "Stats for key_code 48 should not be present"
     );
+
+    // Check per_key_near_miss_stats array (should be empty)
+    let near_miss_stats_array = stats_json["per_key_near_miss_stats"]
+        .as_array()
+        .expect("per_key_near_miss_stats is not an array");
+    assert_eq!(near_miss_stats_array.len(), 0);
+
+    // Check overall histograms (should be present but potentially empty counts)
+    assert!(stats_json["overall_bounce_histogram"].is_object());
+    assert!(stats_json["overall_near_miss_histogram"].is_object());
 }
 
 #[test]
@@ -594,9 +609,144 @@ fn test_only_non_key_events() {
         "Per-key stats should be empty"
     );
     assert!(
-        stats_json["per_key_passed_near_miss_timing"]
+        stats_json["per_key_near_miss_stats"]
             .as_array() // Check if it's an array
             .is_none_or(|a| a.is_empty()), // Check if the array is empty
         "Near-miss stats should be empty"
     );
+    // Overall histograms should be present but empty
+    assert!(stats_json["overall_bounce_histogram"].is_object());
+    assert_eq!(stats_json["overall_bounce_histogram"]["count"], 0);
+    assert!(stats_json["overall_near_miss_histogram"].is_object());
+    assert_eq!(stats_json["overall_near_miss_histogram"]["count"], 0);
+}
+
+#[test]
+fn stats_output_only_passed() {
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(10_000, KEY_A, 0); // Pass
+    let e3 = key_ev(20_000, KEY_B, 1); // Pass
+    let input_events = vec![e1, e2, e3];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time")
+        .arg("5ms")
+        .arg("--stats-json") // Test JSON output
+        .env("RUST_LOG", "warn")
+        .write_stdin(input_bytes);
+
+    let output = cmd.output().expect("Failed to run command");
+    assert!(output.status.success());
+
+    let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
+    let json_start_index = stderr_str.find('{').expect("No JSON block start '{' found");
+    let json_part = &stderr_str[json_start_index..];
+    let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON from stderr: {e}\nStderr:\n{stderr_str}"
+        )
+    });
+
+    assert_eq!(stats_json["key_events_processed"], 3);
+    assert_eq!(stats_json["key_events_passed"], 3);
+    assert_eq!(stats_json["key_events_dropped"], 0);
+
+    // Check per_key_stats for KEY_A
+    let key_a_stats = stats_json["per_key_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_A)
+        .expect("KEY_A stats not found");
+    assert_eq!(key_a_stats["total_processed"], 2); // e1, e2
+    assert_eq!(key_a_stats["total_dropped"], 0);
+    assert!((key_a_stats["drop_percentage"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(key_a_stats["stats"]["press"]["total_processed"], 1); // e1
+    assert_eq!(key_a_stats["stats"]["press"]["passed_count"], 1);
+    assert_eq!(key_a_stats["stats"]["press"]["dropped_count"], 0);
+    assert!((key_a_stats["stats"]["press"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(key_a_stats["stats"]["release"]["total_processed"], 1); // e2
+    assert_eq!(key_a_stats["stats"]["release"]["passed_count"], 1);
+    assert_eq!(key_a_stats["stats"]["release"]["dropped_count"], 0);
+    assert!((key_a_stats["stats"]["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+
+    // Check per_key_stats for KEY_B
+    let key_b_stats = stats_json["per_key_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_B)
+        .expect("KEY_B stats not found");
+    assert_eq!(key_b_stats["total_processed"], 1); // e3
+    assert_eq!(key_b_stats["total_dropped"], 0);
+    assert!((key_b_stats["drop_percentage"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert_eq!(key_b_stats["stats"]["press"]["total_processed"], 1); // e3
+    assert_eq!(key_b_stats["stats"]["press"]["passed_count"], 1);
+    assert_eq!(key_b_stats["stats"]["press"]["dropped_count"], 0);
+    assert!((key_b_stats["stats"]["press"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+
+    // Check overall histograms are empty
+    assert_eq!(stats_json["overall_bounce_histogram"]["count"], 0);
+    assert_eq!(stats_json["overall_near_miss_histogram"]["count"], 0);
+}
+
+#[test]
+fn stats_output_only_dropped() {
+    let e1 = key_ev(0, KEY_A, 1); // Pass
+    let e2 = key_ev(3_000, KEY_A, 1); // Drop
+    let e3 = key_ev(4_000, KEY_A, 1); // Drop
+    let input_events = vec![e1, e2, e3];
+    let input_bytes = events_to_bytes(&input_events);
+
+    let mut cmd = Command::cargo_bin("intercept-bounce").unwrap();
+    cmd.arg("--debounce-time")
+        .arg("5ms")
+        .arg("--stats-json") // Test JSON output
+        .env("RUST_LOG", "warn")
+        .write_stdin(input_bytes);
+
+    let output = cmd.output().expect("Failed to run command");
+    assert!(output.status.success());
+
+    let stderr_str = String::from_utf8(output.stderr).expect("Stderr not valid UTF-8");
+    let json_start_index = stderr_str.find('{').expect("No JSON block start '{' found");
+    let json_part = &stderr_str[json_start_index..];
+    let stats_json: Value = serde_json::from_str(json_part).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON from stderr: {e}\nStderr:\n{stderr_str}"
+        )
+    });
+
+    assert_eq!(stats_json["key_events_processed"], 3);
+    assert_eq!(stats_json["key_events_passed"], 1); // e1
+    assert_eq!(stats_json["key_events_dropped"], 2); // e2, e3
+
+    // Check per_key_stats for KEY_A
+    let key_a_stats = stats_json["per_key_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_A)
+        .expect("KEY_A stats not found");
+    assert_eq!(key_a_stats["total_processed"], 3); // e1, e2, e3
+    assert_eq!(key_a_stats["total_dropped"], 2); // e2, e3
+    assert!((key_a_stats["drop_percentage"].as_f64().unwrap() - (2.0/3.0)*100.0).abs() < f64::EPSILON);
+    assert_eq!(key_a_stats["stats"]["press"]["total_processed"], 3); // e1, e2, e3
+    assert_eq!(key_a_stats["stats"]["press"]["passed_count"], 1); // e1
+    assert_eq!(key_a_stats["stats"]["press"]["dropped_count"], 2); // e2, e3
+    assert!((key_a_stats["stats"]["press"]["drop_rate"].as_f64().unwrap() - (2.0/3.0)*100.0).abs() < f64::EPSILON);
+    assert_eq!(key_a_stats["stats"]["press"]["timings_us"], json!([3000, 4000])); // Diffs relative to e1
+
+    // Check overall bounce histogram
+    let overall_bounce_hist = &stats_json["overall_bounce_histogram"];
+    assert_eq!(overall_bounce_hist["count"], 2);
+    assert_eq!(overall_bounce_hist["avg_us"], (3000 + 4000) / 2); // 3500
+    // 3000 us = 3ms -> 2-4ms bucket (index 2)
+    // 4000 us = 4ms -> 4-8ms bucket (index 3)
+    assert_eq!(overall_bounce_hist["buckets"][2]["count"], 1);
+    assert_eq!(overall_bounce_hist["buckets"][3]["count"], 1);
+
+    // Check overall near-miss histogram is empty
+    assert_eq!(stats_json["overall_near_miss_histogram"]["count"], 0);
 }
