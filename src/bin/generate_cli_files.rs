@@ -44,9 +44,10 @@ fn main() -> Result<(), Error> {
         };
         let completions_path = out_path.join(format!("{bin_name}.{ext}"));
         println!("Generating completion file: {completions_path:?}");
-        // The output directory `out_path` is already created before the loop.
-        // `generate_to` writes directly to the file path provided.
-        generate_to(shell, &mut cmd.clone(), bin_name, &completions_path)?;
+        // Explicitly create the file first.
+        let mut file = fs::File::create(&completions_path)?;
+        // Call generate_to with the file handle instead of the path.
+        generate_to(shell, &mut cmd.clone(), bin_name, &mut file)?;
     }
 
     println!(
