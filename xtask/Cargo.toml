@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false   # This crate is not meant to be published            
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "cargo"] } # Use clap
+clap_complete = "4.5"
+clap_mangen = "0.2"
+clap_complete_nushell = "4.5.5"
+anyhow = "1.0"                                             # For easier error handling in xtask
