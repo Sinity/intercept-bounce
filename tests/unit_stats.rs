@@ -49,7 +49,7 @@ fn timing_histogram_average() {
     assert_eq!(hist.sum_us, 6000);
     assert_eq!(hist.average_us(), 2000);
 
-    let hist2 = TimingHistogram::default(); // Removed mut
+    let hist2 = TimingHistogram::default();
     assert_eq!(hist2.count, 0);
     assert_eq!(hist2.sum_us, 0);
     assert_eq!(hist2.average_us(), 0);
@@ -460,8 +460,20 @@ fn stats_human_output_formatting() {
     assert!(output_string.contains("Key [KEY_B] (48):"));
     assert!(output_string.contains("Total Processed: 2, Passed: 2, Dropped: 0 (0.00%)")); // 0/2 = 0%
     assert!(output_string.contains("Press   (1): Processed: 2, Passed: 2, Dropped: 0 (0.00%)")); // 0/2 = 0%
-    // Explicitly assert that the line for KEY_B Release is NOT present
-    assert!(!output_string.contains("Release (0): Processed: 0, Passed: 0, Dropped: 0 (0.00%)"));
+
+    // Check that the line for KEY_B Release is NOT present.
+    // Find the section for KEY_B
+    let key_b_section_start = output_string.find("Key [KEY_B] (48):");
+    assert!(key_b_section_start.is_some(), "KEY_B section should be present");
+    let rest_of_output = &output_string[key_b_section_start.unwrap()..];
+    // Find the start of the next key section or the end of the output
+    let next_key_start = rest_of_output[1..].find("\nKey ["); // Look for newline followed by "Key ["
+    let key_b_section_end = next_key_start.map_or(rest_of_output.len(), |idx| idx + 1); // Adjust index
+    let key_b_section = &rest_of_output[..key_b_section_end];
+
+    // Assert that the Release line is NOT within the KEY_B section
+    assert!(!key_b_section.contains("\n  Release (0):")); // Check for newline + indentation + "Release (0):"
+
     assert!(output_string.contains("Repeat  (2): Processed: 0, Passed: 0, Dropped: 0 (0.00%)")); // 0/0 = 0%
 
     // Per-Key Near-Miss Stats
@@ -536,7 +548,7 @@ fn stats_passed_counts_and_drop_rates() {
     // Drop rate: 0 / 1 = 0%
 
     // Overall Counts
-    // Fix assertion: 3 (A Press) + 3 (A Release) + 1 (B Press) + 1 (C Repeat) = 8 events processed
+    // 3 (A Press) + 3 (A Release) + 1 (B Press) + 1 (C Repeat) = 8 events processed
     assert_eq!(stats.key_events_processed, 8);
     assert_eq!(stats.key_events_passed, 5); // a1, a3, a4, b1, c1
     assert_eq!(stats.key_events_dropped, 3); // a2, a5, a6
@@ -595,7 +607,6 @@ fn stats_collector_aggregate_histograms() {
     // Check overall near-miss histogram
     let overall_near_miss_hist = &stats.overall_near_miss_histogram;
     assert_eq!(overall_near_miss_hist.count, 3); // 21000, 25000, 40000 us
-    // Fix assertion for sum_us
     assert_eq!(overall_near_miss_hist.sum_us, 21000 + 25000 + 40000); // 86000 us
     assert_eq!(overall_near_miss_hist.average_us(), 86000 / 3); // 28666 us
 
@@ -748,9 +759,7 @@ fn stats_drop_rate_edge_cases() {
     assert!(output_string.contains("Press   (1): Processed: 1, Passed: 0, Dropped: 1 (100.00%)"));
 
     // Key D should not appear in the per-key stats section as it had no activity recorded via record_event_info_with_config
-    // Removed check for KEY_D as it's not defined.
-    // let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D as u16);
-    // assert!(!key_d_present, "KEY_D should not be in JSON stats");
+    // The default state of the StatsCollector ensures this.
 
     // Check JSON output for edge cases
     let mut buf = Vec::new();
@@ -782,7 +791,6 @@ fn stats_drop_rate_edge_cases() {
     assert!((key_c_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 100.0).abs() < f64::EPSILON);
 
     // Ensure KEY_D is not present
-    // Removed check for KEY_D as it's not defined.
-    // let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D as u16);
-    // assert!(!key_d_present, "KEY_D should not be in JSON stats");
+    let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D as u16);
+    assert!(!key_d_present, "KEY_D should not be in JSON stats because it had no activity");
 }
