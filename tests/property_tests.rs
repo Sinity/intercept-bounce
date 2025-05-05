@@ -109,7 +109,7 @@ proptest! {
         let mut filter = BounceFilter::new();
 
         for (event_us, type_, code, value) in event_data {
-            let event = key_ev(event_us, code, value); // Use helper from test_helpers
+             let event = key_ev(event_us, code, value); // Use helper from test_helpers
 
             if !event::is_key_event(&event) {
                 let info = filter.check_event(&event, debounce_time);

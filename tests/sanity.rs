@@ -419,7 +419,7 @@ fn stats_output_json() {
     assert_eq!(detailed_stats["press"]["total_processed"], 2); // e1, e2
     assert_eq!(detailed_stats["press"]["passed_count"], 1); // e1 passed
     assert_eq!(detailed_stats["press"]["dropped_count"], 1); // e2 dropped
-    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSilon); // 1 drop / 2 processed = 50%
+    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON); // 1 drop / 2 processed = 50%
     assert_eq!(detailed_stats["press"]["timings_us"], json!([3000])); // Bounce timing
     assert!(detailed_stats["press"]["bounce_histogram"].is_object());
 
@@ -459,7 +459,9 @@ fn stats_output_json() {
 
     // Check overall histograms (should be present but potentially empty counts)
     assert!(stats_json["overall_bounce_histogram"].is_object());
+    assert_eq!(stats_json["overall_bounce_histogram"]["count"], 1); // e2 bounce
     assert!(stats_json["overall_near_miss_histogram"].is_object());
+    assert_eq!(stats_json["overall_near_miss_histogram"]["count"], 0); // No near misses in this sequence
 }
 
 #[test]
@@ -605,13 +607,13 @@ fn test_only_non_key_events() {
     assert!(
         stats_json["per_key_stats"]
             .as_array() // Check if it's an array
-            .is_none_or(|a| a.is_empty()), // Check if the array is empty
+            .map_or(true, |a| a.is_empty()), // Check if the array is empty or not an array
         "Per-key stats should be empty"
     );
     assert!(
         stats_json["per_key_near_miss_stats"]
             .as_array() // Check if it's an array
-            .is_none_or(|a| a.is_empty()), // Check if the array is empty
+            .map_or(true, |a| a.is_empty()), // Check if the array is empty or not an array
         "Near-miss stats should be empty"
     );
     // Overall histograms should be present but empty

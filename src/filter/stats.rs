@@ -12,18 +12,18 @@ use std::time::Duration;
 // Define histogram bucket boundaries in milliseconds.
 // These represent the *upper bounds* of the buckets.
 // Example: [1, 2, 4] means buckets are <1ms, 1-2ms, 2-4ms, >=4ms.
-const HISTOGRAM_BUCKET_BOUNDARIES_MS: &[u64] = &[1, 2, 4, 8, 16, 32, 64, 128];
-const NUM_HISTOGRAM_BUCKETS: usize = HISTOGRAM_BUCKET_BOUNDARIES_MS.len() + 1;
+pub(crate) const HISTOGRAM_BUCKET_BOUNDARIES_MS: &[u64] = &[1, 2, 4, 8, 16, 32, 64, 128];
+pub(crate) const NUM_HISTOGRAM_BUCKETS: usize = HISTOGRAM_BUCKET_BOUNDARIES_MS.len() + 1;
 
 /// Represents a histogram of timing values.
 #[derive(Debug, Serialize, Clone)]
 pub struct TimingHistogram {
     // Counts per bucket. Index 0 is for values < boundary[0], index N is for values >= boundary[N-1].
-    buckets: [u64; NUM_HISTOGRAM_BUCKETS],
+    pub(crate) buckets: [u64; NUM_HISTOGRAM_BUCKETS],
     // Total count of events recorded in this histogram.
-    count: u64,
+    pub(crate) count: u64,
     // Sum of all timings recorded (in microseconds) for calculating average.
-    sum_us: u64,
+    pub(crate) sum_us: u664,
     // Optional: Store min/max directly if needed, otherwise calculate from raw data if kept.
     // min_us: u64,
     // max_us: u64,
@@ -209,17 +209,17 @@ pub struct StatsCollector {
     /// Total count of key events processed (passed or dropped).
     pub key_events_processed: u64,
     /// Total count of key events that passed the filter.
-    pub key_events_passed: u64,
+    pub key_events_passed: u664,
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
-    pub per_key_stats: Box<[KeyStats; FILTER_MAP_SIZE]>,
+    pub(crate) per_key_stats: Box<[KeyStats; FILTER_MAP_SIZE]>,
     /// Holds near-miss stats per key code and value. Indexed by `keycode * 3 + value`.
-    pub per_key_near_miss_stats: Box<[NearMissStats; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
+    pub(crate) per_key_near_miss_stats: Box<[NearMissStats; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
     /// Overall histogram for all bounce timings. Aggregated before reporting.
-    overall_bounce_histogram: TimingHistogram,
+    pub(crate) overall_bounce_histogram: TimingHistogram,
     /// Overall histogram for all near_miss timings. Aggregated before reporting.
-    overall_near_miss_histogram: TimingHistogram,
+    pub(crate) overall_near_miss_histogram: TimingHistogram,
 }
 
 // Implement Default to allow std::mem::take in logger.
@@ -318,7 +318,7 @@ impl StatsCollector {
 
     /// Aggregates per-key histograms into the overall histograms.
     /// Should be called before generating reports.
-    fn aggregate_histograms(&mut self) {
+    pub(crate) fn aggregate_histograms(&mut self) {
         // Reset overall histograms (important if called multiple times, e.g., periodic)
         self.overall_bounce_histogram = TimingHistogram::default();
         self.overall_near_miss_histogram = TimingHistogram::default();
