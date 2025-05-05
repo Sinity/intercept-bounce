@@ -22,7 +22,7 @@ use intercept_bounce::event;
 use intercept_bounce::filter;
 use intercept_bounce::logger;
 use intercept_bounce::{cli, config::Config, util};
-use logger::{EventInfo, LogMessage, Logger};
+use logger::{LogMessage, Logger}; // Removed EventInfo from here
 use tracing::{debug, error, info, instrument, trace, warn};
 
 // --- OTLP Imports ---
@@ -309,14 +309,16 @@ fn main() -> io::Result<()> {
                             Ok(mut filter) => {
                                 trace!("BounceFilter mutex locked successfully.");
                                 let info = filter.check_event(&ev, ctx.cfg.debounce_time());
-                                trace!(?info, "BounceFilter check_event returned");
+                                // Log individual fields instead of the whole struct using `?`
+                                trace!(event_us = info.event_us, is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event returned");
                                 info
                             }
                             Err(poisoned) => {
                                 error!("FATAL: BounceFilter mutex poisoned in main event loop.");
                                 let mut filter = poisoned.into_inner();
                                 let info = filter.check_event(&ev, ctx.cfg.debounce_time());
-                                trace!(?info, "BounceFilter check_event (poisoned) returned");
+                                // Log individual fields instead of the whole struct using `?`
+                                trace!(event_us = info.event_us, is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event (poisoned) returned");
                                 info
                             }
                         }
