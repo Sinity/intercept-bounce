@@ -68,3 +68,6 @@ harness = false
 name = "generate-cli-files"
 path = "src/bin/generate_cli_files.rs"
 required-features = []
+
+[workspace]
+members = [".", "xtask", "fuzz"]
