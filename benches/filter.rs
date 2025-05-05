@@ -1,9 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use input_linux_sys::{input_event, EV_KEY, EV_SYN};
-use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector;
 use intercept_bounce::filter::BounceFilter;
-use intercept_bounce::logger::{EventInfo, LogMessage, Logger};
+use intercept_bounce::logger::{LogMessage, Logger};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::thread;
@@ -11,8 +9,9 @@ use std::time::Duration;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-mod common; // Include the common module
-use common::*; // Import helpers
+// mod common; // Include the common module
+// use input_linux_sys::KEY_A;
+// use common::*; // Import helpers
 
 fn bench_filter_check_event(c: &mut Criterion) {
     let debounce_time = Duration::from_millis(10); // 10ms debounce
@@ -48,7 +47,6 @@ fn bench_filter_check_event(c: &mut Criterion) {
         })
     });
 }
-
 
 // Helper to create a populated StatsCollector (example)
 fn create_populated_stats() -> StatsCollector {
@@ -104,7 +102,11 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(passed_event_info(key_ev(debounce_time.as_micros() as u64, 30, 1), debounce_time.as_micros() as u64, Some(0)));
+            let msg = LogMessage::Event(passed_event_info(
+                key_ev(debounce_time.as_micros() as u64, 30, 1),
+                debounce_time.as_micros() as u64,
+                Some(0),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -122,7 +124,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(bounced_event_info(key_ev(15_000, 30, 1), 15_000, 5_000, Some(10_000)));
+            let msg = LogMessage::Event(bounced_event_info(
+                key_ev(15_000, 30, 1),
+                15_000,
+                5_000,
+                Some(10_000),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -140,7 +147,11 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(passed_event_info(key_ev(debounce_time.as_micros() as u64, 30, 1), debounce_time.as_micros() as u64, Some(0)));
+            let msg = LogMessage::Event(passed_event_info(
+                key_ev(debounce_time.as_micros() as u64, 30, 1),
+                debounce_time.as_micros() as u64,
+                Some(0),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -158,7 +169,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(bounced_event_info(key_ev(15_000, 30, 1), 15_000, 5_000, Some(10_000)));
+            let msg = LogMessage::Event(bounced_event_info(
+                key_ev(15_000, 30, 1),
+                15_000,
+                5_000,
+                Some(10_000),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -176,7 +192,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(bounced_event_info(key_ev(15_000, 30, 1), 15_000, 5_000, Some(10_000)));
+            let msg = LogMessage::Event(bounced_event_info(
+                key_ev(15_000, 30, 1),
+                15_000,
+                5_000,
+                Some(10_000),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -194,7 +215,11 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None);
         // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(passed_event_info(key_ev(25_000, 30, 1), 25_000, Some(10_000)));
+            let msg = LogMessage::Event(passed_event_info(
+                key_ev(25_000, 30, 1),
+                25_000,
+                Some(10_000),
+            ));
             logger.process_message(msg, &None);
         })
     });
@@ -231,7 +256,11 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
                                                                                     // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(passed_event_info(key_ev(debounce_time.as_micros() as u64, 30, 1), debounce_time.as_micros() as u64, Some(0)));
+            let msg = LogMessage::Event(passed_event_info(
+                key_ev(debounce_time.as_micros() as u64, 30, 1),
+                debounce_time.as_micros() as u64,
+                Some(0),
+            ));
             logger.process_message(msg, &None); // Add &None for near_miss_counter
         })
     });
@@ -249,7 +278,12 @@ fn bench_logger_process_message(c: &mut Criterion) {
         let mut logger = Logger::new(receiver.clone(), running.clone(), cfg, None); // Add None for otel_meter
                                                                                     // Recreate the EventInfo inside the closure for each iteration
         b.iter(|| {
-            let msg = LogMessage::Event(bounced_event_info(key_ev(15_000, 30, 1), 15_000, 5_000, Some(10_000)));
+            let msg = LogMessage::Event(bounced_event_info(
+                key_ev(15_000, 30, 1),
+                15_000,
+                5_000,
+                Some(10_000),
+            ));
             logger.process_message(msg, &None); // Add &None for near_miss_counter
         })
     });

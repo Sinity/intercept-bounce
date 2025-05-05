@@ -11,8 +11,8 @@ use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use chrono::Local;
 use input_linux_sys::{input_event, EV_MSC, EV_SYN};
-use std::io;
 use opentelemetry::metrics::{Counter, Meter};
+use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -153,11 +153,7 @@ impl Logger {
     /// Processes a single message received from the main thread.
     /// Updates statistics and performs logging if enabled.
     #[instrument(name = "logger_process_message", skip(self, msg, near_miss_counter), fields(otel.kind = "internal", event_type=tracing::field::Empty, is_bounce=tracing::field::Empty))]
-    pub fn process_message(
-        &mut self,
-        msg: LogMessage,
-        near_miss_counter: &Option<Counter<u64>>,
-    ) {
+    pub fn process_message(&mut self, msg: LogMessage, near_miss_counter: &Option<Counter<u64>>) {
         // Made public for benches/tests
         match msg {
             LogMessage::Event(data) => {
@@ -225,7 +221,7 @@ impl Logger {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
                 &self.config,
-                None,                     // Runtime is only for cumulative
+                None, // Runtime is only for cumulative
                 "Periodic",
                 &mut io::stderr().lock(),
             );
@@ -275,7 +271,8 @@ impl Logger {
             } else {
                 " (Bounce Time: N/A)".to_string()
             }
-        } else { // Not a bounce or not a key event
+        } else {
+            // Not a bounce or not a key event
             "".to_string()
         };
 
@@ -285,7 +282,8 @@ impl Logger {
                     if Duration::from_micros(diff) >= self.config.debounce_time()
                         && Duration::from_micros(diff) <= self.config.near_miss_threshold()
                     {
-                        format!(" (Diff since last passed: {})", util::format_us(diff)) // Keep util::format_us
+                        format!(" (Diff since last passed: {})", util::format_us(diff))
+                    // Keep util::format_us
                     } else {
                         "".to_string()
                     }
@@ -295,12 +293,17 @@ impl Logger {
             } else {
                 "".to_string()
             }
-        } else { // Not a passed key event or no previous passed event
+        } else {
+            // Not a passed key event or no previous passed event
             "".to_string()
         };
 
         let relative_human = format_relative_us(relative_us);
-        let key_info_str = if event::is_key_event(&data.event) { format!(" Key [{key_name_str}] ({})", data.event.code) } else { "".to_string() };
+        let key_info_str = if event::is_key_event(&data.event) {
+            format!(" Key [{key_name_str}] ({})", data.event.code)
+        } else {
+            "".to_string()
+        };
 
         // Use info! macro for event logging
         info!(
@@ -368,8 +371,6 @@ impl Logger {
             bounce_time_us = data.diff_us,
             bounce_info = %bounce_info_str,
             "[DROP] {relative_human} {type_name} ({code}, {value_name} {value}) Key [{key_name}] ({code}){bounce_info_str}",
-            // No additional arguments needed for the format string itself
-            bounce_info_str
         );
     }
 }
@@ -385,4 +386,3 @@ fn format_relative_us(relative_us: u64) -> String {
     };
     format!("{s:<10}") // Keep format! here for padding
 }
-

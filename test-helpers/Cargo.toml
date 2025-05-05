@@ -5,9 +5,7 @@ edition = "2021"
 authors = ["sinity <ezo.dev@gmail.com>"]
 description = "Common functions for tests"
 license = "MIT OR Apache-2.0"
-keywords = ["interception", "keyboard", "debounce", "evdev"]
 
-[dev-dependencies]
-intersect-bounce = ??
-
-input-linux-sys = "0.1"
+[dependencies]
+intercept-bounce = { path = ".." }
+input-linux-sys = "0.4"

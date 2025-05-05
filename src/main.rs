@@ -101,7 +101,6 @@ fn set_high_priority() {
     }
 }
 
-
 /// Sets the main and logger running flags to false and logs the shutdown reason.
 fn trigger_shutdown(
     reason: &str,
@@ -161,7 +160,8 @@ fn main() -> io::Result<()> {
     let logger_running_signal = Arc::clone(&logger_running);
     let final_stats_printed_signal = Arc::clone(&final_stats_printed);
     thread::spawn(move || {
-        if let Some(sig) = signals.forever().next() { // `sig` is used in format string
+        if let Some(sig) = signals.forever().next() {
+            // `sig` is used in format string
             let reason = format!("Received signal {}", sig);
             // Ensure final stats are printed by the signal handler if it triggers shutdown.
             final_stats_printed_signal.store(true, Ordering::SeqCst);
@@ -219,7 +219,12 @@ fn main() -> io::Result<()> {
     };
 
     // Run the main event processing loop.
-    run_main_loop(&main_loop_context, &mut main_state, &otel_counters, &logger_running);
+    run_main_loop(
+        &main_loop_context,
+        &mut main_state,
+        &otel_counters,
+        &logger_running,
+    );
 
     info!("Main event loop finished");
 
@@ -262,7 +267,8 @@ fn main() -> io::Result<()> {
             info!(target: "stats", stats_kind = "cumulative", format = "human", "Emitting final statistics");
             final_stats.print_stats_to_stderr(&cfg, "Cumulative");
             if let Some(rt) = runtime_us {
-                info!(runtime = %util::format_duration(Duration::from_micros(rt)), "Total Runtime"); // Keep %util::...
+                info!(runtime = %util::format_duration(Duration::from_micros(rt)), "Total Runtime");
+                // Keep %util::...
             }
         }
         if main_state.total_dropped_log_messages > 0 {
@@ -281,7 +287,6 @@ fn main() -> io::Result<()> {
     info!("Application exiting successfully");
     Ok(())
 }
-
 
 /// Processes a single input event.
 /// Handles filtering, logging, and writing passed events to stdout.
@@ -379,7 +384,6 @@ fn process_event(
 
     Ok(())
 }
-
 
 /// The main event reading and processing loop.
 /// Reads events from stdin, processes them using `process_event`,
