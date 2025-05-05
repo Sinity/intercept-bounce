@@ -1,6 +1,9 @@
 use input_linux_sys::{
-    pub input_event, EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN, // Add pub here
+    input_event, EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN,
 };
+// Re-export input_event publicly
+pub use input_linux_sys::input_event;
+
 use libc::{self, c_ulong, ioctl};
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind};
