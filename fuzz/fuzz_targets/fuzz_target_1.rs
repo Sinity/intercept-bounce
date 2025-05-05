@@ -41,7 +41,8 @@ fuzz_target!(|data: &[u8]| {
             // Call the function under test. The primary goal of fuzzing here
             // is to find panics, crashes, hangs, or memory issues within check_event
             // when processing potentially malformed or unexpected event data.
-            let (_is_bounce, _diff_us, _last_passed_us) = filter.check_event(&event, debounce_time);
+            // The function now returns an EventInfo struct.
+            let _event_info = filter.check_event(&event, debounce_time);
 
             // Optional: Add basic assertions if specific invariants should hold even with garbage input.
             // For example, ensure runtime calculation doesn't panic.
