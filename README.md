@@ -52,6 +52,9 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 >   * Output statistics (on exit and periodic dumps) in JSON format to stderr instead of the default human-readable format.
 > * `--verbose`:
 >   * Enable verbose logging, including internal state, thread startup/shutdown messages, and detailed debug information.
+> * `--ring-buffer-size <SIZE>`:
+>   * Size of the ring buffer for storing recently passed events (for debugging). Set to 0 to disable. (Default: 0).
+>   * Note: The buffer has a fixed internal capacity (currently 64); this flag controls how much of it is actively used.
 > * `-h, --help`: Print help information.
 > * `-V, --version`: Print version information.
 
@@ -154,16 +157,12 @@ Compare the results, particularly for the `logger::channel_send_burst` benchmark
 
 ### Generating Shell Completions and Man Pages
 
-You can generate shell completion scripts (Bash, Zsh, Fish, etc.) and a man page using the provided helper binary:
+You can generate shell completion scripts (Bash, Zsh, Fish, etc.) and a man page using the provided xtask command:
 
-```bash
-# Ensure OUT_DIR is set (or default to target/generated)
-export OUT_DIR=target/generated
-
-# Run the generation binary
-cargo run --bin generate-cli-files
+```sh
+cargo xtask generate-docs
 ```
-The generated files will be placed in the `target/generated` directory (or the directory specified by `OUT_DIR`). You can then install them to the appropriate locations on your system (e.g., `/usr/local/share/man/man1/` for the man page, `/usr/share/bash-completion/completions/` for Bash completions).
+The generated files will be placed in the `docs/man` and `docs/completions` directories within the project root. You can then install them to the appropriate locations on your system (e.g., `/usr/local/share/man/man1/` for the man page, `/usr/share/bash-completion/completions/` for Bash completions). The Nix flake automatically installs these if you build using Nix.
 ---
 
 ## Additional Ideas
