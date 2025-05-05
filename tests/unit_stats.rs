@@ -460,8 +460,8 @@ fn stats_human_output_formatting() {
     assert!(output_string.contains("Key [KEY_B] (48):"));
     assert!(output_string.contains("Total Processed: 2, Passed: 2, Dropped: 0 (0.00%)")); // 0/2 = 0%
     assert!(output_string.contains("Press   (1): Processed: 2, Passed: 2, Dropped: 0 (0.00%)")); // 0/2 = 0%
-    // Removed assertion for KEY_B Release line, as it's not printed when total_processed is 0
-    // assert!(output_string.contains("Release (0): Processed: 0, Passed: 0, Dropped: 0 (0.00%)")); // 0/0 = 0%
+    // Explicitly assert that the line for KEY_B Release is NOT present
+    assert!(!output_string.contains("Release (0): Processed: 0, Passed: 0, Dropped: 0 (0.00%)"));
     assert!(output_string.contains("Repeat  (2): Processed: 0, Passed: 0, Dropped: 0 (0.00%)")); // 0/0 = 0%
 
     // Per-Key Near-Miss Stats
@@ -749,7 +749,8 @@ fn stats_drop_rate_edge_cases() {
 
     // Key D should not appear in the per-key stats section as it had no activity recorded via record_event_info_with_config
     // Removed check for KEY_D as it's not defined.
-    // assert!(!output_string.contains("Key [KEY_D]"));
+    // let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D as u16);
+    // assert!(!key_d_present, "KEY_D should not be in JSON stats");
 
     // Check JSON output for edge cases
     let mut buf = Vec::new();
