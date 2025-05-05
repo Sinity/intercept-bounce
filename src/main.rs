@@ -304,32 +304,26 @@ fn main() -> io::Result<()> {
                     }
 
                     trace!("Locking BounceFilter mutex...");
-                    let (is_bounce, diff_us, last_passed_us) = {
+                    let event_info = {
                         match ctx.bounce_filter.lock() {
                             Ok(mut filter) => {
                                 trace!("BounceFilter mutex locked successfully.");
-                                let result = filter.check_event(&ev, ctx.cfg.debounce_time());
-                                trace!(?result, "BounceFilter check_event returned");
-                                result
+                                let info = filter.check_event(&ev, ctx.cfg.debounce_time());
+                                trace!(?info, "BounceFilter check_event returned");
+                                info
                             }
                             Err(poisoned) => {
                                 error!("FATAL: BounceFilter mutex poisoned in main event loop.");
                                 let mut filter = poisoned.into_inner();
-                                let result = filter.check_event(&ev, ctx.cfg.debounce_time());
-                                trace!(?result, "BounceFilter check_event (poisoned) returned");
-                                result
+                                let info = filter.check_event(&ev, ctx.cfg.debounce_time());
+                                trace!(?info, "BounceFilter check_event (poisoned) returned");
+                                info
                             }
                         }
                     };
                     trace!("BounceFilter mutex unlocked");
 
-                    let event_info = EventInfo {
-                        event: ev,
-                        event_us,
-                        is_bounce,
-                        diff_us,
-                        last_passed_us,
-                    };
+                    // event_info is now returned directly from check_event
                     trace!(event_type = event_info.event.type_,
                        event_code = event_info.event.code,
                        event_value = event_info.event.value,
@@ -375,13 +369,14 @@ fn main() -> io::Result<()> {
                         }
                     }
 
-                    if !is_bounce {
+                    if !event_info.is_bounce {
                         trace!("Event passed filter. Attempting to write to stdout...");
                         if let Some(counter) = &otel_counters.events_passed {
                             counter.add(1, &[]);
                         }
 
-                        if let Err(e) = write_event_raw(ctx.stdout_fd, &ev) {
+                        // Use event_info.event which is a copy of the original event
+                        if let Err(e) = write_event_raw(ctx.stdout_fd, &event_info.event) {
                             if e.kind() == ErrorKind::BrokenPipe {
                                 info!("Output pipe broken, exiting");
                                 debug!("Setting main_running flag to false due to BrokenPipe");

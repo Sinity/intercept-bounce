@@ -6,6 +6,7 @@ pub mod keynames;
 pub mod stats;
 
 use crate::event::{self, is_key_event};
+use crate::logger::EventInfo; // Import EventInfo
 use input_linux_sys::input_event;
 use std::time::Duration; // Import Duration
 
@@ -71,15 +72,9 @@ impl BounceFilter {
     /// * `is_bounce`: `true` if the event should be dropped, `false` otherwise.
     /// * `diff_us_if_bounce`: If `is_bounce` is true, contains the time difference (µs)
     ///   between this event and the last passed event. Otherwise `None`.
-    /// * `last_passed_us_before_this`: The timestamp (µs) of the previous event
-    ///   of the same key code and value that passed the filter, or `None` if this
-    ///   is the first passed event of its type. This is needed by the logger
-    ///   thread to calculate near-miss statistics.
-    pub fn check_event(
-        &mut self,
-        event: &input_event,
-        debounce_time: Duration,
-    ) -> (bool, Option<u64>, Option<u64>) {
+    ///   of the same key code and value that passed the filter. This is needed
+    ///   by the logger thread to calculate near-miss statistics.
+    pub fn check_event(&mut self, event: &input_event, debounce_time: Duration) -> EventInfo {
         let event_us = event::event_microseconds(event);
 
         // Update overall timestamps
@@ -91,15 +86,28 @@ impl BounceFilter {
         // --- Early returns for non-debounced events ---
         // Pass non-key events or key repeats immediately
         if !is_key_event(event) || event.value == 2 {
-            return (false, None, None);
+            return EventInfo {
+                event: *event, // Copy event
+                event_us,
+                is_bounce: false,
+                diff_us: None,
+                last_passed_us: None, // No relevant last_passed_us for non-debounced events
+            };
         }
 
         // Check bounds for key code/value indices
         let key_code_idx = event.code as usize;
         let key_value_idx = event.value as usize;
         if !(key_code_idx < 1024 && key_value_idx < 3) {
-            return (false, None, None);
-        } // Out of bounds
+            // Out of bounds - treat as passed, no relevant history
+            return EventInfo {
+                event: *event, // Copy event
+                event_us,
+                is_bounce: false,
+                diff_us: None,
+                last_passed_us: None,
+            };
+        }
 
         // --- Debounce logic ---
         let last_passed_us = self.last_event_us[key_code_idx][key_value_idx];
@@ -113,18 +121,32 @@ impl BounceFilter {
                 self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
                 self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
             }
-            return (false, None, None);
+            return EventInfo {
+                event: *event, // Copy event
+                event_us,
+                is_bounce: false,
+                diff_us: None,
+                last_passed_us: None, // No previous passed event for this key/value
+            };
         }
 
         // Calculate time difference if possible (handles time going backwards)
-        if let Some(diff_us) = event_us.checked_sub(last_passed_us) {
+        let diff_us_opt = event_us.checked_sub(last_passed_us);
+
+        if let Some(diff_us) = diff_us_opt {
             // Check if the difference is within the debounce window.
             if debounce_time > Duration::ZERO && Duration::from_micros(diff_us) < debounce_time {
                 // It's a bounce! Return bounce info. Do NOT update last_event_us or ring buffer.
-                return (true, Some(diff_us), Some(last_passed_us));
+                return EventInfo {
+                    event: *event, // Copy event
+                    event_us,
+                    is_bounce: true,
+                    diff_us: Some(diff_us),
+                    last_passed_us: Some(last_passed_us),
+                };
             }
         }
-        // If time went backwards (checked_sub returned None), it's not a bounce.
+        // If time went backwards (checked_sub returned None), or diff_us >= debounce_time, it's not a bounce.
 
         // --- Event Passed ---
         // If we reach here, the event is NOT a bounce. Record as passed.
@@ -136,8 +158,14 @@ impl BounceFilter {
             self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
         }
 
-        // Return non-bounce, providing the timestamp of the previously passed event.
-        (false, None, Some(last_passed_us))
+        // Return non-bounce info, providing the timestamp of the previously passed event.
+        EventInfo {
+            event: *event, // Copy event
+            event_us,
+            is_bounce: false,
+            diff_us: None, // Not a bounce, so no bounce diff_us
+            last_passed_us: Some(last_passed_us),
+        }
     }
 
     /// Returns the total duration based on the first and last event timestamps seen.

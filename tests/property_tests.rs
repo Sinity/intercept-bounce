@@ -3,6 +3,7 @@
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
 use intercept_bounce::event;
 use intercept_bounce::filter::BounceFilter;
+use intercept_bounce::logger::EventInfo; // Import EventInfo
 use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -64,12 +65,12 @@ proptest! {
                 value: if type_ == EV_KEY as u16 { value } else { 0 },
             };
 
-            let (is_bounce, _diff_us, _last_passed_us_before) = filter.check_event(&event, debounce_time);
+            let info: EventInfo = filter.check_event(&event, debounce_time);
 
             // Check the debounce logic only for non-repeat key events
             if event::is_key_event(&event) && event.value != 2 {
                 let key = (event.code, event.value);
-                if !is_bounce {
+                if !info.is_bounce {
                     // If the event passed, check its timing against the last passed event for this key/value
                     if let Some(last_passed) = last_passed_times.get(&key) {
                         // Only assert if time didn't go backwards relative to the last passed event
@@ -124,9 +125,9 @@ proptest! {
             };
 
             if !event::is_key_event(&event) {
-                let (is_bounce, _diff, _last) = filter.check_event(&event, debounce_time);
+                let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
-                    !is_bounce,
+                    !info.is_bounce,
                     "Non-key event type:{} code:{} val:{} at {}us was incorrectly marked as bounce.",
                     type_, code, value, event_us
                 );
@@ -155,9 +156,9 @@ proptest! {
             };
 
             if event::is_key_event(&event) && event.value == 2 {
-                let (is_bounce, _diff, _last) = filter.check_event(&event, debounce_time);
+                let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
-                    !is_bounce,
+                    !info.is_bounce,
                     "Repeat event type:{} code:{} val:{} at {}us was incorrectly marked as bounce.",
                     type_, code, value, event_us
                 );
@@ -187,8 +188,8 @@ proptest! {
                 value: if *type_ == EV_KEY as u16 { *value } else { 0 },
             };
 
-            let (is_bounce, _diff, _last) = filter.check_event(&event, debounce_time);
-            if !is_bounce {
+            let info = filter.check_event(&event, debounce_time);
+            if !info.is_bounce {
                 passed_events_ts.push(*event_us);
             }
         }

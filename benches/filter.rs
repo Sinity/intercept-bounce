@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion}; // Add black_box
 use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
 use intercept_bounce::config::Config;
 use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
@@ -82,7 +82,8 @@ fn bench_filter_check_event(c: &mut Criterion) {
     c.bench_function("filter::check_event_pass", |b| {
         b.iter(|| {
             let mut filter = BounceFilter::new();
-            filter.check_event(&event_pass, debounce_time); // Pass Duration
+            // Call check_event and use black_box to prevent optimizing away the call
+            black_box(filter.check_event(&event_pass, debounce_time));
         })
     });
 
@@ -90,8 +91,8 @@ fn bench_filter_check_event(c: &mut Criterion) {
     c.bench_function("filter::check_event_bounce", |b| {
         b.iter(|| {
             let mut filter = BounceFilter::new();
-            filter.check_event(&event_pass, debounce_time); // Pass Duration
-            filter.check_event(&event_bounce, debounce_time); // Check bounce with Duration
+            black_box(filter.check_event(&event_pass, debounce_time));
+            black_box(filter.check_event(&event_bounce, debounce_time));
         })
     });
 
@@ -99,7 +100,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
     c.bench_function("filter::check_event_non_key", |b| {
         b.iter(|| {
             let mut filter = BounceFilter::new();
-            filter.check_event(&event_non_key, debounce_time); // Pass Duration
+            black_box(filter.check_event(&event_non_key, debounce_time));
         })
     });
 }
