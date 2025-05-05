@@ -230,7 +230,8 @@ fn main() -> io::Result<()> {
     drop(main_state.log_sender);
 
     debug!("Waiting for logger thread to join...");
-    let final_stats = match logger_handle.join() {
+    // Make final_stats mutable so we can call mutable methods on it
+    let mut final_stats = match logger_handle.join() {
         Ok(stats) => {
             debug!("Logger thread joined successfully");
             stats
@@ -250,9 +251,10 @@ fn main() -> io::Result<()> {
         let runtime_us = {
             match bounce_filter.lock() {
                 Ok(filter) => filter.get_runtime_us(),
-                Err(_) => {
-                    warn!("BounceFilter mutex poisoned during final runtime calculation");
-                    None
+                Err(poisoned) => {
+                    warn!("BounceFilter mutex poisoned during final runtime calculation. Recovering...");
+                    let filter = poisoned.into_inner();
+                    filter.get_runtime_us()
                 }
             }
         };
