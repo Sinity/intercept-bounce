@@ -1,110 +1,103 @@
-use anyhow::{Context, Result};                                       
-use clap::{CommandFactory, Parser};                                  
-use clap_complete::{generate, Shell};                                
-use clap_complete_nushell::Nushell;                                  
-use clap_mangen::Man;                                                
-use intercept_bounce::cli::Args; // Import Args from the library     
+use anyhow::{Context, Result};
+use clap::{CommandFactory, Parser};
+use clap_complete::{generate, Shell};
+use clap_complete_nushell::Nushell;
+use clap_mangen::Man;
+use intercept_bounce::cli::Args; // Import Args from the library
 
 use std::io::Write;
-use std::{                                                           
-    env, fs,                                                         
-    path::{Path, PathBuf},                                           
-    process::Command,                                                
-};                                                                   
-                                                                     
-#[derive(Parser, Debug)]                                             
-#[command(author, version, about, long_about = None)]                
-struct XtaskArgs {                                                   
-    #[command(subcommand)]                                           
-    command: Commands,                                               
-}                                                                    
-                                                                     
-#[derive(clap::Subcommand, Debug)]                                   
-enum Commands {                                                      
-    /// Generate man page and shell completions.                     
-    GenerateDocs,                                                    
-    /// Run cargo check.                                             
-    Check,                                                           
-    /// Run cargo test.                                              
-    Test,                                                            
-    /// Run cargo clippy.                                            
-    Clippy,                                                          
-    /// Run cargo fmt --check.                                       
-    FmtCheck,                                                        
-}                                                                    
-                                                                     
-fn main() -> Result<()> {                                            
-    let args = XtaskArgs::parse();                                   
-                                                                     
-    match args.command {                                             
-        Commands::GenerateDocs => generate_docs().context("Failed to 
-generate docs"),                                                     
-        Commands::Check => run_cargo("check", &[]).context("cargo    
-check failed"),                                                      
-        Commands::Test => run_cargo("test", &[]).context("cargo test 
-failed"),                                                            
-        Commands::Clippy => run_cargo("clippy", &["--", "-D",        
-"warnings"])                                                         
-            .context("cargo clippy failed"),                         
-        Commands::FmtCheck => run_cargo("fmt", &["--",               
-"--check"]).context("cargo fmt failed"),                             
-    }                                                                
-}                                                                    
-                                                                     
-fn run_cargo(command: &str, args: &[&str]) -> Result<()> {           
-    let cargo = env::var("CARGO").unwrap_or_else(|_|                 
-"cargo".to_string());                                                
-    let mut cmd = Command::new(cargo);                               
-    cmd.arg(command);                                                
-    cmd.args(args);                                                  
-    // Run in the workspace root                                     
-    cmd.current_dir(project_root());                                 
-                                                                     
-    let status = cmd.status().context(format!("Failed to execute     
-cargo {}", command))?;                                               
-                                                                     
-    if !status.success() {                                           
-        anyhow::bail!("cargo {} command failed", command);           
-    }                                                                
-    Ok(())                                                           
-}                                                                    
-                                                                     
-                                                                     
-fn project_root() -> PathBuf {                                       
-    Path::new(&env!("CARGO_MANIFEST_DIR"))                           
-        .ancestors()                                                 
-        .nth(1)                                                      
-        .unwrap()                                                    
-        .to_path_buf()                                               
-}                                                                    
-                                                                     
-fn generate_docs() -> Result<()> {                                   
-    let root_dir = project_root();                                   
-    let docs_dir = root_dir.join("docs");                            
-    let man_dir = docs_dir.join("man");                              
-    let completions_dir = docs_dir.join("completions");              
-                                                                     
-    fs::create_dir_all(&man_dir).context("Failed to create man       
-directory")?;                                                        
-    fs::create_dir_all(&completions_dir).context("Failed to create   
-completions directory")?;                                            
-                                                                     
-    let cmd = Args::command();                                       
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct XtaskArgs {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Commands {
+    /// Generate man page and shell completions.
+    GenerateDocs,
+    /// Run cargo check.
+    Check,
+    /// Run cargo test.
+    Test,
+    /// Run cargo clippy.
+    Clippy,
+    /// Run cargo fmt --check.
+    FmtCheck,
+}
+
+fn main() -> Result<()> {
+    let args = XtaskArgs::parse();
+
+    match args.command {
+        Commands::GenerateDocs => generate_docs().context("Failed to generate docs"),
+        Commands::Check => run_cargo("check", &[]).context("cargo check failed"),
+        Commands::Test => run_cargo("test", &[]).context("cargo test failed"),
+        Commands::Clippy => {
+            run_cargo("clippy", &["--", "-D", "warnings"]).context("cargo clippy failed")
+        }
+        Commands::FmtCheck => run_cargo("fmt", &["--", "--check"]).context("cargo fmt failed"),
+    }
+}
+
+fn run_cargo(command: &str, args: &[&str]) -> Result<()> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let mut cmd = Command::new(cargo);
+    cmd.arg(command);
+    cmd.args(args);
+    // Run in the workspace root
+    cmd.current_dir(project_root());
+
+    let status = cmd
+        .status()
+        .context(format!("Failed to execute cargo {}", command))?;
+
+    if !status.success() {
+        anyhow::bail!("cargo {} command failed", command);
+    }
+    Ok(())
+}
+
+fn project_root() -> PathBuf {
+    Path::new(&env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(1)
+        .unwrap()
+        .to_path_buf()
+}
+
+fn generate_docs() -> Result<()> {
+    let root_dir = project_root();
+    let docs_dir = root_dir.join("docs");
+    let man_dir = docs_dir.join("man");
+    let completions_dir = docs_dir.join("completions");
+
+    fs::create_dir_all(&man_dir).context("Failed to create man directory")?;
+    fs::create_dir_all(&completions_dir).context("Failed to create completions directory")?;
+
+    let cmd = Args::command();
     let bin_name = cmd.get_name().to_string(); // Get bin name from clap
-    
-    // --- Generate Man Page ---                                     
-    let man_path = man_dir.join(format!("{}.1", bin_name));          
-    println!("Generating man page: {:?}", man_path);                 
+
+    // --- Generate Man Page ---
+    let man_path = man_dir.join(format!("{}.1", bin_name));
+    println!("Generating man page: {:?}", man_path);
     generate_man_page(&cmd, &man_path)?;
-    
+
     // --- Generate Shell Completions ---
     generate_completions(&cmd, &completions_dir)?;
-                                                                     
-    println!(                                                        
-        "Successfully generated man page and completions in: {}",    
-        docs_dir.display()                                           
-    );                                                               
-    Ok(())                                                           
+
+    println!(
+        "Successfully generated man page and completions in: {}",
+        docs_dir.display()
+    );
+    Ok(())
 }
 
 // --- Man Page Content Constants ---
@@ -493,72 +486,163 @@ This means the logger thread cannot keep up with the rate of events from the mai
 Check device permissions, physical keyboard connection, and system logs (`dmesg`) for hardware errors related to the input device.
 "#;
 
-+const MAN_THEORY_OF_OPERATION: &str = r#"
-+\fB{bin_name}\fR employs a multi-threaded architecture to separate the low-latency input filtering path from potentially slower logging and statistics processing.
-+.PP
-+.B Main Thread:
-+.IP 1. 4
-+Reads raw `input_event` structs from standard input in a loop.
-+.IP 2. 4
-+For each event, acquires a `std::sync::Mutex` protecting the shared `BounceFilter` state.
-+.IP 3. 4
-+Calls `BounceFilter::check_event`, which performs the debounce logic using timestamp comparisons based on data stored in fixed-size arrays within the `BounceFilter` struct (specifically, `last_event_us`). Updates the state if the event passes.
-+.IP 4. 4
-+Releases the mutex.
-+.IP 5. 4
-+Constructs an `EventInfo` struct containing the event and the filter result (passed/dropped, timings).
-+.IP 6. 4
-+Attempts to send the `EventInfo` to the logger thread via a bounded `crossbeam-channel` using `try_send`. If the channel is full, the message is dropped to avoid blocking.
-+.IP 7. 4
-+If the event was not dropped by the filter, writes the original `input_event` struct to standard output.
-+.PP
-+.B Logger Thread:
-+.IP 1. 4
-+Runs in a separate thread (`std::thread`).
-+.IP 2. 4
-+Waits to receive `EventInfo` messages from the main thread's channel, with a timeout to allow periodic checks.
-+.IP 3. 4
-+Processes received `EventInfo` messages:
-+.RS 4
-+.IP \(bu 4
-+Updates statistics stored in a `StatsCollector` struct. Simple counts use lock-free atomics (`std::sync::atomic`), while timing vectors (`Vec<u64>`) are updated directly as the `StatsCollector` is owned solely by the logger thread.
-+.IP \(bu 4
-+Performs logging to standard error based on the configured logging flags (`--log-all-events`, `--log-bounces`) and log level (`RUST_LOG`, `--verbose`). Logging uses the `tracing` framework.
-+.RE
-+.IP 4. 4
-+Periodically checks if the configured `--log-interval` has elapsed. If so, prints the current interval statistics and resets them.
-+.IP 5. 4
-+Continues until the main thread signals shutdown (by dropping the channel sender or setting an atomic flag).
-+.IP 6. 4
-+On shutdown, returns the final `StatsCollector` containing cumulative statistics to the main thread.
-+.PP
-+.B State Management:
-+.IP \(bu 4
-+The core filter state (`last_event_us` array) is protected by a `Mutex` to ensure safe access from the main thread (which modifies it) and potentially other threads if the design were different (though currently only the main thread accesses it mutably).
-+.IP \(bu 4
-+Statistics are managed primarily by the logger thread, minimizing contention on the main path.
-+.IP \(bu 4
-+Inter-thread communication uses `crossbeam-channel`, chosen for its performance characteristics.
-+"#;
-+
- /// Generates the man page with custom sections.
- fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
-     let version = env!("CARGO_PKG_VERSION");
-@@ -311,12 +445,16 @@
- 
-     // --- Custom Sections ---
-     let sections = [
--        ("DESCRIPTION", MAN_DESCRIPTION),
-+        ("DESCRIPTION", MAN_DESCRIPTION), // What it is, high level
-+        ("DEBOUNCING", MAN_DEBOUNCING), // How debounce works, choosing time
-+        ("NEAR-MISS", MAN_NEAR_MISS), // How near-miss works, interpretation
-+        // OPTIONS section is generated by clap_mangen
-         ("EXAMPLES", MAN_EXAMPLES),
-         ("INTEGRATION", MAN_INTEGRATION),
-         ("STATISTICS", MAN_STATISTICS),
-         ("LOGGING", MAN_LOGGING),
-         ("SIGNALS", MAN_SIGNALS),
-+        ("THEORY OF OPERATION", MAN_THEORY_OF_OPERATION), // Internal architecture
-         ("EXIT STATUS", MAN_EXIT_STATUS),
-         ("PERFORMANCE", MAN_PERFORMANCE),
-         ("TROUBLESHOOTING", MAN_TROUBLESHOOTING),
+const MAN_THEORY_OF_OPERATION: &str = r#"
+\fB{bin_name}\fR employs a multi-threaded architecture to separate the low-latency input filtering path from potentially slower logging and statistics processing.
+.PP
+.B Main Thread:
+.IP 1. 4
+Reads raw `input_event` structs from standard input in a loop.
+.IP 2. 4
+For each event, acquires a `std::sync::Mutex` protecting the shared `BounceFilter` state.
+.IP 3. 4
+Calls `BounceFilter::check_event`, which performs the debounce logic using timestamp comparisons based on data stored in fixed-size arrays within the `BounceFilter` struct (specifically, `last_event_us`). Updates the state if the event passes.
+.IP 4. 4
+Releases the mutex.
+.IP 5. 4
+Constructs an `EventInfo` struct containing the event and the filter result (passed/dropped, timings).
+.IP 6. 4
+Attempts to send the `EventInfo` to the logger thread via a bounded `crossbeam-channel` using `try_send`. If the channel is full, the message is dropped to avoid blocking.
+.IP 7. 4
+If the event was not dropped by the filter, writes the original `input_event` struct to standard output.
+.PP
+.B Logger Thread:
+.IP 1. 4
+Runs in a separate thread (`std::thread`).
+.IP 2. 4
+Waits to receive `EventInfo` messages from the main thread's channel, with a timeout to allow periodic checks.
+.IP 3. 4
+Processes received `EventInfo` messages:
+.RS 4
+.IP \(bu 4
+Updates statistics stored in a `StatsCollector` struct. Simple counts use lock-free atomics (`std::sync::atomic`), while timing vectors (`Vec<u64>`) are updated directly as the `StatsCollector` is owned solely by the logger thread.
+.IP \(bu 4
+Performs logging to standard error based on the configured logging flags (`--log-all-events`, `--log-bounces`) and log level (`RUST_LOG`, `--verbose`). Logging uses the `tracing` framework.
+.RE
+.IP 4. 4
+Periodically checks if the configured `--log-interval` has elapsed. If so, prints the current interval statistics and resets them.
+.IP 5. 4
+Continues until the main thread signals shutdown (by dropping the channel sender or setting an atomic flag).
+.IP 6. 4
+On shutdown, returns the final `StatsCollector` containing cumulative statistics to the main thread.
+.PP
+.B State Management:
+.IP \(bu 4
+The core filter state (`last_event_us` array) is protected by a `Mutex` to ensure safe access from the main thread (which modifies it) and potentially other threads if the design were different (though currently only the main thread accesses it mutably).
+.IP \(bu 4
+Statistics are managed primarily by the logger thread, minimizing contention on the main path.
+.IP \(bu 4
+Inter-thread communication uses `crossbeam-channel`, chosen for its performance characteristics.
+"#;
+
+/// Generates the man page with custom sections.
+fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
+    let version = env!("CARGO_PKG_VERSION");
+    // Format date like 'Month Day, Year' e.g., "July 18, 2024"
+    let date = chrono::Local::now().format("%B %d, %Y").to_string();
+    let app_name_uppercase = cmd.get_name().to_uppercase();
+    let bin_name = cmd.get_name();
+
+    let mut buffer: Vec<u8> = Vec::new();
+
+    // --- Header ---
+    writeln!(
+        buffer,
+        r#".TH "{}" 1 "{}" "{}" "User Commands""#,
+        app_name_uppercase, date, version
+    )?;
+
+    // --- NAME ---
+    writeln!(buffer, ".SH NAME")?;
+    writeln!(
+        buffer,
+        r#"{} \- {}"#,
+        bin_name,
+        cmd.get_about().unwrap_or_default().replace('-', r"\-")
+    )?;
+
+    // --- SYNOPSIS ---
+    writeln!(buffer, ".SH SYNOPSIS")?;
+    writeln!(buffer, r#".B {}"#, bin_name)?;
+    writeln!(buffer, r#" [OPTIONS]"#)?;
+
+    // --- OPTIONS (Generated by clap_mangen) ---
+    writeln!(buffer, ".SH OPTIONS")?;
+    Man::new(cmd.clone()).render_section_into("OPTIONS", &mut buffer)?;
+
+    // --- Custom Sections ---
+    let sections = [
+        ("DESCRIPTION", MAN_DESCRIPTION), // What it is, high level
+        ("DEBOUNCING", MAN_DEBOUNCING),   // How debounce works, choosing time
+        ("NEAR-MISS", MAN_NEAR_MISS),     // How near-miss works, interpretation
+        // OPTIONS section is generated by clap_mangen
+        ("EXAMPLES", MAN_EXAMPLES),
+        ("INTEGRATION", MAN_INTEGRATION),
+        ("STATISTICS", MAN_STATISTICS),
+        ("LOGGING", MAN_LOGGING),
+        ("SIGNALS", MAN_SIGNALS),
+        ("THEORY OF OPERATION", MAN_THEORY_OF_OPERATION), // Internal architecture
+        ("EXIT STATUS", MAN_EXIT_STATUS),
+        ("PERFORMANCE", MAN_PERFORMANCE),
+        ("TROUBLESHOOTING", MAN_TROUBLESHOOTING),
+        ("ENVIRONMENT", MAN_ENVIRONMENT),
+        ("BUGS", MAN_BUGS),
+        ("SEE ALSO", MAN_SEE_ALSO),
+    ]; // Added missing ];
+
+    for (title, content_template) in sections {
+        writeln!(buffer, ".SH {}", title)?;
+        // Format the content, replacing {bin_name} placeholder
+        let formatted_content = content_template.replace("{bin_name}", bin_name);
+        writeln!(buffer, "{}", formatted_content)?;
+    }
+
+    // --- AUTHOR ---
+    writeln!(buffer, ".SH AUTHOR")?;
+    writeln!(
+        buffer,
+        r#"Written by {}."#,
+        cmd.get_author().unwrap_or("Unknown")
+    )?;
+
+    // Write the buffer to the file
+    fs::write(path, buffer).with_context(|| format!("Failed to write man page to {:?}", path))?;
+    Ok(())
+}
+
+/// Generates shell completion files.
+fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<()> {
+    let bin_name = cmd.get_name();
+    // --- Generate Shell Completions ---
+    let shells = [
+        Shell::Bash,
+        Shell::Elvish,
+        Shell::Fish,
+        Shell::PowerShell,
+        Shell::Zsh,
+    ];
+
+    for shell in shells {
+        let ext = match shell {
+            Shell::Bash => "bash",
+            Shell::Elvish => "elv",
+            Shell::Fish => "fish",
+            Shell::PowerShell => "ps1",
+            Shell::Zsh => "zsh",
+            _ => continue, // Should not happen
+        };
+        let completions_path = completions_dir.join(format!("{}.{}", bin_name, ext));
+        println!("Generating completion file: {:?}", completions_path);
+        let mut file = fs::File::create(&completions_path)
+            .with_context(|| format!("Failed to create completion file: {:?}", completions_path))?;
+        generate(shell, &mut cmd.clone(), bin_name.clone(), &mut file);
+    }
+
+    // --- Generate Nushell Completion ---
+    let nu_path = completions_dir.join(format!("{}.nu", bin_name));
+    println!("Generating Nushell completion file: {:?}", nu_path);
+    let mut nu_file = fs::File::create(&nu_path)
+        .with_context(|| format!("Failed to create Nushell completion file: {:?}", nu_path))?;
+    generate(Nushell, &mut cmd.clone(), bin_name.clone(), &mut nu_file);
+
+    Ok(())
+}
