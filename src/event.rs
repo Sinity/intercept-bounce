@@ -1,5 +1,5 @@
 use input_linux_sys::{
-    input_event, EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN,
+    pub input_event, EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN, // Add pub here
 };
 use libc::{self, c_ulong, ioctl};
 use std::fs::{self, OpenOptions};
