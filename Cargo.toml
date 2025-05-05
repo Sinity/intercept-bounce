@@ -14,36 +14,41 @@ readme = "README.md"
 features = ["default"]
 
 [dependencies]
-clap            = { version = "4.5", features = ["derive"] }
 input-linux-sys = "0.1"
-signal-hook     = "0.3"
-phf             = { version = "0.11", features = ["macros"] }
-libc            = "0.2"
-serde           = { version = "1.0", features = ["derive"] }
-serde_json      = "1.0"
-chrono          = "0.4"
+signal-hook = "0.3"
+phf = { version = "0.11", features = ["macros"] }
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
 crossbeam-channel = "0.5"
-tracing         = "0.1"
+tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-humantime       = "2.1"
-clap_complete = "4.5.1"
+humantime = "2.1"
+clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
 clap_mangen = "0.2"
+clap_complete_nushell = "4.5.5"
 
 # --- OpenTelemetry Dependencies ---
 opentelemetry = { version = "0.23", features = ["metrics"] }
-opentelemetry_sdk = { version = "0.23", features = ["rt-tokio-current-thread", "metrics"] }
+opentelemetry_sdk = { version = "0.23", features = [
+  "rt-tokio-current-thread",
+  "metrics",
+] }
 opentelemetry-otlp = { version = "0.16", features = ["grpc-tonic", "metrics"] }
 tracing-opentelemetry = "0.24"
 
 [features]
 default = []
 debug_ring_buffer = [] # Optional feature for debugging
-shell_nu = [] # Feature flag for Nushell completion support
+shell_nu = []          # Feature flag for Nushell completion support
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }
 clap = { version = "4.5", features = ["derive"] }
-clap_complete = "4.5.1"
+clap_complete = "4.5"
+clap_complete_nushell = "4.5.5"
 clap_mangen = "0.2"
 
 [dev-dependencies]
@@ -56,8 +61,8 @@ libfuzzer-sys = "0.4"
 fastrand = "2.0"
 
 [[bench]]
-name     = "filter"
-harness  = false
+name = "filter"
+harness = false
 
 # Helper binary for generating completions and man pages during build
 [[bin]]
