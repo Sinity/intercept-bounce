@@ -375,7 +375,7 @@ fn main() -> io::Result<()> {
 /// Returns Ok(()) on success, or a MainLoopError if the loop should terminate.
 #[instrument(skip_all, fields(ev.type = ev.type_, ev.code = ev.code, ev.value = ev.value))]
 fn process_event(
-    ev: &event::input_event, // Use the correct path via the event module
+    ev: &event::input_event,
     ctx: &MainLoopContext,
     main_state: &mut MainState,
     otel_counters: &OtelCounters,
@@ -407,7 +407,7 @@ fn process_event(
     };
 
     // Extract the event and bounce status *before* event_info is moved.
-    let event_to_write = event_info.event; // input_event implements Copy
+    let event_to_write = event_info.event;
     let is_bounce = event_info.is_bounce;
 
     // Send event info to logger thread.

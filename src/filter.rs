@@ -6,16 +6,15 @@ pub mod keynames;
 pub mod stats;
 
 use crate::event::{self, is_key_event};
-use crate::logger::EventInfo; // Import EventInfo
+use crate::logger::EventInfo;
 use input_linux_sys::input_event;
-use std::time::Duration; // Import Duration
+use std::time::Duration;
 
 /// Holds the minimal state required for bounce filtering decisions.
 ///
 /// This struct only stores the timestamp (in microseconds) of the last *passed* event
 /// for each key code and value combination. It does not store historical
 /// statistics; that responsibility is delegated to the `Logger` thread.
-// #[derive(Debug)] // Removed because input_event doesn't implement Debug
 pub struct BounceFilter {
     // Stores the timestamp (in microseconds) of the last event that *passed* the filter
     // for a given key code (index 0..1023) and key value (index 0=release, 1=press, 2=repeat).
@@ -34,7 +33,6 @@ pub struct BounceFilter {
     overall_last_event_us: Option<u64>,
 }
 
-// Add Default impl as suggested by clippy::new_without_default
 impl Default for BounceFilter {
     fn default() -> Self {
         Self::new()
@@ -46,9 +44,9 @@ impl BounceFilter {
     #[must_use]
     pub fn new() -> Self {
         BounceFilter {
-            last_event_us: [[u64::MAX; 3]; 1024], // Initialize directly
+            last_event_us: [[u64::MAX; 3]; 1024],
             #[cfg(feature = "debug_ring_buffer")]
-            recent_passed_events: [(); 64].map(|_| None), // Initialize with None
+            recent_passed_events: [(); 64].map(|_| None),
             #[cfg(feature = "debug_ring_buffer")]
             recent_event_idx: 0,
             overall_first_event_us: None,
@@ -87,7 +85,7 @@ impl BounceFilter {
         // Pass non-key events or key repeats immediately
         if !is_key_event(event) || event.value == 2 {
             return EventInfo {
-                event: *event, // Copy event
+                event: *event,
                 event_us,
                 is_bounce: false,
                 diff_us: None,
@@ -101,7 +99,7 @@ impl BounceFilter {
         if !(key_code_idx < 1024 && key_value_idx < 3) {
             // Out of bounds - treat as passed, no relevant history
             return EventInfo {
-                event: *event, // Copy event
+                event: *event,
                 event_us,
                 is_bounce: false,
                 diff_us: None,
@@ -118,8 +116,8 @@ impl BounceFilter {
             // Record passed event in ring buffer
             #[cfg(feature = "debug_ring_buffer")]
             {
-                self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
-                self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+                self.recent_passed_events[self.recent_event_idx] = Some(*event);
+                self.recent_event_idx = (self.recent_event_idx + 1) % 64;
             }
             return EventInfo {
                 event: *event, // Copy event
@@ -138,7 +136,7 @@ impl BounceFilter {
             if debounce_time > Duration::ZERO && Duration::from_micros(diff_us) < debounce_time {
                 // It's a bounce! Return bounce info. Do NOT update last_event_us or ring buffer.
                 return EventInfo {
-                    event: *event, // Copy event
+                    event: *event,
                     event_us,
                     is_bounce: true,
                     diff_us: Some(diff_us),
@@ -154,13 +152,13 @@ impl BounceFilter {
         // Record passed event in ring buffer
         #[cfg(feature = "debug_ring_buffer")]
         {
-            self.recent_passed_events[self.recent_event_idx] = Some(*event); // Copy the event
-            self.recent_event_idx = (self.recent_event_idx + 1) % 64; // Cycle index
+            self.recent_passed_events[self.recent_event_idx] = Some(*event);
+            self.recent_event_idx = (self.recent_event_idx + 1) % 64;
         }
 
         // Return non-bounce info, providing the timestamp of the previously passed event.
         EventInfo {
-            event: *event, // Copy event
+            event: *event,
             event_us,
             is_bounce: false,
             diff_us: None, // Not a bounce, so no bounce diff_us

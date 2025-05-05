@@ -6,31 +6,26 @@ use crate::config::Config;
 use crate::event;
 use crate::filter::keynames::{get_event_type_name, get_key_name};
 use crate::filter::stats::StatsCollector;
-use crate::util; // Import util
-use crossbeam_channel::{Receiver, RecvTimeoutError}; // Use directly
+use crate::util;
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use chrono::Local;
 use input_linux_sys::{input_event, EV_MSC, EV_SYN};
 use std::io;
-// Removed unused: use std::ops::Deref;
-use opentelemetry::metrics::{Counter, Meter}; // Import OTLP metrics types
+use opentelemetry::metrics::{Counter, Meter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::info;
-use tracing::{instrument, Span}; // Import instrument and Span // Only info is used directly in this file's functions
+use tracing::{instrument, Span}; // Import instrument and Span
 
 /// Represents a message sent from the main thread to the logger thread.
-// #[derive(Clone)] // Remove Clone
-// #[derive(Debug)] // input_event does not implement Debug
 pub enum LogMessage {
     /// Contains detailed information about a single processed event.
     Event(EventInfo),
 }
 
 /// Detailed information about a single processed event, sent to the logger.
-// #[derive(Clone)] // Remove Clone
-// #[derive(Debug)] // input_event does not implement Debug
 pub struct EventInfo {
     /// The raw input event.
     pub event: input_event,
@@ -48,7 +43,7 @@ pub struct EventInfo {
 
 /// Manages the state and execution loop for the logger thread.
 pub struct Logger {
-    receiver: Receiver<LogMessage>, // Use Receiver directly
+    receiver: Receiver<LogMessage>,
     logger_running: Arc<AtomicBool>,
     config: Arc<Config>,
 
@@ -65,20 +60,20 @@ pub struct Logger {
 impl Logger {
     /// Creates a new Logger instance.
     pub fn new(
-        receiver: Receiver<LogMessage>, // Use Receiver directly
+        receiver: Receiver<LogMessage>,
         logger_running: Arc<AtomicBool>,
         config: Arc<Config>,
-        otel_meter: Option<Meter>, // Accept optional meter
+        otel_meter: Option<Meter>,
     ) -> Self {
         Logger {
-            receiver, // Use Receiver directly
+            receiver,
             logger_running,
             config,
             cumulative_stats: StatsCollector::with_capacity(),
             interval_stats: StatsCollector::with_capacity(),
             last_dump_time: Instant::now(),
             first_event_us: None,
-            otel_meter, // Store the meter
+            otel_meter,
         }
     }
 
@@ -92,7 +87,7 @@ impl Logger {
     pub fn run(&mut self) -> StatsCollector {
         // Use tracing for logger thread startup message
         tracing::debug!("Logger thread started");
-        let log_interval = self.config.log_interval(); // Get Duration directly
+        let log_interval = self.config.log_interval();
         let check_interval = Duration::from_millis(100); // Used for periodic checks
 
         // --- OTLP Metrics Setup (in logger thread) ---
@@ -110,7 +105,7 @@ impl Logger {
                 );
                 while let Ok(msg) = self.receiver.try_recv() {
                     tracing::trace!("Draining channel: Processing message after shutdown signal");
-                    self.process_message(msg, &near_miss_counter); // Pass counter
+                    self.process_message(msg, &near_miss_counter);
                 }
                 tracing::debug!("Finished draining channel. Exiting run loop");
                 break;
@@ -142,7 +137,7 @@ impl Logger {
                         tracing::trace!(
                             "Logger thread draining channel: Processing message after disconnect"
                         );
-                        self.process_message(msg, &near_miss_counter); // Pass counter
+                        self.process_message(msg, &near_miss_counter);
                     }
                     tracing::warn!("Finished draining channel. Exiting run loop");
                     break; // Exit loop on disconnect
@@ -161,7 +156,7 @@ impl Logger {
     pub fn process_message(
         &mut self,
         msg: LogMessage,
-        near_miss_counter: &Option<Counter<u64>>, // Receive counter
+        near_miss_counter: &Option<Counter<u64>>,
     ) {
         // Made public for benches/tests
         match msg {
@@ -229,15 +224,15 @@ impl Logger {
         if self.config.stats_json {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
-                &self.config,             // Remove explicit auto-deref
+                &self.config,
                 None,                     // Runtime is only for cumulative
-                "Periodic",               // Report type
-                &mut io::stderr().lock(), // Write directly to stderr
+                "Periodic",
+                &mut io::stderr().lock(),
             );
             tracing::debug!("Logger thread finished printing periodic stats in JSON format");
         } else {
             tracing::debug!("Logger thread printing periodic stats in human-readable format");
-            interval_stats_clone.print_stats_to_stderr(&self.config, "Periodic"); // Remove explicit auto-deref
+            interval_stats_clone.print_stats_to_stderr(&self.config, "Periodic");
             tracing::debug!(
                 "Logger thread finished printing periodic stats in human-readable format"
             );
@@ -287,7 +282,6 @@ impl Logger {
         let near_miss_info_str = if !data.is_bounce && event::is_key_event(&data.event) {
             if let Some(last_us) = data.last_passed_us {
                 if let Some(diff) = data.event_us.checked_sub(last_us) {
-                    // Check against Duration directly, use accessor
                     if Duration::from_micros(diff) >= self.config.debounce_time()
                         && Duration::from_micros(diff) <= self.config.near_miss_threshold()
                     {
@@ -310,7 +304,7 @@ impl Logger {
             // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
             status = status,
             relative_us = relative_us,
-            relative_human = %format_relative_us(relative_us), // Include formatted string
+            relative_human = %format_relative_us(relative_us),
             event_type = data.event.type_,
             event_type_name = type_name,
             event_code = data.event.code,
@@ -318,10 +312,10 @@ impl Logger {
             key_name = key_name_str,
             value_name = value_name_str,
             is_bounce = data.is_bounce,
-            bounce_time_us = data.diff_us, // Use Option<u64> directly
-            bounce_info = %bounce_info_str, // Include formatted string
-            near_miss_diff_us = if !data.is_bounce && event::is_key_event(&data.event) { data.event_us.checked_sub(data.last_passed_us.unwrap_or(0)) } else { None }, // Calculate diff for near miss field
-            near_miss_info = %near_miss_info_str, // Include formatted string
+            bounce_time_us = data.diff_us,
+            bounce_info = %bounce_info_str,
+            near_miss_diff_us = if !data.is_bounce && event::is_key_event(&data.event) { data.event_us.checked_sub(data.last_passed_us.unwrap_or(0)) } else { None },
+            near_miss_info = %near_miss_info_str,
             "[{}] {} {} ({}, {} {}){}{}{}",
             status,
             format_relative_us(relative_us),
@@ -368,7 +362,7 @@ impl Logger {
             // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
             status = "DROP",
             relative_us = relative_us,
-            relative_human = %format_relative_us(relative_us), // Include formatted string
+            relative_human = %format_relative_us(relative_us),
             event_type = data.event.type_,
             event_type_name = type_name,
             event_code = code,
@@ -376,8 +370,8 @@ impl Logger {
             key_name = key_name,
             value_name = value_name,
             is_bounce = true,
-            bounce_time_us = data.diff_us, // Use Option<u64> directly
-            bounce_info = %bounce_info_str, // Include formatted string
+            bounce_time_us = data.diff_us,
+            bounce_info = %bounce_info_str,
             "[{}] {} {} ({}, {} {}) Key [{}] ({}){}",
             "DROP",
             format_relative_us(relative_us),
@@ -395,13 +389,12 @@ impl Logger {
 /// Helper to format relative timestamps consistently for logging.
 fn format_relative_us(relative_us: u64) -> String {
     let s = if relative_us < 1_000 {
-        format!("+{relative_us} µs") // Use inline formatting
+        format!("+{relative_us} µs")
     } else if relative_us < 1_000_000 {
         format!("+{:.1} ms", relative_us as f64 / 1000.0)
     } else {
         format!("+{:.3} s", relative_us as f64 / 1_000_000.0)
     };
-    format!("{s:<10}") // Use inline formatting
+    format!("{s:<10}")
 }
 
-// format_us moved to src/util.rs

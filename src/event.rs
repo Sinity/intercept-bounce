@@ -10,7 +10,7 @@ use std::io::{self, ErrorKind};
 use std::mem::size_of;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
-use tracing::warn; // Import warn
+use tracing::warn;
 
 /// Reads exactly one `input_event` directly from a raw file descriptor using `libc::read`.
 ///
@@ -51,7 +51,6 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
                 bytes_read += n as usize;
             }
             _ => {
-                // Use io::Error::other for simplicity
                 return Err(io::Error::other("libc::read returned unexpected value"));
             }
         }
@@ -99,7 +98,6 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
                 bytes_written += n as usize;
             }
             _ => {
-                // Use io::Error::other for simplicity
                 return Err(io::Error::other("libc::write returned unexpected value"));
             }
         }
@@ -111,12 +109,12 @@ pub fn write_event_raw(fd: RawFd, event: &input_event) -> io::Result<()> {
 /// Returns `u64::MAX` if the calculation overflows.
 #[inline]
 pub fn event_microseconds(event: &input_event) -> u64 {
-    let sec = event.time.tv_sec as u64; // Cast from i64
+    let sec = event.time.tv_sec as u64;
     let usec = event.time.tv_usec as u64; // tv_usec should be non-negative, cast is okay
                                           // Use checked arithmetic to prevent overflow panics from fuzzed/invalid inputs
     sec.checked_mul(1_000_000)
         .and_then(|s| s.checked_add(usec))
-        .unwrap_or(u64::MAX) // Return MAX on overflow
+        .unwrap_or(u64::MAX)
 }
 
 /// Checks if the event type is EV_KEY.
@@ -127,7 +125,7 @@ pub fn is_key_event(event: &input_event) -> bool {
 
 /// Lists available input devices and their capabilities. Requires root privileges.
 pub fn list_input_devices() -> io::Result<()> {
-    eprintln!("{:<15} {:<30} Capabilities", "Device", "Name"); // Move literal into format string
+    eprintln!("{:<15} {:<30} Capabilities", "Device", "Name");
     eprintln!("-------------------------------------------------------------------");
 
     let mut entries: Vec<_> = fs::read_dir("/dev/input/")?
@@ -156,7 +154,7 @@ pub fn list_input_devices() -> io::Result<()> {
         {
             Ok(f) => f,
             Err(e) => {
-                let msg = format!("{e}"); // Use inline formatting
+                let msg = format!("{e}");
                 if msg.contains("Permission denied") {
                     eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
                     continue;
@@ -175,7 +173,7 @@ pub fn list_input_devices() -> io::Result<()> {
                 warn!(device=%path_str, error=%e, "Could not get device name via EVIOCGNAME ioctl");
                 "<Unknown Name>".to_string()
             }
-        }; // Semicolon was missing here
+        };
 
         let type_bits_size = (EV_MAX / 8) + 1;
         let mut type_bits_buf: Vec<u8> = vec![0; type_bits_size as usize];

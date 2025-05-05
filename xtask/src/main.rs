@@ -3,7 +3,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::{generate, Shell};
 use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
-use intercept_bounce::cli::Args; // Import Args from the library
+use intercept_bounce::cli::Args;
 
 use std::io::Write;
 use std::{
@@ -83,7 +83,7 @@ fn generate_docs() -> Result<()> {
     fs::create_dir_all(&completions_dir).context("Failed to create completions directory")?;
 
     let cmd = Args::command();
-    let bin_name = cmd.get_name().to_string(); // Get bin name from clap
+    let bin_name = cmd.get_name().to_string();
 
     // --- Generate Man Page ---
     let man_path = man_dir.join(format!("{}.1", bin_name));

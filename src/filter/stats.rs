@@ -1,13 +1,12 @@
 // This module defines the StatsCollector struct and related types
 // used by the logger thread to accumulate and report statistics.
 
-use crate::filter::keynames::{get_key_name, get_value_name}; // Import new helper
-use crate::logger::EventInfo; // Use EventInfo from logger module
-use crate::util; // Import the new util module
+use crate::filter::keynames::{get_key_name, get_value_name};
+use crate::logger::EventInfo;
+use crate::util;
 use serde::Serialize;
-// Remove HashMap import, use Vec instead for JSON arrays
 use std::io::Write;
-use std::time::Duration; // Import Duration // Need Write for print_stats_json
+use std::time::Duration;
 
 /// Metadata included in JSON statistics output, providing context.
 #[derive(Serialize, Clone, Debug)]
@@ -86,9 +85,9 @@ pub struct StatsCollector {
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
-    pub per_key_stats: Box<[KeyStats; 1024]>, // Back in a Box
+    pub per_key_stats: Box<[KeyStats; 1024]>,
     /// Holds near-miss timings for passed events. Indexed by `keycode * 3 + value`.
-    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; 3072]>, // Back in a Box
+    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; 3072]>,
 }
 
 // Implement Default to allow std::mem::take in logger.
@@ -124,7 +123,6 @@ impl StatsCollector {
         info: &EventInfo,
         config: &crate::config::Config,
     ) {
-        // Use the is_key_event helper from the event module
         use crate::event::is_key_event;
 
         // Only process EV_KEY events for these statistics.
@@ -138,7 +136,6 @@ impl StatsCollector {
         let key_code_idx = info.event.code as usize;
         let key_value_idx = info.event.value as usize;
         let mut maybe_value_stats = if key_code_idx < 1024 && key_value_idx < 3 {
-            // Add mut
             Some(match info.event.value {
                 1 => &mut self.per_key_stats[key_code_idx].press,
                 0 => &mut self.per_key_stats[key_code_idx].release,
@@ -168,14 +165,12 @@ impl StatsCollector {
             self.key_events_passed += 1;
             // Check for near-miss only on passed events if we found valid stats
             if maybe_value_stats.is_some() {
-                // Check if stats struct was valid
                 if let Some(last_us) = info.last_passed_us {
                     if let Some(diff) = info.event_us.checked_sub(last_us) {
                         // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
                         // The filter ensures diff >= debounce_time for passed events.
                         // Here, we check against the near-miss threshold.
                         if diff <= config.near_miss_threshold_us() {
-                            // Add parentheses
                             self.record_near_miss((info.event.code, info.event.value), diff);
                         }
                     }
@@ -214,7 +209,7 @@ impl StatsCollector {
         // let log_all_events = config.log_all_events;
         // let log_bounces = config.log_bounces;
 
-        writeln!(writer, "\n--- Overall Statistics ({report_type}) ---")?; // Use inline formatting
+        writeln!(writer, "\n--- Overall Statistics ({report_type}) ---")?;
         writeln!(
             writer,
             "Key Events Processed: {}",
@@ -227,7 +222,7 @@ impl StatsCollector {
         } else {
             0.0
         };
-        writeln!(writer, "Percentage Dropped:  {percentage:.2}%")?; // Use inline formatting
+        writeln!(writer, "Percentage Dropped:  {percentage:.2}%")?;
 
         let mut any_drops = false;
         for key_code in 0..self.per_key_stats.len() {
@@ -246,8 +241,8 @@ impl StatsCollector {
                 }
 
                 let key_name = get_key_name(key_code as u16);
-                writeln!(writer, "\nKey [{key_name}] ({key_code}):")?; // Use inline formatting
-                                                                       // Calculate total processed for this key
+                writeln!(writer, "\nKey [{key_name}] ({key_code}):")?;
+                // Calculate total processed for this key
                 let total_processed_for_key = stats.press.total_processed
                     + stats.release.total_processed
                     + stats.repeat.total_processed;
@@ -256,7 +251,6 @@ impl StatsCollector {
                 } else {
                     0.0
                 };
-                // Use inline formatting
                 writeln!(
                     writer,
                     "  Total Processed: {total_processed_for_key}, Dropped: {total_drops_for_key} ({key_drop_percentage:.2}%)"
@@ -346,7 +340,7 @@ impl StatsCollector {
                     util::format_us(min),
                     util::format_us(avg as u64),
                     util::format_us(max)
-                )?; // Add ? here
+                )?;
             }
         }
         if !any_near_miss {
@@ -377,7 +371,7 @@ impl StatsCollector {
         &self,
         config: &crate::config::Config,
         runtime_us: Option<u64>,
-        report_type: &str, // Ensure report_type parameter is present
+        report_type: &str,
         mut writer: impl Write,
     ) {
         // Config parameters are used directly in ReportData construction below
@@ -497,4 +491,3 @@ impl StatsCollector {
     }
 }
 
-// format_us moved to src/util.rs
