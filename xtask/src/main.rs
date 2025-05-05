@@ -108,16 +108,23 @@ completions directory")?;
 }
 
 // --- Man Page Content Constants ---
+// Note: Using roff formatting. \fB...\fR = bold, \fI...\fR = italic, \- = hyphen, \(bu = bullet
 
 const MAN_DESCRIPTION: &str = r#"
 \fB{bin_name}\fR is an Interception Tools filter designed to eliminate keyboard chatter (also known as switch bounce).
 It reads Linux \fBinput_event\fR(5) structs from standard input, filters out rapid duplicate key events below a configurable time threshold, and writes the filtered events to standard output.
 Statistics are printed to standard error on exit or periodically.
 
-This is particularly useful for mechanical keyboards which can sometimes register multiple presses or releases for a single physical key action due to noisy switch contacts.
-It integrates with the Interception Tools ecosystem, typically placed in a pipeline between \fBintercept\fR(1) and \fBuinput\fR(1).
+Keyboard chatter occurs when a single physical key press or release generates multiple electrical signals due to the mechanical contacts bouncing. This can result in unintended duplicate characters or actions. \fB{bin_name}\fR addresses this by ignoring subsequent identical key events (same key code and same state \- press or release) that occur within the specified \fB\-\-debounce\-time\fR.
+.PP
+The filter maintains state independently for each key code (0-1023) and for each state (press=1, release=0). Key repeat events (value=2) are never filtered. Non-key events (e.g., mouse movements, synchronization events) are passed through unmodified.
+.PP
+It is designed for the Linux environment using the \fBevdev\fR input system and integrates seamlessly with the Interception Tools ecosystem, typically placed in a pipeline between \fBintercept\fR(1) (to capture events) and \fBuinput\fR(1) (to create a filtered virtual device).
+.PP
+Performance is critical for input filtering. \fB{bin_name}\fR uses a lock-free approach for the core filtering logic and a separate thread for logging and statistics to minimize latency impact on the main event processing path.
 "#;
 
+// Add more detail and context to examples
 const MAN_EXAMPLES: &str = r#"
 .PP
 .B Basic Filtering (15ms window):
@@ -126,11 +133,15 @@ const MAN_EXAMPLES: &str = r#"
 sudo sh \-c 'intercept \-g /dev/input/by\-id/your\-kbd | {bin_name} \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-kbd'
 .fi
 .PP
+This command intercepts events from your keyboard (replace placeholder path), filters them with a 15ms debounce window, and creates a new virtual keyboard device with the filtered output. Applications should use the new virtual device created by \fBuinput\fR.
+.PP
 .B Filtering with Bounce Logging:
 .IP
 .nf
 sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...'
 .fi
+.PP
+Filter with a 20ms threshold and log only the key events that are dropped (considered bounces) to standard error. Useful for identifying which keys are chattering without logging every event.
 .PP
 .B Periodic Stats Dump (every 5 minutes):
 .IP
@@ -138,10 +149,18 @@ sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 20ms \-\-log\-bou
 sudo sh \-c 'intercept \-g ... | {bin_name} \-\-log\-interval 5m | uinput \-d ...'
 .fi
 .PP
+Run with default filtering and print detailed statistics to standard error every 5 minutes, in addition to the final report on exit.
+.PP
 .B JSON Statistics Output:
 .IP
 .nf
 sudo sh \-c 'intercept \-g ... | {bin_name} \-\-stats\-json | uinput \-d ...' > /dev/null
+.fi
+.PP
+Output statistics in JSON format to standard error. Standard output (the filtered events) is redirected to /dev/null in this example, useful if only collecting stats.
+.PP
+.B Finding Your Keyboard Device:
+.IP Use \fBintercept \-L\fR or look in \fI/dev/input/by-id/\fR for device names ending in \fI-event-kbd\fR.
 .fi
 "#;
 
@@ -149,12 +168,18 @@ const MAN_INTEGRATION: &str = r#"
 \fB{bin_name}\fR is designed to work with Interception Tools. It can be used in pipelines or within a \fBudevmon\fR(1) configuration file (\fIudevmon.yaml\fR).
 .PP
 .B Example udevmon.yaml Job:
+.PP
+This example demonstrates setting up \fB{bin_name}\fR to run automatically via \fBudevmon\fR whenever a specific keyboard is plugged in.
 .IP
 .nf
 \- JOB: "intercept \-g $DEVNODE | {bin_name} \-\-debounce\-time 15ms | uinput \-d $DEVNODE"
   DEVICE:
     LINK: "/dev/input/by\-id/usb\-Your_Keyboard_Name\-event\-kbd"
 .fi
+.PP
+Replace the \fILINK\fR value with the appropriate path for your keyboard found in \fI/dev/input/by-id/\fR. The \fI$DEVNODE\fR variable is automatically substituted by \fBudevmon\fR with the actual device path (e.g., /dev/input/event5).
+.PP
+Refer to the Interception Tools documentation for more details on configuring \fBudevmon\fR.
 "#;
 
 const MAN_STATISTICS: &str = r#"
@@ -162,17 +187,21 @@ const MAN_STATISTICS: &str = r#"
 .IP \(bu 4
 Overall counts (processed, passed, dropped)
 .IP \(bu 4
-Per-key drop counts and bounce timings (min/avg/max)
+Per-key drop counts and bounce timings (min/avg/max). Bounce time is the duration between a dropped event and the previous \fIpassed\fR event for the same key and state (press/release).
 .IP \(bu 4
-Near-miss events that occur just outside the debounce window
+Near-miss events: Passed events that occurred just outside the debounce window but within the \fB\-\-near\-miss\-threshold\-time\fR of the previous passed event for the same key/state. Timings reported are the duration since the previous passed event. This helps identify keys close to bouncing.
 .PP
 Statistics are always printed to stderr on exit (cleanly or via signal). They can also be printed periodically using the \fB\-\-log\-interval\fR option.
 .PP
-When using \fB\-\-stats\-json\fR, statistics are output in JSON format for easier parsing and integration with monitoring tools.
+The human-readable format includes percentages and formatted timings (µs, ms, s).
+.PP
+.B JSON Output (\-\-stats\-json):
+.IP
+Provides a machine-readable format containing all the same information as the human-readable output, plus configuration parameters used for the run. The structure includes overall counts, per-key drop statistics (nested under `press`, `release`, `repeat`), and near-miss timings. Timings are reported in microseconds.
 "#;
 
 const MAN_LOGGING: &str = r#"
-\fB{bin_name}\fR provides several logging options for debugging and monitoring:
+\fB{bin_name}\fR provides several logging options for debugging and monitoring, written to standard error:
 .IP \(bu 4
 \fB\-\-log\-all\-events\fR: Log details of every incoming event to stderr (PASS or DROP)
 .IP \(bu 4
@@ -180,7 +209,11 @@ const MAN_LOGGING: &str = r#"
 .IP \(bu 4
 \fB\-\-verbose\fR: Enable verbose logging, including internal state and thread activity
 .PP
-The RUST_LOG environment variable can be used to control log filtering (e.g., RUST_LOG=debug).
+Log messages include timestamps relative to the first event processed, event type/code/value, key names (if applicable), and bounce/near-miss timing information.
+.PP
+The \fBRUST_LOG\fR environment variable can be used to control log filtering (e.g., \fBRUST_LOG=debug\fR, \fBRUST_LOG=intercept_bounce=trace\fR). This overrides the default level set by \fB\-\-verbose\fR. See the \fBtracing_subscriber\fR documentation for filter syntax.
+.PP
+Note: Enabling \fB\-\-log\-all\-events\fR or high verbosity levels (trace) can impact performance due to the volume of log messages generated.
 "#;
 
 const MAN_SIGNALS: &str = r#"
@@ -196,13 +229,26 @@ When any of these signals are received, the program will shut down cleanly and p
 "#;
 
 const MAN_EXIT_STATUS: &str = r#"
-\fB{bin_name}\fR exits with status 0 on success, 1 on error, and 2 on device listing errors.
+.IP 0 4
+Success (including clean shutdown via signal).
+.IP 1 4
+General runtime error (e.g., I/O error reading/writing events, internal errors).
+.IP 2 4
+Error listing input devices when using the \fB\-\-list\-devices\fR option (e.g., permission denied).
 "#;
 
 const MAN_ENVIRONMENT: &str = r#"
 .TP
 .B RUST_LOG
-Controls the logging verbosity and filtering. Examples: "info", "debug", "intercept_bounce=debug".
+Controls the logging verbosity and filtering. Examples: "info", "debug", "intercept_bounce=debug". Overrides the default log level implied by \fB\-\-verbose\fR.
+"#;
+
+const MAN_PERFORMANCE: &str = r#"
+\fB{bin_name}\fR aims for minimal latency. The core filtering logic uses simple lookups and avoids locks. Logging and statistics are handled by a separate thread to avoid blocking the main event processing path.
+.PP
+Performance depends on the event rate from the input device and the system load. Enabling verbose logging (\fB\-\-log\-all\-events\fR or \fB\-\-verbose\fR with \fBRUST_LOG=trace\fR) can significantly increase CPU usage and potentially introduce latency due to contention writing to stderr.
+.PP
+Use \fBcargo bench\fR to run microbenchmarks for the core filter logic and inter-thread communication.
 "#;
 
 const MAN_BUGS: &str = r#"
@@ -213,6 +259,18 @@ const MAN_SEE_ALSO: &str = r#"
 \fBintercept\fR(1), \fBuinput\fR(1), \fBudevmon\fR(1), \fBinput_event\fR(5)
 .PP
 Full documentation at: https://github.com/sinity/intercept-bounce
+"#;
+
+const MAN_TROUBLESHOOTING: &str = r#"
+.TP
+.B Permission Denied:
+Running \fBintercept\fR and \fBuinput\fR typically requires root privileges or specific user group memberships (e.g., 'input'). Ensure the user running the pipeline has read access to the input device (\fI/dev/input/event*\fR) and write access to \fI/dev/uinput\fR.
+.TP
+.B Incorrect Device Path:
+Double-check the device path used with \fBintercept \-g\fR or in \fIudevmon.yaml\fR. Use paths from \fI/dev/input/by-id/\fR for stability.
+.TP
+.B Mixed Output in Terminal:
+If running interactively with logging enabled, log messages (stderr) might mix with terminal echo or shell output. Redirect stderr (\fI2> logfile.txt\fR) or use \fBudevmon\fR for background operation.
 "#;
 
 /// Generates the man page with custom sections.
@@ -250,6 +308,8 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
         ("LOGGING", MAN_LOGGING),
         ("SIGNALS", MAN_SIGNALS),
         ("EXIT STATUS", MAN_EXIT_STATUS),
+        ("PERFORMANCE", MAN_PERFORMANCE),
+        ("TROUBLESHOOTING", MAN_TROUBLESHOOTING),
         ("ENVIRONMENT", MAN_ENVIRONMENT),
         ("BUGS", MAN_BUGS),
         ("SEE ALSO", MAN_SEE_ALSO),
