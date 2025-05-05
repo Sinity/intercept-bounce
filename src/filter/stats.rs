@@ -144,32 +144,32 @@ pub struct KeyStats {
 
 /// Structure for serializing per-key drop statistics in JSON.
 #[derive(Serialize, Debug)]
-struct PerKeyStatsJson<'a> {
+struct PerKeyStatsJson<'this> {
     key_code: u16,
     key_name: &'static str,
     total_processed: u64,
     total_dropped: u64,
-    drop_percentage: f664,
-    stats: KeyStatsJson<'a>, // Use the new struct holding detailed stats
+    drop_percentage: f64, // Fixed typo here
+    stats: KeyStatsJson<'this>, // Use the new struct holding detailed stats
 }
 
 /// Structure for serializing detailed key value stats in JSON.
 #[derive(Serialize, Debug)]
-struct KeyValueStatsJson<'a> {
+struct KeyValueStatsJson<'this> {
     total_processed: u64,
     passed_count: u64,
     dropped_count: u64,
     drop_rate: f64,
-    timings_us: &'a Vec<u64>, // Reference original timings
+    timings_us: &'this Vec<u64>, // Reference original timings
     bounce_histogram: TimingHistogramJson,
 }
 
 /// Structure for serializing detailed key stats in JSON.
 #[derive(Serialize, Debug)]
-struct KeyStatsJson<'a> {
-    press: KeyValueStatsJson<'a>,
-    release: KeyValueStatsJson<'a>,
-    repeat: KeyValueStatsJson<'a>, // Keep repeat for structure consistency
+struct KeyStatsJson<'this> {
+    press: KeyValueStatsJson<'this>,
+    release: KeyValueStatsJson<'this>,
+    repeat: KeyValueStatsJson<'this>, // Keep repeat for structure consistency
 }
 
 /// Structure for serializing histogram data in JSON.
@@ -192,13 +192,13 @@ struct HistogramBucketJson {
 
 /// Structure for serializing near-miss statistics in JSON.
 #[derive(Serialize, Debug)]
-struct NearMissStatsJson<'a> {
+struct NearMissStatsJson<'this> {
     key_code: u16,
     key_value: i32,
     key_name: &'static str,
     value_name: &'static str,
     count: usize,
-    timings_us: &'a Vec<u64>, // Reference the original timings vector
+    timings_us: &'this Vec<u64>, // Reference the original timings vector
     near_miss_histogram: TimingHistogramJson,
 }
 
@@ -218,7 +218,7 @@ pub struct StatsCollector {
     pub per_key_near_miss_stats: Box<[NearMissStats; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
     /// Overall histogram for all bounce timings. Aggregated before reporting.
     overall_bounce_histogram: TimingHistogram,
-    /// Overall histogram for all near-miss timings. Aggregated before reporting.
+    /// Overall histogram for all near_miss timings. Aggregated before reporting.
     overall_near_miss_histogram: TimingHistogram,
 }
 
@@ -304,7 +304,7 @@ impl StatsCollector {
                 if let Some(diff) = info.event_us.checked_sub(last_us) {
                     // Check if the difference is within the near-miss window (debounce_time <= diff <= threshold)
                     // The filter ensures diff >= debounce_time for passed events.
-                    // Here, we check against the near-miss threshold.
+                    // Here, we check against the near_miss threshold.
                     if diff <= config.near_miss_threshold_us() {
                         // Calculate the flat index for the per_key_near_miss_stats array.
                         let idx = key_code_idx * NUM_KEY_STATES + key_value_idx;
@@ -331,7 +331,7 @@ impl StatsCollector {
         }
 
         for near_miss_stats in self.per_key_near_miss_stats.iter() {
-            // Aggregate near-miss histograms
+            // Aggregate near_miss histograms
             Self::accumulate_histogram(&mut self.overall_near_miss_histogram, &near_miss_stats.histogram);
         }
     }
@@ -608,11 +608,11 @@ impl StatsCollector {
 
     /// Prints statistics in JSON format to the given writer.
     /// Includes runtime provided externally (calculated in main thread).
-    pub fn print_stats_json(
-        &mut self, // Needs to be mutable to aggregate histograms before printing
+    pub fn print_stats_json<'this>( // Renamed lifetime to 'this
+        &'this mut self, // Explicitly tie lifetime to &mut self
         config: &crate::config::Config,
         runtime_us: Option<u64>,
-        report_type: &str,
+        report_type: &'this str, // report_type also needs this lifetime
         mut writer: impl Write,
     ) {
         // Aggregate histograms before reporting
@@ -637,7 +637,7 @@ impl StatsCollector {
                 };
 
                 // Helper closure to create KeyValueStatsJson
-                let create_kv_stats_json = |kv_stats: &'a KeyValueStats| -> KeyValueStatsJson<'a> {
+                let create_kv_stats_json = |kv_stats: &'this KeyValueStats| -> KeyValueStatsJson<'this> {
                     let drop_rate = if kv_stats.total_processed > 0 {
                         (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
                     } else {
@@ -694,8 +694,8 @@ impl StatsCollector {
         }
 
         #[derive(Serialize)]
-        struct ReportData<'a> {
-            report_type: &'a str,
+        struct ReportData<'this> { // Renamed lifetime to 'this
+            report_type: &'this str,
             #[serde(skip_serializing_if = "Option::is_none")]
             runtime_us: Option<u64>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -714,8 +714,8 @@ impl StatsCollector {
             overall_bounce_histogram: TimingHistogramJson,
             overall_near_miss_histogram: TimingHistogramJson,
             // Per-Key and Per-Near-Miss details
-            per_key_stats: Vec<PerKeyStatsJson<'a>>,
-            per_key_near_miss_stats: Vec<NearMissStatsJson<'a>>,
+            per_key_stats: Vec<PerKeyStatsJson<'this>>,
+            per_key_near_miss_stats: Vec<NearMissStatsJson<'this>>,
         }
 
         let runtime_human = runtime_us.map(|us| util::format_duration(Duration::from_micros(us)));
