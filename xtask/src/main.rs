@@ -5,7 +5,7 @@ use clap_complete_nushell::Nushell;
 use clap_mangen::Man;                                                
 use intercept_bounce::cli::Args; // Import Args from the library     
 
-use std::io::Write; // Needed for writing to buffer
+use std::io::Write;
 use std::{                                                           
     env, fs,                                                         
     path::{Path, PathBuf},                                           
@@ -107,83 +107,58 @@ completions directory")?;
     Ok(())                                                           
 }
 
-/// Generates the man page with custom sections.
-fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
-    let version = env!("CARGO_PKG_VERSION");
-    // Format date like 'Month Day, Year' e.g., "July 18, 2024"
-    let date = chrono::Local::now().format("%B %d, %Y").to_string();
-    let app_name_uppercase = cmd.get_name().to_uppercase();
+// --- Man Page Content Constants ---
 
-    let mut buffer: Vec<u8> = Vec::new();
-
-    // Manual roff generation with custom sections
-    writeln!(buffer, r#".TH "{}" 1 "{}" "{}" "User Commands""#, app_name_uppercase, date, version)?;
-    writeln!(buffer, ".SH NAME")?;
-    writeln!(buffer, r#"{} \- {}"#, cmd.get_name(), cmd.get_about().unwrap_or_default().replace('-', r"\-"))?;
-
-    writeln!(buffer, ".SH SYNOPSIS")?;
-    // Basic synopsis - clap_mangen doesn't easily expose just the synopsis line
-    writeln!(buffer, r#".B {}"#, cmd.get_name())?;
-    writeln!(buffer, r#" [OPTIONS]"#)?;
-
-    writeln!(buffer, ".SH DESCRIPTION")?;
-    writeln!(buffer, r#"
-\fB{}\fR is an Interception Tools filter designed to eliminate keyboard chatter (also known as switch bounce).
+const MAN_DESCRIPTION: &str = r#"
+\fB{bin_name}\fR is an Interception Tools filter designed to eliminate keyboard chatter (also known as switch bounce).
 It reads Linux \fBinput_event\fR(5) structs from standard input, filters out rapid duplicate key events below a configurable time threshold, and writes the filtered events to standard output.
 Statistics are printed to standard error on exit or periodically.
 
 This is particularly useful for mechanical keyboards which can sometimes register multiple presses or releases for a single physical key action due to noisy switch contacts.
 It integrates with the Interception Tools ecosystem, typically placed in a pipeline between \fBintercept\fR(1) and \fBuinput\fR(1).
-"#, cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH OPTIONS")?;
-    // Use clap_mangen to render *only* the options section
-    Man::new(cmd.clone()).render_section_into("OPTIONS", &mut buffer)?;
-
-    writeln!(buffer, ".SH EXAMPLES")?;
-    writeln!(buffer, r#"
+const MAN_EXAMPLES: &str = r#"
 .PP
 .B Basic Filtering (15ms window):
 .IP
 .nf
-sudo sh \-c 'intercept \-g /dev/input/by\-id/your\-kbd | {} \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-kbd'
+sudo sh \-c 'intercept \-g /dev/input/by\-id/your\-kbd | {bin_name} \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-kbd'
 .fi
 .PP
 .B Filtering with Bounce Logging:
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {} \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...'
 .fi
 .PP
 .B Periodic Stats Dump (every 5 minutes):
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {} \-\-log\-interval 5m | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | {bin_name} \-\-log\-interval 5m | uinput \-d ...'
 .fi
 .PP
 .B JSON Statistics Output:
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {} \-\-stats\-json | uinput \-d ...' > /dev/null
+sudo sh \-c 'intercept \-g ... | {bin_name} \-\-stats\-json | uinput \-d ...' > /dev/null
 .fi
-"#, cmd.get_name(), cmd.get_name(), cmd.get_name(), cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH INTEGRATION")?;
-    writeln!(buffer, r#"
-\fB{}\fR is designed to work with Interception Tools. It can be used in pipelines or within a \fBudevmon\fR(1) configuration file (\fIudevmon.yaml\fR).
+const MAN_INTEGRATION: &str = r#"
+\fB{bin_name}\fR is designed to work with Interception Tools. It can be used in pipelines or within a \fBudevmon\fR(1) configuration file (\fIudevmon.yaml\fR).
 .PP
 .B Example udevmon.yaml Job:
 .IP
 .nf
-\- JOB: "intercept \-g $DEVNODE | {} \-\-debounce\-time 15ms | uinput \-d $DEVNODE"
+\- JOB: "intercept \-g $DEVNODE | {bin_name} \-\-debounce\-time 15ms | uinput \-d $DEVNODE"
   DEVICE:
     LINK: "/dev/input/by\-id/usb\-Your_Keyboard_Name\-event\-kbd"
 .fi
-"#, cmd.get_name(), cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH STATISTICS")?;
-    writeln!(buffer, r#"
-\fB{}\fR collects and reports detailed statistics about the events it processes. These statistics include:
+const MAN_STATISTICS: &str = r#"
+\fB{bin_name}\fR collects and reports detailed statistics about the events it processes. These statistics include:
 .IP \(bu 4
 Overall counts (processed, passed, dropped)
 .IP \(bu 4
@@ -194,11 +169,10 @@ Near-miss events that occur just outside the debounce window
 Statistics are always printed to stderr on exit (cleanly or via signal). They can also be printed periodically using the \fB\-\-log\-interval\fR option.
 .PP
 When using \fB\-\-stats\-json\fR, statistics are output in JSON format for easier parsing and integration with monitoring tools.
-"#, cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH LOGGING")?;
-    writeln!(buffer, r#"
-\fB{}\fR provides several logging options for debugging and monitoring:
+const MAN_LOGGING: &str = r#"
+\fB{bin_name}\fR provides several logging options for debugging and monitoring:
 .IP \(bu 4
 \fB\-\-log\-all\-events\fR: Log details of every incoming event to stderr (PASS or DROP)
 .IP \(bu 4
@@ -207,11 +181,10 @@ When using \fB\-\-stats\-json\fR, statistics are output in JSON format for easie
 \fB\-\-verbose\fR: Enable verbose logging, including internal state and thread activity
 .PP
 The RUST_LOG environment variable can be used to control log filtering (e.g., RUST_LOG=debug).
-"#, cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH SIGNALS")?;
-    writeln!(buffer, r#"
-\fB{}\fR handles the following signals gracefully:
+const MAN_SIGNALS: &str = r#"
+\fB{bin_name}\fR handles the following signals gracefully:
 .IP \(bu 4
 SIGINT (Ctrl+C)
 .IP \(bu 4
@@ -220,32 +193,76 @@ SIGTERM
 SIGQUIT
 .PP
 When any of these signals are received, the program will shut down cleanly and print final statistics to stderr.
-"#, cmd.get_name())?;
+"#;
 
-    writeln!(buffer, ".SH EXIT STATUS")?;
-    writeln!(buffer, r#"
-\fB{}\fR exits with status 0 on success, 1 on error, and 2 on device listing errors.
-"#, cmd.get_name())?;
+const MAN_EXIT_STATUS: &str = r#"
+\fB{bin_name}\fR exits with status 0 on success, 1 on error, and 2 on device listing errors.
+"#;
 
-    writeln!(buffer, ".SH ENVIRONMENT")?;
-    writeln!(buffer, r#"
+const MAN_ENVIRONMENT: &str = r#"
 .TP
 .B RUST_LOG
 Controls the logging verbosity and filtering. Examples: "info", "debug", "intercept_bounce=debug".
-"#)?;
+"#;
 
-    writeln!(buffer, ".SH BUGS")?;
-    writeln!(buffer, r#"
+const MAN_BUGS: &str = r#"
 Report bugs to: https://github.com/sinity/intercept-bounce/issues
-"#)?;
+"#;
 
-    writeln!(buffer, ".SH SEE ALSO")?;
-    writeln!(buffer, r#"
+const MAN_SEE_ALSO: &str = r#"
 \fBintercept\fR(1), \fBuinput\fR(1), \fBudevmon\fR(1), \fBinput_event\fR(5)
 .PP
 Full documentation at: https://github.com/sinity/intercept-bounce
-"#)?;
+"#;
 
+/// Generates the man page with custom sections.
+fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
+    let version = env!("CARGO_PKG_VERSION");
+    // Format date like 'Month Day, Year' e.g., "July 18, 2024"
+    let date = chrono::Local::now().format("%B %d, %Y").to_string();
+    let app_name_uppercase = cmd.get_name().to_uppercase();
+    let bin_name = cmd.get_name();
+
+    let mut buffer: Vec<u8> = Vec::new();
+
+    // --- Header ---
+    writeln!(buffer, r#".TH "{}" 1 "{}" "{}" "User Commands""#, app_name_uppercase, date, version)?;
+
+    // --- NAME ---
+    writeln!(buffer, ".SH NAME")?;
+    writeln!(buffer, r#"{} \- {}"#, bin_name, cmd.get_about().unwrap_or_default().replace('-', r"\-"))?;
+
+    // --- SYNOPSIS ---
+    writeln!(buffer, ".SH SYNOPSIS")?;
+    writeln!(buffer, r#".B {}"#, bin_name)?;
+    writeln!(buffer, r#" [OPTIONS]"#)?;
+
+    // --- OPTIONS (Generated by clap_mangen) ---
+    writeln!(buffer, ".SH OPTIONS")?;
+    Man::new(cmd.clone()).render_section_into("OPTIONS", &mut buffer)?;
+
+    // --- Custom Sections ---
+    let sections = [
+        ("DESCRIPTION", MAN_DESCRIPTION),
+        ("EXAMPLES", MAN_EXAMPLES),
+        ("INTEGRATION", MAN_INTEGRATION),
+        ("STATISTICS", MAN_STATISTICS),
+        ("LOGGING", MAN_LOGGING),
+        ("SIGNALS", MAN_SIGNALS),
+        ("EXIT STATUS", MAN_EXIT_STATUS),
+        ("ENVIRONMENT", MAN_ENVIRONMENT),
+        ("BUGS", MAN_BUGS),
+        ("SEE ALSO", MAN_SEE_ALSO),
+    ];
+
+    for (title, content_template) in sections {
+        writeln!(buffer, ".SH {}", title)?;
+        // Format the content, replacing {bin_name} placeholder
+        let formatted_content = content_template.replace("{bin_name}", bin_name);
+        writeln!(buffer, "{}", formatted_content)?;
+    }
+
+    // --- AUTHOR ---
     writeln!(buffer, ".SH AUTHOR")?;
     writeln!(buffer, r#"Written by {}."#, cmd.get_author().unwrap_or("Unknown"))?;
 
