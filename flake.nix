@@ -14,15 +14,14 @@
   } @ inputs:
     flake-utils.lib.eachDefaultSystem
     (
-      system:
-      let
+      system: let
         pkgs = import nixpkgs {inherit system;};
       in {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "intercept-bounce";
           version = "0.6.0"; # TODO: Consider deriving from Cargo.toml or git tag
           src = ./.;
-          cargoHash = "sha256-1Aw/bnhfHr6GBBVFPQHZITcWKe5EKZlrBbGZK9Pn4Zw="; # Update this when Cargo.lock changes
+          cargoHash = "sha256-NGhaFLAdJzfCk0YZRVrNriqd+2W1Ohbbya4s3Jid+/8="; # Update this when Cargo.lock changes
 
           nativeBuildInputs = with pkgs; [
             pkg-config
