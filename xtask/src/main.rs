@@ -356,7 +356,7 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
         println!("Generating completion file: {:?}", completions_path);                                                   
         let mut file = fs::File::create(&completions_path)           
             .with_context(|| format!("Failed to create completion file: {:?}", completions_path))?;                                    
-        generate(shell, &mut cmd.clone(), &bin_name, &mut file);     
+        generate(shell, &mut cmd.clone(), bin_name.clone(), &mut file);     
     }                                                                
                                                                      
     // --- Generate Nushell Completion ---                           
@@ -364,7 +364,7 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
     println!("Generating Nushell completion file: {:?}", nu_path);   
     let mut nu_file = fs::File::create(&nu_path)                     
         .with_context(|| format!("Failed to create Nushell completion file: {:?}", nu_path))?;                                             
-    generate(Nushell, &mut cmd.clone(), &bin_name, &mut nu_file);
+    generate(Nushell, &mut cmd.clone(), bin_name.clone(), &mut nu_file);
     
     Ok(())
 }
