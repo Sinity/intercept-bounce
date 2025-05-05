@@ -425,11 +425,11 @@ impl StatsCollector {
 
         // Overall Bounce Histogram
         writeln!(writer, "\n--- Overall Bounce Timing Histogram ---")?;
-        write!(writer, "{}", self.format_histogram_human(&self.overall_bounce_histogram))?;
+        write!(writer, "{}", Self::format_histogram_human(&self.overall_bounce_histogram))?;
 
         // Overall Near-Miss Histogram
         writeln!(writer, "\n--- Overall Near-Miss Timing Histogram (Passed within {}) ---", util::format_duration(config.near_miss_threshold()))?;
-        write!(writer, "{}", self.format_histogram_human(&self.overall_near_miss_histogram))?;
+        write!(writer, "{}", Self::format_histogram_human(&self.overall_near_miss_histogram))?;
 
 
         let mut any_drops = false;
@@ -637,7 +637,7 @@ impl StatsCollector {
                 };
 
                 // Helper closure to create KeyValueStatsJson
-                let create_kv_stats_json = |kv_stats: &KeyValueStats| -> KeyValueStatsJson {
+                let create_kv_stats_json = |kv_stats: &KeyValueStats| {
                     let drop_rate = if kv_stats.total_processed > 0 {
                         (kv_stats.dropped_count as f64 / kv_stats.total_processed as f64) * 100.0
                     } else {

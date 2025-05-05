@@ -216,7 +216,7 @@ impl Logger {
         let wallclock = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
         tracing::info!(target: "stats", kind = "periodic", wallclock = %wallclock, "Periodic stats dump");
 
-        let interval_stats_clone = self.interval_stats.clone();
+        let mut interval_stats_clone = self.interval_stats.clone();
         if self.config.stats_json {
             tracing::debug!("Logger thread printing periodic stats in JSON format");
             interval_stats_clone.print_stats_json(
