@@ -325,9 +325,10 @@ fn main() -> io::Result<()> {
                     };
                     trace!("BounceFilter mutex unlocked");
 
-                    // Extract the event needed for stdout *before* event_info is moved.
+                    // Extract the event and bounce status *before* event_info is moved.
                     // input_event implements Copy, so this is cheap.
                     let event_to_write = event_info.event;
+                    let is_bounce = event_info.is_bounce; // Store is_bounce before move
 
                     // event_info is now returned directly from check_event
                     trace!(event_type = event_info.event.type_,
@@ -375,7 +376,7 @@ fn main() -> io::Result<()> {
                         }
                     }
 
-                    if !event_info.is_bounce {
+                    if !is_bounce { // Use the stored is_bounce value
                         trace!("Event passed filter. Attempting to write to stdout...");
                         if let Some(counter) = &otel_counters.events_passed {
                             counter.add(1, &[]);
