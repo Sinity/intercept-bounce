@@ -1,5 +1,5 @@
 use input_linux_sys::{
-    EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN,
+    EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN, KEY_MAX,
 };
 // Re-export input_event publicly
 pub use input_linux_sys::input_event;
@@ -155,10 +155,10 @@ pub fn list_input_devices() -> io::Result<()> {
             Ok(f) => f,
             Err(e) => {
                 let msg = format!("{e}");
-                if msg.contains("Permission denied") {
+                if msg.contains("Permission denied") { // Keep format! here
                     eprintln!("{:<15} {:<30} Permission Denied", path_str, "");
                     continue;
-                } else {
+                } else { // Keep format! here
                     eprintln!("{:<15} {:<30} Error opening: {}", path_str, "", e);
                     continue;
                 }
@@ -169,7 +169,7 @@ pub fn list_input_devices() -> io::Result<()> {
         let mut name_buf = [0u8; 256];
         let device_name = match eviocgname(fd, &mut name_buf) {
             Ok(name) => name,
-            Err(e) => {
+            Err(e) => { // Keep %e for Display formatting
                 warn!(device=%path_str, error=%e, "Could not get device name via EVIOCGNAME ioctl");
                 "<Unknown Name>".to_string()
             }
@@ -205,7 +205,7 @@ pub fn list_input_devices() -> io::Result<()> {
                     capabilities.push("EV_REP (Repeat)");
                 }
             }
-            Err(e) => {
+            Err(e) => { // Keep %e for Display formatting
                 warn!(device=%path_str, error=%e, "Could not get device capabilities via EVIOCGBIT ioctl");
                 capabilities.push("Error getting capabilities");
             }
@@ -216,7 +216,7 @@ pub fn list_input_devices() -> io::Result<()> {
                 "{:<15} {:<30} {}",
                 path_str,
                 device_name,
-                capabilities.join(", ")
+                capabilities.join(", ") // Keep join
             );
         }
 
@@ -261,7 +261,7 @@ fn eviocgname(fd: RawFd, buf: &mut [u8; 256]) -> io::Result<String> {
         Err(io::Error::last_os_error())
     } else {
         let nul = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        Ok(String::from_utf8_lossy(&buf[..nul]).to_string())
+        Ok(String::from_utf8_lossy(&buf[..nul]).to_string()) // Keep to_string
     }
 }
 

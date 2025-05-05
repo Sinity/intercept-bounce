@@ -1,5 +1,6 @@
 // This module defines the StatsCollector struct and related types
 // used by the logger thread to accumulate and report statistics.
+use crate::filter::{FILTER_MAP_SIZE, NUM_KEY_STATES};
 
 use crate::filter::keynames::{get_key_name, get_value_name};
 use crate::logger::EventInfo;
@@ -85,9 +86,9 @@ pub struct StatsCollector {
     /// Total count of key events dropped by the filter.
     pub key_events_dropped: u64,
     /// Holds aggregated drop stats per key code. Uses a fixed-size array for O(1) lookup.
-    pub per_key_stats: Box<[KeyStats; 1024]>,
+    pub per_key_stats: Box<[KeyStats; FILTER_MAP_SIZE]>,
     /// Holds near-miss timings for passed events. Indexed by `keycode * 3 + value`.
-    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; 3072]>,
+    pub per_key_passed_near_miss_timing: Box<[Vec<u64>; FILTER_MAP_SIZE * NUM_KEY_STATES]>,
 }
 
 // Implement Default to allow std::mem::take in logger.
@@ -102,9 +103,9 @@ impl StatsCollector {
     #[must_use]
     pub fn with_capacity() -> Self {
         // Allocate the arrays on the heap using Box::new
-        let per_key_stats = Box::new([(); 1024].map(|_| KeyStats::default()));
+        let per_key_stats = Box::new([(); FILTER_MAP_SIZE].map(|_| KeyStats::default()));
         let per_key_passed_near_miss_timing =
-            Box::new([(); 3072].map(|_| Vec::with_capacity(1024))); // Assuming initial capacity is desired
+            Box::new([(); FILTER_MAP_SIZE * NUM_KEY_STATES].map(|_| Vec::with_capacity(1024))); // Assuming initial capacity is desired
 
         StatsCollector {
             key_events_processed: 0,
@@ -135,7 +136,7 @@ impl StatsCollector {
         // Get mutable access to the specific KeyValueStats for this event, if valid
         let key_code_idx = info.event.code as usize;
         let key_value_idx = info.event.value as usize;
-        let mut maybe_value_stats = if key_code_idx < 1024 && key_value_idx < 3 {
+        let mut maybe_value_stats = if key_code_idx < FILTER_MAP_SIZE && key_value_idx < NUM_KEY_STATES {
             Some(match info.event.value {
                 1 => &mut self.per_key_stats[key_code_idx].press,
                 0 => &mut self.per_key_stats[key_code_idx].release,
@@ -184,9 +185,9 @@ impl StatsCollector {
     fn record_near_miss(&mut self, key: (u16, i32), diff: u64) {
         let (key_code, key_value) = key;
         // Check bounds before calculating index.
-        if (key_code as usize) < 1024 && (key_value as usize) < 3 {
+        if (key_code as usize) < FILTER_MAP_SIZE && (key_value as usize) < NUM_KEY_STATES {
             // Calculate the flat index for the per_key_passed_near_miss_timing array.
-            let idx = key_code as usize * 3 + key_value as usize;
+            let idx = key_code as usize * NUM_KEY_STATES + key_value as usize;
             let vec = &mut self.per_key_passed_near_miss_timing[idx];
             // Use reserve(1) for potentially better allocation strategy than doubling.
             if vec.len() == vec.capacity() {
@@ -204,10 +205,6 @@ impl StatsCollector {
         report_type: &str,
         mut writer: impl Write, // Accept a generic writer
     ) -> std::io::Result<()> {
-        // Config parameters are logged at startup via tracing.
-        // These variables are no longer needed here.
-        // let log_all_events = config.log_all_events;
-        // let log_bounces = config.log_bounces;
 
         writeln!(writer, "\n--- Overall Statistics ({report_type}) ---")?;
         writeln!(
@@ -262,7 +259,7 @@ impl StatsCollector {
                                              value_stats: &KeyValueStats|
                  -> std::io::Result<()> {
                     if value_stats.count > 0 {
-                        write!(
+                        write!( // Use write! instead of writeln! here
                             writer,
                             "  {:<7} ({}): {} drops",
                             value_name, value_code, value_stats.count
@@ -317,8 +314,8 @@ impl StatsCollector {
                     any_near_miss = true;
                 }
 
-                let key_code = (idx / 3) as u16;
-                let key_value = (idx % 3) as i32;
+                let key_code = (idx / NUM_KEY_STATES) as u16;
+                let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
 
                 let min = timings.iter().min().copied().unwrap_or(0);
@@ -374,13 +371,6 @@ impl StatsCollector {
         report_type: &str,
         mut writer: impl Write,
     ) {
-        // Config parameters are used directly in ReportData construction below
-        // or accessed via config methods, so these local bindings are unused.
-        // let debounce_time_us = config.debounce_us();
-        // let near_miss_threshold_us = config.near_miss_threshold_us();
-        // let log_all_events = config.log_all_events;
-        // let log_bounces = config.log_bounces;
-        // let log_interval_us = config.log_interval_us();
 
         // --- Prepare Per-Key Drop Stats for JSON ---
         let mut per_key_stats_json_vec = Vec::new();
@@ -416,8 +406,8 @@ impl StatsCollector {
         let mut near_miss_json_vec = Vec::new();
         for (idx, timings) in self.per_key_passed_near_miss_timing.iter().enumerate() {
             if !timings.is_empty() {
-                let key_code = (idx / 3) as u16;
-                let key_value = (idx % 3) as i32;
+                let key_code = (idx / NUM_KEY_STATES) as u16;
+                let key_value = (idx % NUM_KEY_STATES) as i32;
                 let key_name = get_key_name(key_code);
                 let value_name = get_value_name(key_value);
 

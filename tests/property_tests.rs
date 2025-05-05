@@ -1,12 +1,15 @@
 //! Property-based tests for the BounceFilter logic using proptest.
 
-use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN};
+use input_linux_sys::{input_event, timeval, EV_KEY, EV_REL, EV_SYN, KEY_MAX};
 use intercept_bounce::event;
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::EventInfo;
 use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
+
+mod common; // Include the common module
+use common::key_ev; // Import specific helpers if needed, or use common::*
 
 // --- Test Constants ---
 const MAX_EVENTS: usize = 1000; // Max number of events in a sequence
@@ -29,7 +32,7 @@ fn arb_event_sequence_data() -> impl Strategy<Value = Vec<(u64, u16, u16, i32)>>
             } else {
                 EV_REL as u16 // Or relative motion
             };
-            let code = fastrand::u16(0..256); // Random key/axis code
+            let code = fastrand::u16(0..=KEY_MAX); // Random key/axis code up to KEY_MAX
             let value = fastrand::i32(0..3); // Random value (press/release/repeat or axis value)
 
             events.push((event_us, event_type, code, value));
@@ -55,15 +58,7 @@ proptest! {
         let mut last_passed_times: HashMap<(u16, i32), u64> = HashMap::new();
 
         for (event_us, type_, code, value) in event_data {
-            let event = input_event {
-                time: timeval {
-                    tv_sec: (event_us / 1_000_000) as i64,
-                    tv_usec: (event_us % 1_000_000) as i64,
-                },
-                type_,
-                code: if type_ == EV_KEY as u16 { code } else { 0 },
-                value: if type_ == EV_KEY as u16 { value } else { 0 },
-            };
+            let event = common::key_ev(event_us, code, value); // Use common helper
 
             let info: EventInfo = filter.check_event(&event, debounce_time);
 
@@ -78,8 +73,7 @@ proptest! {
                             let diff = event_us - *last_passed;
                             prop_assert!(
                                 Duration::from_micros(diff) >= debounce_time,
-                                "Passed event type:{} code:{} val:{} at {}us was too close ({}us) to previous passed event at {}us for key {:?}. Debounce time: {:?}",
-                                type_, code, value, event_us, diff, last_passed, key, debounce_time
+                                "Passed event type:{type_} code:{code} val:{value} at {event_us}us was too close ({diff}us) to previous passed event at {last_passed}us for key {key:?}. Debounce time: {debounce_time:?}"
                             );
                         }
                     }
@@ -93,8 +87,7 @@ proptest! {
                             let diff = event_us - *last_passed;
                             prop_assert!(
                                 Duration::from_micros(diff) < debounce_time,
-                                "Bounced event type:{} code:{} val:{} at {}us was too far ({}us) from previous passed event at {}us for key {:?}. Debounce time: {:?}",
-                                type_, code, value, event_us, diff, last_passed, key, debounce_time
+                                "Bounced event type:{type_} code:{code} val:{value} at {event_us}us was too far ({diff}us) from previous passed event at {last_passed}us for key {key:?}. Debounce time: {debounce_time:?}"
                             );
                         }
                     }
@@ -114,22 +107,13 @@ proptest! {
         let mut filter = BounceFilter::new();
 
         for (event_us, type_, code, value) in event_data {
-            let event = input_event {
-                time: timeval {
-                    tv_sec: (event_us / 1_000_000) as i64,
-                    tv_usec: (event_us % 1_000_000) as i64,
-                },
-                type_,
-                code: if type_ == EV_KEY as u16 { code } else { 0 },
-                value: if type_ == EV_KEY as u16 { value } else { 0 },
-            };
+            let event = common::key_ev(event_us, code, value); // Use common helper
 
             if !event::is_key_event(&event) {
                 let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
                     !info.is_bounce,
-                    "Non-key event type:{} code:{} val:{} at {}us was incorrectly marked as bounce.",
-                    type_, code, value, event_us
+                    "Non-key event type:{type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
                 );
             }
         }
@@ -145,22 +129,13 @@ proptest! {
         let mut filter = BounceFilter::new();
 
         for (event_us, type_, code, value) in event_data {
-             let event = input_event {
-                time: timeval {
-                    tv_sec: (event_us / 1_000_000) as i64,
-                    tv_usec: (event_us % 1_000_000) as i64,
-                },
-                type_,
-                code: if type_ == EV_KEY as u16 { code } else { 0 },
-                value: if type_ == EV_KEY as u16 { value } else { 0 },
-            };
+             let event = common::key_ev(event_us, code, value); // Use common helper
 
             if event::is_key_event(&event) && event.value == 2 {
                 let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
                     !info.is_bounce,
-                    "Repeat event type:{} code:{} val:{} at {}us was incorrectly marked as bounce.",
-                    type_, code, value, event_us
+                    "Repeat event type:{type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
                 );
             }
         }
@@ -178,15 +153,7 @@ proptest! {
         let mut passed_events_ts = Vec::new();
 
         for (event_us, type_, code, value) in &event_data {
-            let event = input_event {
-                time: timeval {
-                    tv_sec: (*event_us / 1_000_000) as i64,
-                    tv_usec: (*event_us % 1_000_000) as i64,
-                },
-                type_: *type_,
-                code: if *type_ == EV_KEY as u16 { *code } else { 0 },
-                value: if *type_ == EV_KEY as u16 { *value } else { 0 },
-            };
+            let event = common::key_ev(*event_us, *code, *value); // Use common helper
 
             let info = filter.check_event(&event, debounce_time);
             if !info.is_bounce {
@@ -197,7 +164,7 @@ proptest! {
         // Check that the timestamps of passed events are strictly non-decreasing.
         let mut last_ts = 0u64;
         for &ts in &passed_events_ts {
-            prop_assert!(ts >= last_ts, "Passed event timestamps are not non-decreasing: {} followed by {}", last_ts, ts);
+            prop_assert!(ts >= last_ts, "Passed event timestamps are not non-decreasing: {last_ts} followed by {ts}");
             last_ts = ts;
         }
     }

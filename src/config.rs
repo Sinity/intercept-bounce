@@ -81,7 +81,7 @@ impl From<&crate::cli::Args> for Config {
         };
         // Allow overriding with RUST_LOG environment variable
         let log_filter =
-            std::env::var("RUST_LOG").unwrap_or_else(|_| default_log_filter.to_string());
+            std::env::var("RUST_LOG").unwrap_or_else(|_| default_log_filter.to_string()); // Keep to_string
 
         Self {
             debounce_time: a.debounce_time,

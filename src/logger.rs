@@ -271,11 +271,11 @@ impl Logger {
 
         let bounce_info_str = if data.is_bounce && event::is_key_event(&data.event) {
             if let Some(diff) = data.diff_us {
-                format!(" (Bounce Time: {})", util::format_us(diff))
+                format!(" (Bounce Time: {})", util::format_us(diff)) // Keep util::format_us
             } else {
                 " (Bounce Time: N/A)".to_string()
             }
-        } else {
+        } else { // Not a bounce or not a key event
             "".to_string()
         };
 
@@ -285,7 +285,7 @@ impl Logger {
                     if Duration::from_micros(diff) >= self.config.debounce_time()
                         && Duration::from_micros(diff) <= self.config.near_miss_threshold()
                     {
-                        format!(" (Diff since last passed: {})", util::format_us(diff))
+                        format!(" (Diff since last passed: {})", util::format_us(diff)) // Keep util::format_us
                     } else {
                         "".to_string()
                     }
@@ -295,14 +295,16 @@ impl Logger {
             } else {
                 "".to_string()
             }
-        } else {
+        } else { // Not a passed key event or no previous passed event
             "".to_string()
         };
 
+        let relative_human = format_relative_us(relative_us);
+        let key_info_str = if event::is_key_event(&data.event) { format!(" Key [{key_name_str}] ({})", data.event.code) } else { "".to_string() };
+
         // Use info! macro for event logging
         info!(
-            // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
-            status = status,
+            status, // Field name is the same as variable name
             relative_us = relative_us,
             relative_human = %format_relative_us(relative_us),
             event_type = data.event.type_,
@@ -316,16 +318,8 @@ impl Logger {
             bounce_info = %bounce_info_str,
             near_miss_diff_us = if !data.is_bounce && event::is_key_event(&data.event) { data.event_us.checked_sub(data.last_passed_us.unwrap_or(0)) } else { None },
             near_miss_info = %near_miss_info_str,
-            "[{}] {} {} ({}, {} {}){}{}{}",
-            status,
-            format_relative_us(relative_us),
-            type_name,
-            data.event.code,
-            value_name_str,
-            data.event.value,
-            if event::is_key_event(&data.event) { format!(" Key [{}] ({})", key_name_str, data.event.code) } else { "".to_string() },
-            bounce_info_str,
-            near_miss_info_str
+            "[{status}] {relative_human} {type_name} ({}, {value_name_str} {}){key_info_str}{bounce_info_str}{near_miss_info_str}",
+            data.event.code, data.event.value // Arguments for the format string
         );
     }
 
@@ -352,14 +346,15 @@ impl Logger {
             .saturating_sub(self.first_event_us.unwrap_or(data.event_us));
 
         let bounce_info_str = if let Some(diff) = data.diff_us {
-            format!(" (Bounce Time: {})", util::format_us(diff))
+            format!(" (Bounce Time: {})", util::format_us(diff)) // Keep util::format_us
         } else {
             " (Bounce Time: N/A)".to_string()
         };
 
+        let relative_human = format_relative_us(relative_us);
+
         // Use info! macro for bounce logging
         info!(
-            // target: "event", // Use a specific target for event logs - REMOVED for test compatibility
             status = "DROP",
             relative_us = relative_us,
             relative_human = %format_relative_us(relative_us),
@@ -372,15 +367,8 @@ impl Logger {
             is_bounce = true,
             bounce_time_us = data.diff_us,
             bounce_info = %bounce_info_str,
-            "[{}] {} {} ({}, {} {}) Key [{}] ({}){}",
-            "DROP",
-            format_relative_us(relative_us),
-            type_name,
-            code,
-            value_name,
-            value,
-            key_name,
-            code,
+            "[DROP] {relative_human} {type_name} ({code}, {value_name} {value}) Key [{key_name}] ({code}){bounce_info_str}",
+            // No additional arguments needed for the format string itself
             bounce_info_str
         );
     }
@@ -395,6 +383,6 @@ fn format_relative_us(relative_us: u64) -> String {
     } else {
         format!("+{:.3} s", relative_us as f64 / 1_000_000.0)
     };
-    format!("{s:<10}")
+    format!("{s:<10}") // Keep format! here for padding
 }
 

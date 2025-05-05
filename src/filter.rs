@@ -5,21 +5,28 @@
 pub mod keynames;
 pub mod stats;
 
-use crate::event::{self, is_key_event};
+use crate::event::{self, event_microseconds, is_key_event};
 use crate::logger::EventInfo;
-use input_linux_sys::input_event;
+use input_linux_sys::{input_event, KEY_MAX};
 use std::time::Duration;
+
+// Constants for filter state size
+/// Number of key codes to track (0 to KEY_MAX inclusive).
+pub const FILTER_MAP_SIZE: usize = KEY_MAX as usize + 1;
+/// Number of key states (0=release, 1=press, 2=repeat).
+pub const NUM_KEY_STATES: usize = 3;
 
 /// Holds the minimal state required for bounce filtering decisions.
 ///
 /// This struct only stores the timestamp (in microseconds) of the last *passed* event
 /// for each key code and value combination. It does not store historical
-/// statistics; that responsibility is delegated to the `Logger` thread.
 pub struct BounceFilter {
     // Stores the timestamp (in microseconds) of the last event that *passed* the filter
     // for a given key code (index 0..1023) and key value (index 0=release, 1=press, 2=repeat).
     // Initialized with u64::MAX to indicate no event has passed yet.
-    last_event_us: [[u64; 3]; 1024],
+    // Use constants for array dimensions.
+    // Size is KEY_MAX + 1 because key codes are 0-based up to KEY_MAX.
+    last_event_us: [[u64; NUM_KEY_STATES]; FILTER_MAP_SIZE],
     // Ring buffer to store the last N *passed* events for debugging purposes.
     // Needs input_event to derive Copy or Default, or use MaybeUninit.
     // We'll use Option<input_event> and initialize with None.
@@ -44,7 +51,7 @@ impl BounceFilter {
     #[must_use]
     pub fn new() -> Self {
         BounceFilter {
-            last_event_us: [[u64::MAX; 3]; 1024],
+            last_event_us: [[u64::MAX; NUM_KEY_STATES]; FILTER_MAP_SIZE],
             #[cfg(feature = "debug_ring_buffer")]
             recent_passed_events: [(); 64].map(|_| None),
             #[cfg(feature = "debug_ring_buffer")]
@@ -71,7 +78,7 @@ impl BounceFilter {
     /// * `diff_us_if_bounce`: If `is_bounce` is true, contains the time difference (µs)
     ///   between this event and the last passed event. Otherwise `None`.
     ///   of the same key code and value that passed the filter. This is needed
-    ///   by the logger thread to calculate near-miss statistics.
+    ///   by the logger thread.
     pub fn check_event(&mut self, event: &input_event, debounce_time: Duration) -> EventInfo {
         let event_us = event::event_microseconds(event);
 
@@ -96,7 +103,7 @@ impl BounceFilter {
         // Check bounds for key code/value indices
         let key_code_idx = event.code as usize;
         let key_value_idx = event.value as usize;
-        if !(key_code_idx < 1024 && key_value_idx < 3) {
+        if !(key_code_idx < FILTER_MAP_SIZE && key_value_idx < NUM_KEY_STATES) {
             // Out of bounds - treat as passed, no relevant history
             return EventInfo {
                 event: *event,

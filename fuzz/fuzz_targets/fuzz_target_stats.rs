@@ -1,6 +1,6 @@
 #![no_main]
 
-use arbitrary::Arbitrary;
+use arbitrary::{Arbitrary, Unstructured};
 use input_linux_sys::input_event;
 use intercept_bounce::{config::Config, filter::stats::StatsCollector, logger::EventInfo};
 use libfuzzer_sys::fuzz_target;
@@ -24,7 +24,7 @@ struct ArbitraryEventData {
     near_miss_ms: u64, // Use ms for easier arbitrary generation
 }
 
-fuzz_target!(|arb_data: ArbitraryEventData| {
+fuzz_target!(|data: &[u8]| {
     // Create a dummy input_event (only type, code, value are used by EventInfo)
     let dummy_event = input_event {
         time: input_linux_sys::timeval {
@@ -32,8 +32,16 @@ fuzz_target!(|arb_data: ArbitraryEventData| {
             tv_usec: 0,
         }, // Time not used by EventInfo directly
         type_: arb_data.event_type,
-        code: arb_data.event_code,
+        code: arb_data.event_code, // Use arbitrary code directly
         value: arb_data.event_value,
+    };
+
+    // Create an Unstructured instance from the raw data
+    let mut u = Unstructured::new(data);
+    // Generate ArbitraryEventData using the Unstructured instance
+    let arb_data = match ArbitraryEventData::arbitrary(&mut u) {
+        Ok(d) => d,
+        Err(_) => return, // Not enough data or invalid data for arbitrary generation
     };
 
     // Construct EventInfo from arbitrary data

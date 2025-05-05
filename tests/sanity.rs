@@ -1,13 +1,11 @@
 use assert_cmd::Command;
-use input_linux_sys::{input_event, timeval, EV_KEY};
+use input_linux_sys::{input_event, EV_KEY};
 use predicates::prelude::*;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::mem::size_of;
 use std::process::Output;
 
-const KEY_A: u16 = 30;
-const KEY_B: u16 = 48;
 const EV_SYN: u16 = 0; // For SYN_REPORT events
 
 // Helper to create a key event
@@ -23,18 +21,8 @@ fn key_ev(ts: u64, code: u16, value: i32) -> input_event {
     }
 }
 
-// Helper to create a non-key event (e.g., SYN_REPORT)
-fn non_key_ev(ts: u64) -> input_event {
-    input_event {
-        time: timeval {
-            tv_sec: (ts / 1_000_000) as i64,
-            tv_usec: (ts % 1_000_000) as i64,
-        },
-        type_: EV_SYN, // Example: SYN event
-        code: 0,       // SYN_REPORT
-        value: 0,
-    }
-}
+mod common; // Include the common module
+use common::*; // Import helpers
 
 // Helper to serialize events into bytes
 fn events_to_bytes(events: &[input_event]) -> Vec<u8> {

@@ -57,10 +57,10 @@ fn run_cargo(command: &str, args: &[&str]) -> Result<()> {
 
     let status = cmd
         .status()
-        .context(format!("Failed to execute cargo {}", command))?;
+        .context(format!("Failed to execute cargo {command}"))?;
 
     if !status.success() {
-        anyhow::bail!("cargo {} command failed", command);
+        anyhow::bail!("cargo {command} command failed");
     }
     Ok(())
 }
@@ -86,7 +86,7 @@ fn generate_docs() -> Result<()> {
     let bin_name = cmd.get_name().to_string();
 
     // --- Generate Man Page ---
-    let man_path = man_dir.join(format!("{}.1", bin_name));
+    let man_path = man_dir.join(format!("{bin_name}.1"));
     println!("Generating man page: {:?}", man_path);
     generate_man_page(&cmd, &man_path)?;
 
@@ -94,7 +94,7 @@ fn generate_docs() -> Result<()> {
     generate_completions(&cmd, &completions_dir)?;
 
     println!(
-        "Successfully generated man page and completions in: {}",
+        "Successfully generated man page and completions in: {}", // Keep display
         docs_dir.display()
     );
     Ok(())
@@ -547,7 +547,7 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     // Render the standard sections (NAME, SYNOPSIS, DESCRIPTION, OPTIONS, AUTHOR) using clap_mangen
     // Note: clap_mangen uses the command's `about` for NAME and `long_about` (or `about`) for DESCRIPTION.
     // It doesn't include the .TH header automatically, so we add it manually first.
-    writeln!(
+    writeln!( // Keep explicit args for .TH format
         buffer,
         r#".TH "{}" 1 "{}" "{}" "User Commands""#,
         app_name_uppercase, date, version
@@ -575,13 +575,13 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
     ];
 
     for (title, content_template) in custom_sections {
-        writeln!(buffer, ".SH {}", title)?;
+        writeln!(buffer, ".SH {title}")?;
         // Format the content, replacing {bin_name} placeholder
         let formatted_content = content_template.replace("{bin_name}", bin_name);
-        writeln!(buffer, "{}", formatted_content)?;
+        writeln!(buffer, "{formatted_content}")?;
     }
 
-    // Note: AUTHOR section is typically included by clap_mangen's render method.
+    // AUTHOR section is included by clap_mangen's render method.
 
     // Write the complete buffer (standard sections + custom sections) to the file
     fs::write(path, buffer).with_context(|| format!("Failed to write man page to {:?}", path))?;
@@ -609,15 +609,15 @@ fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<(
             Shell::Zsh => "zsh",
             _ => continue, // Should not happen
         };
-        let completions_path = completions_dir.join(format!("{}.{}", bin_name, ext));
+        let completions_path = completions_dir.join(format!("{bin_name}.{ext}"));
         println!("Generating completion file: {:?}", completions_path);
         let mut file = fs::File::create(&completions_path)
             .with_context(|| format!("Failed to create completion file: {:?}", completions_path))?;
         generate(shell, &mut cmd.clone(), bin_name, &mut file);
     }
 
-    // --- Generate Nushell Completion ---
-    let nu_path = completions_dir.join(format!("{}.nu", bin_name));
+    // Generate Nushell Completion
+    let nu_path = completions_dir.join(format!("{bin_name}.nu"));
     println!("Generating Nushell completion file: {:?}", nu_path);
     let mut nu_file = fs::File::create(&nu_path)
         .with_context(|| format!("Failed to create Nushell completion file: {:?}", nu_path))?;

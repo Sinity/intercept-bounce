@@ -1,42 +1,14 @@
 //! Unit tests for the BounceFilter logic.
 
-use input_linux_sys::{input_event, timeval, EV_KEY, EV_SYN};
+use input_linux_sys::input_event;
 use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::EventInfo;
 use std::time::Duration;
 
-// --- Test Constants ---
-const KEY_A: u16 = 30; // Example key code
-const KEY_B: u16 = 48; // Another key code
-const DEBOUNCE_TIME: Duration = Duration::from_millis(10); // Standard debounce time for tests
+mod common; // Include the common module
+use common::*; // Import helpers
 
 // --- Test Helpers ---
-
-/// Creates an EV_KEY input_event with a specific microsecond timestamp.
-fn key_ev(ts_us: u64, code: u16, value: i32) -> input_event {
-    input_event {
-        time: timeval {
-            tv_sec: (ts_us / 1_000_000) as i64,
-            tv_usec: (ts_us % 1_000_000) as i64,
-        },
-        type_: EV_KEY as u16,
-        code,
-        value,
-    }
-}
-
-/// Creates a non-key input_event (e.g., EV_SYN) with a specific microsecond timestamp.
-fn non_key_ev(ts_us: u64) -> input_event {
-    input_event {
-        time: timeval {
-            tv_sec: (ts_us / 1_000_000) as i64,
-            tv_usec: (ts_us % 1_000_000) as i64,
-        },
-        type_: EV_SYN as u16,
-        code: 0,
-        value: 0,
-    }
-}
 
 // Helper to check a sequence of events against the filter.
 // Returns a vector of EventInfo structs.
