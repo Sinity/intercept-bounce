@@ -25,7 +25,7 @@
           src = ./.;
           cargoLock = {
             lockFile = ./Cargo.lock;
-            # cargoHash = "sha256-cf4WcslgG5uUdHXIGmta9Lp7lwEdOhs8wCLy9HrqqdE="; # Update this with the output from 'nix hash file Cargo.lock --type sha256 --base64'
+            cargoHash = "sha256-<PASTE_THE_NEW_BASE64_HASH_HERE>"; # Update this with the output from 'nix hash file Cargo.lock --type sha256 --base64'
           };
 
           nativeBuildInputs = with pkgs; [

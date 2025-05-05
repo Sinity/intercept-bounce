@@ -45,7 +45,7 @@ fn main() -> Result<(), Error> {
         // Explicitly create the file first.
         let mut file = fs::File::create(&completions_path)?;
         // Call generate with the file handle (which implements Write).
-        generate(shell, &mut cmd.clone(), bin_name, &mut file)?;
+        generate(shell, &mut cmd.clone(), bin_name, &mut file);
     }
 
     println!(
