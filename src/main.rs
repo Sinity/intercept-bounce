@@ -325,6 +325,10 @@ fn main() -> io::Result<()> {
                     };
                     trace!("BounceFilter mutex unlocked");
 
+                    // Extract the event needed for stdout *before* event_info is moved.
+                    // input_event implements Copy, so this is cheap.
+                    let event_to_write = event_info.event;
+
                     // event_info is now returned directly from check_event
                     trace!(event_type = event_info.event.type_,
                        event_code = event_info.event.code,
