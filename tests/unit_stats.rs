@@ -471,8 +471,9 @@ fn stats_human_output_formatting() {
 
     // Assert that the Release line is NOT within the KEY_B section
     assert!(!key_b_section.contains("\n  Release (0):")); // Check for newline + indentation + "Release (0):"
+    // Assert that the Repeat line is NOT within the KEY_B section
+    assert!(!key_b_section.contains("\n  Repeat  (2):")); // Check for newline + indentation + "Repeat (2):"
 
-    assert!(output_string.contains("Repeat  (2): Processed: 0, Passed: 0, Dropped: 0 (0.00%)")); // 0/0 = 0%
 
     // Per-Key Near-Miss Stats
     assert!(output_string.contains("--- Passed Event Near-Miss Statistics (Passed within 50ms) ---"));
