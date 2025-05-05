@@ -40,15 +40,10 @@
           ];
           buildInputs = [pkgs.openssl]; # Runtime dependency
 
-          # Phase to generate and install docs before the standard build
+          # Use xtask to generate docs before installation
           preBuild = ''
-            export OUT_DIR=$(pwd)/target/generated
-            mkdir -p $OUT_DIR
-            echo "Generating docs in $OUT_DIR using helper binary..."
-            # Build the helper binary (dev profile is faster for this)
-            cargo build --quiet --package intercept-bounce --bin generate-cli-files
-            # Run the helper binary
-            $(pwd)/target/debug/generate-cli-files
+            echo "Generating docs using xtask..."
+            cargo run --package xtask -- generate-docs
             echo "Finished generating docs."
           '';
 
@@ -60,7 +55,7 @@
             runHook postInstall
             echo "Installing man page..."
             mkdir -p $out/share/man/man1
-            cp target/generated/intercept-bounce.1 $out/share/man/man1/
+            cp docs/man/intercept-bounce.1 $out/share/man/man1/
 
             echo "Installing completions..."
             install_completion() {
@@ -70,12 +65,12 @@
               mkdir -p $dest_dir
               # Install completion file, renaming based on shell conventions.
               if [ "$shell" = "bash" ]; then
-                cp target/generated/intercept-bounce.$ext $dest_dir/intercept-bounce
+                cp docs/completions/intercept-bounce.$ext $dest_dir/intercept-bounce
               elif [ "$shell" = "zsh" ]; then
-                cp target/generated/intercept-bounce.$ext $dest_dir/_intercept-bounce
+                cp docs/completions/intercept-bounce.$ext $dest_dir/_intercept-bounce
               else
                 # Fish, Elvish, PowerShell use the filename as is.
-                cp target/generated/intercept-bounce.$ext $dest_dir/intercept-bounce.$ext
+                cp docs/completions/intercept-bounce.$ext $dest_dir/intercept-bounce.$ext
               fi
               echo "Installed $shell completion to $dest_dir"
             }
@@ -87,6 +82,10 @@
             install_completion zsh zsh
             # Install Nushell completion unconditionally
             install_completion nu nu
+            
+            # Ensure all completions are installed
+            echo "Verifying completion files were installed..."
+            find $out/share -type f -name "*intercept-bounce*" | sort
 
             echo "Finished installing docs."
           '';

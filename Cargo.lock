@@ -907,6 +907,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "intercept-bounce-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "input-linux-sys",
+ "intercept-bounce",
+ "libfuzzer-sys",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2349,6 +2359,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.0",
+]
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "clap_complete_nushell",
+ "clap_mangen",
+ "intercept-bounce",
 ]
 
 [[package]]
