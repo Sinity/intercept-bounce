@@ -21,7 +21,7 @@
           pname = "intercept-bounce";
           version = "0.6.0"; # TODO: Consider deriving from Cargo.toml or git tag
           src = ./.;
-          cargoHash = "sha256-1ld9x9xg9wi2q0y1nfhx06bppfplb9mimj3mfja9n6v0r5r1dzki"; # Update this when Cargo.lock changes
+          cargoHash = "sha256-PASTE_THE_NEW_BASE64_HASH_HERE"; # Update this with the output from 'nix hash file Cargo.lock --type sha256 --base64'
 
           nativeBuildInputs = with pkgs; [
             pkg-config
