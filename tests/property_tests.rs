@@ -108,14 +108,14 @@ proptest! {
         let debounce_time = Duration::from_millis(debounce_ms);
         let mut filter = BounceFilter::new();
 
-        for (event_us, type_, code, value) in event_data {
+        for (event_us, _type_, code, value) in event_data { // Prefix unused variable
              let event = key_ev(event_us, code, value); // Use helper from test_helpers
 
             if !event::is_key_event(&event) {
                 let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
                     !info.is_bounce,
-                    "Non-key event type:{type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
+                    "Non-key event type:{_type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
                 );
             }
         }
@@ -130,14 +130,14 @@ proptest! {
         let debounce_time = Duration::from_millis(debounce_ms);
         let mut filter = BounceFilter::new();
 
-        for (event_us, type_, code, value) in event_data {
+        for (event_us, _type_, code, value) in event_data { // Prefix unused variable
              let event = key_ev(event_us, code, value); // Use helper from test_helpers
 
             if event::is_key_event(&event) && event.value == 2 {
                 let info = filter.check_event(&event, debounce_time);
                 prop_assert!(
                     !info.is_bounce,
-                    "Repeat event type:{type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
+                    "Repeat event type:{_type_} code:{code} val:{value} at {event_us}us was incorrectly marked as bounce."
                 );
             }
         }
@@ -187,13 +187,13 @@ proptest! {
         let mut stats = StatsCollector::with_capacity();
 
         // Simulate processing events through the filter and recording in stats
-        for (event_us, type_, code, value) in event_data {
+        for (event_us, _type_, code, value) in event_data { // Prefix unused variable
             let event = key_ev(event_us, code, value);
             let info = filter.check_event(&event, debounce_time);
 
             // Manually calculate last_passed_us for the EventInfo struct
             // This is what the main loop would do before sending to logger
-            let last_passed_us = if event::is_key_event(&event) && event.value != 2 {
+            let _last_passed_us = if event::is_key_event(&event) && event.value != 2 { // Prefix unused variable
                  let key_code_idx = event.code as usize;
                  let key_value_idx = event.value as usize;
                  if key_code_idx < intercept_bounce::filter::FILTER_MAP_SIZE && key_value_idx < intercept_bounce::filter::NUM_KEY_STATES {

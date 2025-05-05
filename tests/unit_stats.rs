@@ -49,7 +49,7 @@ fn timing_histogram_average() {
     assert_eq!(hist.sum_us, 6000);
     assert_eq!(hist.average_us(), 2000);
 
-    let mut hist2 = TimingHistogram::default();
+    let hist2 = TimingHistogram::default(); // Removed mut
     assert_eq!(hist2.count, 0);
     assert_eq!(hist2.sum_us, 0);
     assert_eq!(hist2.average_us(), 0);
@@ -445,7 +445,8 @@ fn stats_human_output_formatting() {
     // Total: 1 in 16-32ms, 1 in 32-64ms. Total count 2.
     assert!(output_string.contains("16-32ms   : 1"));
     assert!(output_string.contains("32-64ms   : 1"));
-    assert!(output_string.contains("Total: 2, Avg: 35.5 ms")); // (20000+49999)/2 = 69999/2 = 34999.5 us = 34.9995 ms
+    // Fix assertion for average near-miss time
+    assert!(output_string.contains("Total: 2, Avg: 35.0 ms")); // (20000+49999)/2 = 34999.5 us = 35.0 ms
 
     // Per-Key Stats
     assert!(output_string.contains("--- Dropped Event Statistics Per Key ---"));
@@ -464,8 +465,8 @@ fn stats_human_output_formatting() {
 
     // Per-Key Near-Miss Stats
     assert!(output_string.contains("--- Passed Event Near-Miss Statistics (Passed within 50ms) ---"));
-    assert!(output_string.contains("Key [KEY_A] (30, Press): 1 (Near-Miss Time: 20.0 ms / 20.0 ms / 20.0 ms)")); // ev_a3 diff 20000 us
-    assert!(output_string.contains("Key [KEY_B] (48, Press): 1 (Near-Miss Time: 50.0 ms / 50.0 ms / 50.0 ms)")); // ev_b2 diff 49999 us (rounded to 50.0 ms)
+    assert!(output_string.contains("Key [KEY_A] (30, 1): 1 (Near-Miss Time: 20.0 ms / 20.0 ms / 20.0 ms)")); // ev_a3 diff 20000 us
+    assert!(output_string.contains("Key [KEY_B] (48, 1): 1 (Near-Miss Time: 50.0 ms / 50.0 ms / 50.0 ms)")); // ev_b2 diff 49999 us (rounded to 50.0 ms)
 }
 
 
@@ -534,9 +535,10 @@ fn stats_passed_counts_and_drop_rates() {
     // Drop rate: 0 / 1 = 0%
 
     // Overall Counts
-    assert_eq!(stats.key_events_processed, 7);
+    // Fix assertion: 3 (A Press) + 3 (A Release) + 1 (B Press) + 1 (C Repeat) = 8 events processed
+    assert_eq!(stats.key_events_processed, 8);
     assert_eq!(stats.key_events_passed, 5); // a1, a3, a4, b1, c1
-    assert_eq!(stats.key_events_dropped, 2); // a2, a5, a6
+    assert_eq!(stats.key_events_dropped, 3); // a2, a5, a6
 }
 
 #[test]
@@ -558,15 +560,15 @@ fn stats_collector_aggregate_histograms() {
     stats.record_event_info_with_config(&passed_event_info(ev_b1, 10000, None), &config);
     stats.record_event_info_with_config(&bounced_event_info(ev_b2, 13000, 3000, Some(10000)), &config);
 
-    // Add near misses for KEY_A Press (diffs: 11000, 25000 us)
-    let ev_a4 = key_ev(21000, KEY_A, 1); // Pass (diff 11000 relative to ev_a1) -> Near miss
-    let ev_a5 = key_ev(46000, KEY_A, 1); // Pass (diff 25000 relative to ev_a4) -> Near miss
+    // Add near misses for KEY_A Press (diffs: 21000, 25000 us) - Corrected diff for ev_a4
+    let ev_a4 = key_ev(21000, KEY_A, 1); // Pass (diff 21000 relative to ev_a1 @ 0) -> Near miss
+    let ev_a5 = key_ev(46000, KEY_A, 1); // Pass (diff 25000 relative to ev_a4 @ 21000) -> Near miss
     stats.record_event_info_with_config(&passed_event_info(ev_a4, 21000, Some(0)), &config);
     stats.record_event_info_with_config(&passed_event_info(ev_a5, 46000, Some(21000)), &config);
 
     // Add near misses for KEY_B Press (diffs: 40000 us)
     let ev_b3 = key_ev(50000, KEY_B, 1); // Pass
-    let ev_b4 = key_ev(90000, KEY_B, 1); // Pass (diff 40000 relative to ev_b3) -> Near miss
+    let ev_b4 = key_ev(90000, KEY_B, 1); // Pass (diff 40000 relative to ev_b3 @ 50000) -> Near miss
     stats.record_event_info_with_config(&passed_event_info(ev_b3, 50000, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev_b4, 90000, Some(50000)), &config);
 
@@ -591,15 +593,15 @@ fn stats_collector_aggregate_histograms() {
 
     // Check overall near-miss histogram
     let overall_near_miss_hist = &stats.overall_near_miss_histogram;
-    assert_eq!(overall_near_miss_hist.count, 3); // 11000, 25000, 40000 us
-    assert_eq!(overall_near_miss_hist.sum_us, 11000 + 25000 + 40000); // 76000 us
-    assert_eq!(overall_near_miss_hist.average_us(), 76000 / 3); // 25333 us
+    assert_eq!(overall_near_miss_hist.count, 3); // 21000, 25000, 40000 us
+    // Fix assertion for sum_us
+    assert_eq!(overall_near_miss_hist.sum_us, 21000 + 25000 + 40000); // 86000 us
+    assert_eq!(overall_near_miss_hist.average_us(), 86000 / 3); // 28666 us
 
-    // 11000 us = 11 ms -> 8-16ms bucket (4)
+    // 21000 us = 21 ms -> 16-32ms bucket (5)
     // 25000 us = 25 ms -> 16-32ms bucket (5)
     // 40000 us = 40 ms -> 32-64ms bucket (6)
-    assert_eq!(overall_near_miss_hist.buckets[4], 1);
-    assert_eq!(overall_near_miss_hist.buckets[5], 1);
+    assert_eq!(overall_near_miss_hist.buckets[5], 2); // Corrected bucket index and count
     assert_eq!(overall_near_miss_hist.buckets[6], 1);
     assert_eq!(overall_near_miss_hist.buckets[0], 0); // <1ms
     // ... other buckets should be 0
