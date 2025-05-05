@@ -53,15 +53,12 @@ fn main() -> Result<(), Error> {
     }
 
     // --- Generate Nushell Completion ---
-    // Removed #[cfg(feature = "shell_nu")]
-    {
-        // Nushell generator is imported at the top now
-        let nu_path = out_path.join(format!("{bin_name}.nu"));
-        println!("Generating Nushell completion file: {nu_path:?}");
-        let mut nu_file = fs::File::create(&nu_path)?;
-        // Use the generate function from clap_complete with the Nushell generator struct
-        clap_complete::generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
-    }
+    // Nushell generator is imported at the top now
+    let nu_path = out_path.join(format!("{bin_name}.nu"));
+    println!("Generating Nushell completion file: {nu_path:?}");
+    let mut nu_file = fs::File::create(&nu_path)?;
+    // Use the generate function from clap_complete with the Nushell generator struct
+    clap_complete::generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
 
     println!(
         "Successfully generated man page and completions in: {}",
