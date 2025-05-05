@@ -377,8 +377,8 @@ fn main() -> io::Result<()> {
                             counter.add(1, &[]);
                         }
 
-                        // Use event_info.event which is a copy of the original event
-                        if let Err(e) = write_event_raw(ctx.stdout_fd, &event_info.event) {
+                        // Use the extracted event_to_write
+                        if let Err(e) = write_event_raw(ctx.stdout_fd, &event_to_write) {
                             if e.kind() == ErrorKind::BrokenPipe {
                                 info!("Output pipe broken, exiting");
                                 debug!("Setting main_running flag to false due to BrokenPipe");
