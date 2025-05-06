@@ -41,11 +41,11 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 >
 > *   `-t, --debounce-time <DURATION>`:
 >    *   Sets the time threshold for bounce filtering (default: `25ms`). Accepts values like `10ms`, `0.5s`.
->    *   Events for the *same key code* and *same value* occurring faster than this threshold are discarded.
->    *   The "value" refers to the state of the key: `1` for press, `0` for release, `2` for repeat. Only press and release events are debounced.
-> *   `--near-miss-threshold-time <DURATION>`:
+>    *   Events for the *same key code* and *same value* (state) occurring faster than this threshold are discarded.
+>    *   The "value" refers to the state of the key: `1` for press, `0` for release, `2` for repeat. Only press (`1`) and release (`0`) events are debounced.
+> *   `--near-miss-threshold <DURATION>`:
 >    *   Sets the time threshold for identifying "near-miss" events (default: `100ms`). Accepts values like `100ms`, `0.1s`.
->    *   Passed key events occurring within this time of the previous passed event for the same key/value are counted and reported in the statistics as near-misses. This helps identify keys that might be *almost* bouncing or have inconsistent timing just outside the debounce window.
+>    *   Passed key events occurring within this time *after* the previous passed event for the same key/state (but *after* the debounce window) are counted and reported in the statistics as near-misses. This helps identify keys with inconsistent timing just outside the debounce window.
 >    *   Setting this to `0ms` effectively disables near-miss tracking.
 >
 > *   `--log-interval <DURATION>`:
