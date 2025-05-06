@@ -73,6 +73,7 @@ fuzz_target!(|data: &[u8]| {
         false, // other flags not relevant
         "info".to_string(),
         None, // otel_endpoint is not used by StatsCollector, provide None
+        0,
     );
 
     // Create a StatsCollector
