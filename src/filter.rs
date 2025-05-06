@@ -49,7 +49,7 @@ impl BounceFilter {
     /// The ring buffer stores the last `ring_buffer_size` passed events for debugging.
     /// If `ring_buffer_size` is 0, the buffer is not allocated and has no overhead.
     #[must_use]
-    pub fn new(ring_buffer_size: usize = 0) -> Self {
+    pub fn new(ring_buffer_size: usize) -> Self {
         let recent_passed_events = if ring_buffer_size > 0 {
             vec![None; ring_buffer_size]
         } else {

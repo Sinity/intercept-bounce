@@ -56,7 +56,7 @@ proptest! {
         debounce_ms in 1u64..=MAX_DEBOUNCE_MS // Test with debounce > 0
     ) {
         let debounce_time = Duration::from_millis(debounce_ms);
-        let mut filter = BounceFilter::new();
+        let mut filter = BounceFilter::new(0);
         let mut last_passed_times: HashMap<(u16, i32), u64> = HashMap::new();
 
         for (event_us, type_, code, value) in event_data {
@@ -106,7 +106,7 @@ proptest! {
         debounce_ms in 0u64..=MAX_DEBOUNCE_MS
     ) {
         let debounce_time = Duration::from_millis(debounce_ms);
-        let mut filter = BounceFilter::new();
+        let mut filter = BounceFilter::new(0);
 
         for (event_us, _type_, code, value) in event_data { // Prefix unused variable
              let event = key_ev(event_us, code, value); // Use helper from test_helpers
@@ -128,7 +128,7 @@ proptest! {
         debounce_ms in 0u64..=MAX_DEBOUNCE_MS
     ) {
         let debounce_time = Duration::from_millis(debounce_ms);
-        let mut filter = BounceFilter::new();
+        let mut filter = BounceFilter::new(0);
 
         for (event_us, _type_, code, value) in event_data { // Prefix unused variable
              let event = key_ev(event_us, code, value); // Use helper from test_helpers
@@ -151,7 +151,7 @@ proptest! {
         debounce_ms in 0u64..=MAX_DEBOUNCE_MS
     ) {
         let debounce_time = Duration::from_millis(debounce_ms);
-        let mut filter = BounceFilter::new();
+        let mut filter = BounceFilter::new(0);
         let mut passed_events_ts = Vec::new();
 
         for (event_us, _type_, code, value) in &event_data { // Prefix unused variable in pattern
@@ -183,7 +183,7 @@ proptest! {
         let near_miss_threshold = Duration::from_millis(near_miss_ms);
         let config = dummy_config_no_arc(debounce_time, near_miss_threshold);
 
-        let mut filter = BounceFilter::new();
+        let mut filter = BounceFilter::new(0);
         let mut stats = StatsCollector::with_capacity();
 
         // Simulate processing events through the filter and recording in stats

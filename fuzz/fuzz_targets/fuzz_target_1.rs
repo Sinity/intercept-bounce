@@ -19,7 +19,8 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let num_events = std::cmp::min(data.len() / event_size, MAX_EVENTS_PER_FUZZ_CASE);
-    let mut filter = BounceFilter::new();
+    // Explicitly create BounceFilter with ring_buffer_size 0 for fuzzing
+    let mut filter = BounceFilter::new(0);
     // Use a fixed, non-zero debounce time for fuzzing consistency
     let debounce_time = Duration::from_millis(10);
 

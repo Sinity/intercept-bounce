@@ -92,8 +92,9 @@ pub fn dummy_config(
         log_bounces,
         stats_json,
         verbose,
-        "info".to_string(), // Default log_filter for tests
-        None,               // otel_endpoint
+        "info".to_string(),
+        None,
+        0,
     ))
 }
 
@@ -109,5 +110,6 @@ pub fn dummy_config_no_arc(debounce_time: Duration, near_miss_threshold: Duratio
         false,              // verbose (not relevant)
         "info".to_string(), // log_filter (not relevant)
         None,               // otel_endpoint (not relevant)
+        0,
     )
 }

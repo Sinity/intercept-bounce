@@ -23,7 +23,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
     // Benchmark a passing scenario (first event or outside window)
     c.bench_function("filter::check_event_pass", |b| {
         b.iter(|| {
-            let mut filter = BounceFilter::new();
+            let mut filter = BounceFilter::new(0);
             // Call check_event and use black_box to prevent optimizing away the call
             black_box(filter.check_event(&event_pass, debounce_time));
         })
@@ -32,7 +32,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
     // Benchmark a bounce scenario
     c.bench_function("filter::check_event_bounce", |b| {
         b.iter(|| {
-            let mut filter = BounceFilter::new();
+            let mut filter = BounceFilter::new(0);
             black_box(filter.check_event(&event_pass, debounce_time));
             black_box(filter.check_event(&event_bounce, debounce_time));
         })
@@ -41,7 +41,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
     // Benchmark a non-key event scenario
     c.bench_function("filter::check_event_non_key", |b| {
         b.iter(|| {
-            let mut filter = BounceFilter::new();
+            let mut filter = BounceFilter::new(0);
             black_box(filter.check_event(&event_non_key, debounce_time));
         })
     });
