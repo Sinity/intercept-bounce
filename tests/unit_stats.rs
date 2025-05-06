@@ -1,7 +1,9 @@
 //! Unit tests for the StatsCollector logic.
 
 use intercept_bounce::config::Config;
-use intercept_bounce::filter::stats::{StatsCollector, TimingHistogram, NUM_HISTOGRAM_BUCKETS, HISTOGRAM_BUCKET_BOUNDARIES_MS};
+use intercept_bounce::filter::stats::{
+    StatsCollector, TimingHistogram, HISTOGRAM_BUCKET_BOUNDARIES_MS, NUM_HISTOGRAM_BUCKETS,
+};
 use intercept_bounce::logger::EventInfo;
 use serde_json::{json, Value};
 use std::io::Cursor; // For capturing human-readable output
@@ -52,7 +54,6 @@ fn timing_histogram_average() {
     assert_eq!(hist2.sum_us, 0);
     assert_eq!(hist2.average_us(), 0);
 }
-
 
 #[test]
 fn stats_basic_counts() {
@@ -152,7 +153,11 @@ fn stats_near_miss_default_threshold() {
     let near_misses_stats = &stats.per_key_near_miss_stats[near_miss_idx];
     // Only ev2 should be a near miss (diff 10500us <= 100000us threshold).
     // ev3's diff (110000us) is >= 100000us threshold.
-    assert_eq!(near_misses_stats.timings_us.len(), 1, "Expected exactly 1 near miss");
+    assert_eq!(
+        near_misses_stats.timings_us.len(),
+        1,
+        "Expected exactly 1 near miss"
+    );
     assert_eq!(
         near_misses_stats.timings_us[0], near_miss_diff1,
         "Expected near miss timing for ev2"
@@ -202,9 +207,19 @@ fn stats_near_miss_custom_threshold() {
     let near_misses_stats = &stats.per_key_near_miss_stats[near_miss_idx];
     // ev2 (diff 11000us) and ev3 (diff 40000us) are within the 50000us threshold.
     // ev4 (diff 60000us) is outside.
-    assert_eq!(near_misses_stats.timings_us.len(), 2, "Expected 2 near misses");
-    assert_eq!(near_misses_stats.timings_us[0], diff1, "Expected near miss timing for ev2"); // Diff between ev2 and ev1
-    assert_eq!(near_misses_stats.timings_us[1], diff2, "Expected near miss timing for ev3"); // Diff between ev3 and ev2
+    assert_eq!(
+        near_misses_stats.timings_us.len(),
+        2,
+        "Expected 2 near misses"
+    );
+    assert_eq!(
+        near_misses_stats.timings_us[0], diff1,
+        "Expected near miss timing for ev2"
+    ); // Diff between ev2 and ev1
+    assert_eq!(
+        near_misses_stats.timings_us[1], diff2,
+        "Expected near miss timing for ev3"
+    ); // Diff between ev3 and ev2
 }
 
 #[test]
@@ -282,10 +297,18 @@ fn stats_json_output_structure() {
     assert_eq!(json_value["key_events_dropped"], 1); // ev2
 
     // Check raw config values
-    assert_eq!(json_value["debounce_time_us"], DEBOUNCE_TIME.as_micros() as u64);
-    assert_eq!(json_value["near_miss_threshold_us"], Duration::from_millis(100).as_micros() as u64);
-    assert_eq!(json_value["log_interval_us"], Duration::ZERO.as_micros() as u64);
-
+    assert_eq!(
+        json_value["debounce_time_us"],
+        DEBOUNCE_TIME.as_micros() as u64
+    );
+    assert_eq!(
+        json_value["near_miss_threshold_us"],
+        Duration::from_millis(100).as_micros() as u64
+    );
+    assert_eq!(
+        json_value["log_interval_us"],
+        Duration::ZERO.as_micros() as u64
+    );
 
     // Check per_key_stats array
     let per_key_stats = json_value["per_key_stats"]
@@ -297,14 +320,20 @@ fn stats_json_output_structure() {
     assert_eq!(key_a_stats["key_name"], "KEY_A");
     assert_eq!(key_a_stats["total_processed"], 3); // ev1, ev2, ev3
     assert_eq!(key_a_stats["total_dropped"], 1); // ev2
-    assert!((key_a_stats["drop_percentage"].as_f64().unwrap() - (1.0/3.0)*100.0).abs() < f64::EPSILON);
+    assert!(
+        (key_a_stats["drop_percentage"].as_f64().unwrap() - (1.0 / 3.0) * 100.0).abs()
+            < f64::EPSILON
+    );
 
     // Check detailed stats within the key entry
     let detailed_stats = &key_a_stats["stats"];
     assert_eq!(detailed_stats["press"]["total_processed"], 3); // ev1, ev2, ev3
     assert_eq!(detailed_stats["press"]["passed_count"], 2); // ev1, ev3
     assert_eq!(detailed_stats["press"]["dropped_count"], 1); // ev2
-    assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - (1.0/3.0)*100.0).abs() < f64::EPSILON);
+    assert!(
+        (detailed_stats["press"]["drop_rate"].as_f64().unwrap() - (1.0 / 3.0) * 100.0).abs()
+            < f64::EPSILON
+    );
     assert_eq!(detailed_stats["press"]["timings_us"], json!([500])); // Bounce timing
 
     // Check bounce histogram for KEY_A Press
@@ -312,12 +341,17 @@ fn stats_json_output_structure() {
     assert_eq!(bounce_hist["count"], 1);
     assert_eq!(bounce_hist["avg_us"], 500);
     assert!(bounce_hist["buckets"].is_array());
-    assert_eq!(bounce_hist["buckets"].as_array().unwrap().len(), NUM_HISTOGRAM_BUCKETS);
+    assert_eq!(
+        bounce_hist["buckets"].as_array().unwrap().len(),
+        NUM_HISTOGRAM_BUCKETS
+    );
     // Check the bucket for 500us (0.5ms) - should be the first bucket (<1ms)
     assert_eq!(bounce_hist["buckets"][0]["min_ms"], 0);
-    assert_eq!(bounce_hist["buckets"][0]["max_ms"], HISTOGRAM_BUCKET_BOUNDARIES_MS[0]);
+    assert_eq!(
+        bounce_hist["buckets"][0]["max_ms"],
+        HISTOGRAM_BUCKET_BOUNDARIES_MS[0]
+    );
     assert_eq!(bounce_hist["buckets"][0]["count"], 1);
-
 
     assert_eq!(detailed_stats["release"]["total_processed"], 0);
     assert_eq!(detailed_stats["release"]["passed_count"], 0);
@@ -326,14 +360,12 @@ fn stats_json_output_structure() {
     assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
     assert_eq!(detailed_stats["release"]["bounce_histogram"]["count"], 0);
 
-
     assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
     assert_eq!(detailed_stats["repeat"]["passed_count"], 0);
     assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
     assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
     assert_eq!(detailed_stats["repeat"]["bounce_histogram"]["count"], 0);
-
 
     // Check per_key_near_miss_stats array
     let near_miss_stats_array = json_value["per_key_near_miss_stats"]
@@ -357,12 +389,14 @@ fn stats_json_output_structure() {
     assert_eq!(near_miss_hist["count"], 1);
     assert_eq!(near_miss_hist["avg_us"], expected_near_miss_diff);
     assert!(near_miss_hist["buckets"].is_array());
-    assert_eq!(near_miss_hist["buckets"].as_array().unwrap().len(), NUM_HISTOGRAM_BUCKETS);
+    assert_eq!(
+        near_miss_hist["buckets"].as_array().unwrap().len(),
+        NUM_HISTOGRAM_BUCKETS
+    );
     // Check the bucket for 11000us (11ms) - should be the 8-16ms bucket (index 4)
     assert_eq!(near_miss_hist["buckets"][4]["min_ms"], 8);
     assert_eq!(near_miss_hist["buckets"][4]["max_ms"], 16);
     assert_eq!(near_miss_hist["buckets"][4]["count"], 1);
-
 
     // Check overall histograms
     let overall_bounce_hist = &json_value["overall_bounce_histogram"];
@@ -395,25 +429,67 @@ fn stats_human_output_formatting() {
 
     // Sequence for KEY_B Press (1): Pass only, one near miss
     let ev_b1 = key_ev(debounce_us * 4, KEY_B, 1); // Pass
-    let ev_b2 = key_ev(debounce_us * 4 + near_miss_threshold.as_micros() as u64 - 1, KEY_B, 1); // Pass (diff 49999 relative to ev_b1) -> Near miss
+    let ev_b2 = key_ev(
+        debounce_us * 4 + near_miss_threshold.as_micros() as u64 - 1,
+        KEY_B,
+        1,
+    ); // Pass (diff 49999 relative to ev_b1) -> Near miss
 
     let config = dummy_config_no_arc(DEBOUNCE_TIME, near_miss_threshold);
 
     stats.record_event_info_with_config(&passed_event_info(ev_a1, 0, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a2, debounce_us / 2, debounce_us / 2, Some(0)), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev_a3, debounce_us * 2, Some(0)), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a4, debounce_us * 2 + debounce_us / 4, debounce_us / 4, Some(debounce_us * 2)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev_a2, debounce_us / 2, debounce_us / 2, Some(0)),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &passed_event_info(ev_a3, debounce_us * 2, Some(0)),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &bounced_event_info(
+            ev_a4,
+            debounce_us * 2 + debounce_us / 4,
+            debounce_us / 4,
+            Some(debounce_us * 2),
+        ),
+        &config,
+    );
 
     stats.record_event_info_with_config(&passed_event_info(ev_a5, debounce_us * 3, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a6, debounce_us * 3 + debounce_us / 2, debounce_us / 2, Some(debounce_us * 3)), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a7, debounce_us * 3 + debounce_us / 2 + 1000, debounce_us / 2 + 1000, Some(debounce_us * 3)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(
+            ev_a6,
+            debounce_us * 3 + debounce_us / 2,
+            debounce_us / 2,
+            Some(debounce_us * 3),
+        ),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &bounced_event_info(
+            ev_a7,
+            debounce_us * 3 + debounce_us / 2 + 1000,
+            debounce_us / 2 + 1000,
+            Some(debounce_us * 3),
+        ),
+        &config,
+    );
 
     stats.record_event_info_with_config(&passed_event_info(ev_b1, debounce_us * 4, None), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev_b2, debounce_us * 4 + near_miss_threshold.as_micros() as u64 - 1, Some(debounce_us * 4)), &config);
-
+    stats.record_event_info_with_config(
+        &passed_event_info(
+            ev_b2,
+            debounce_us * 4 + near_miss_threshold.as_micros() as u64 - 1,
+            Some(debounce_us * 4),
+        ),
+        &config,
+    );
 
     let mut writer = Cursor::new(Vec::new());
-    stats.format_stats_human_readable(&config, "Cumulative", &mut writer).expect("Formatting failed");
+    stats
+        .format_stats_human_readable(&config, "Cumulative", &mut writer)
+        .expect("Formatting failed");
     let output_string = String::from_utf8(writer.into_inner()).expect("Output not UTF-8");
     println!("Human Readable Output:\n{output_string}"); // Print for debugging
 
@@ -436,7 +512,9 @@ fn stats_human_output_formatting() {
     assert!(output_string.contains("Total: 4, Avg: 4.6 ms")); // (5000+2500+5000+6000)/4 = 18500/4 = 4625 us = 4.625 ms
 
     // Overall Near-Miss Histogram
-    assert!(output_string.contains("--- Overall Near-Miss Timing Histogram (Passed within 50ms) ---"));
+    assert!(
+        output_string.contains("--- Overall Near-Miss Timing Histogram (Passed within 50ms) ---")
+    );
     // Check counts for near misses: 20000, 49999 us
     // 20000 us = 20 ms -> 16-32ms bucket (index 5)
     // 49999 us = 49.999 ms -> 32-64ms bucket (index 6)
@@ -462,7 +540,10 @@ fn stats_human_output_formatting() {
     // Check that the line for KEY_B Release is NOT present.
     // Find the section for KEY_B
     let key_b_section_start = output_string.find("Key [KEY_B] (48):");
-    assert!(key_b_section_start.is_some(), "KEY_B section should be present");
+    assert!(
+        key_b_section_start.is_some(),
+        "KEY_B section should be present"
+    );
     let rest_of_output = &output_string[key_b_section_start.unwrap()..];
     // Find the start of the next key section or the end of the output
     let next_key_start = rest_of_output[1..].find("\nKey ["); // Look for newline followed by "Key ["
@@ -471,16 +552,19 @@ fn stats_human_output_formatting() {
 
     // Assert that the Release line is NOT within the KEY_B section
     assert!(!key_b_section.contains("\n  Release (0):")); // Check for newline + indentation + "Release (0):"
-    // Assert that the Repeat line is NOT within the KEY_B section
+                                                          // Assert that the Repeat line is NOT within the KEY_B section
     assert!(!key_b_section.contains("\n  Repeat  (2):")); // Check for newline + indentation + "Repeat (2):"
 
-
     // Per-Key Near-Miss Stats
-    assert!(output_string.contains("--- Passed Event Near-Miss Statistics (Passed within 50ms) ---"));
-    assert!(output_string.contains("Key [KEY_A] (30, 1): 1 (Near-Miss Time: 20.0 ms / 20.0 ms / 20.0 ms)")); // ev_a3 diff 20000 us
-    assert!(output_string.contains("Key [KEY_B] (48, 1): 1 (Near-Miss Time: 50.0 ms / 50.0 ms / 50.0 ms)")); // ev_b2 diff 49999 us (rounded to 50.0 ms)
+    assert!(
+        output_string.contains("--- Passed Event Near-Miss Statistics (Passed within 50ms) ---")
+    );
+    assert!(output_string
+        .contains("Key [KEY_A] (30, 1): 1 (Near-Miss Time: 20.0 ms / 20.0 ms / 20.0 ms)")); // ev_a3 diff 20000 us
+    assert!(output_string
+        .contains("Key [KEY_B] (48, 1): 1 (Near-Miss Time: 50.0 ms / 50.0 ms / 50.0 ms)"));
+    // ev_b2 diff 49999 us (rounded to 50.0 ms)
 }
-
 
 #[test]
 fn stats_passed_counts_and_drop_rates() {
@@ -505,34 +589,60 @@ fn stats_passed_counts_and_drop_rates() {
     let ev_c1 = key_ev(debounce_us * 5, KEY_C, 2); // Pass
 
     stats.record_event_info_with_config(&passed_event_info(ev_a1, 0, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a2, debounce_us / 2, debounce_us / 2, Some(0)), &config);
-    stats.record_event_info_with_config(&passed_event_info(ev_a3, debounce_us * 2, Some(0)), &config); // Pass relative to ev_a1
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev_a2, debounce_us / 2, debounce_us / 2, Some(0)),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &passed_event_info(ev_a3, debounce_us * 2, Some(0)),
+        &config,
+    ); // Pass relative to ev_a1
 
     stats.record_event_info_with_config(&passed_event_info(ev_a4, debounce_us * 3, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a5, debounce_us * 3 + debounce_us / 2, debounce_us / 2, Some(debounce_us * 3)), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_a6, debounce_us * 3 + debounce_us / 2 + 1, debounce_us / 2 + 1, Some(debounce_us * 3)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(
+            ev_a5,
+            debounce_us * 3 + debounce_us / 2,
+            debounce_us / 2,
+            Some(debounce_us * 3),
+        ),
+        &config,
+    );
+    stats.record_event_info_with_config(
+        &bounced_event_info(
+            ev_a6,
+            debounce_us * 3 + debounce_us / 2 + 1,
+            debounce_us / 2 + 1,
+            Some(debounce_us * 3),
+        ),
+        &config,
+    );
 
     stats.record_event_info_with_config(&passed_event_info(ev_b1, debounce_us * 4, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev_c1, debounce_us * 5, None), &config);
-
 
     // --- Assertions ---
     let key_a_stats = &stats.per_key_stats[KEY_A as usize];
     let key_b_stats = &stats.per_key_stats[KEY_B as usize];
     let key_c_stats = &stats.per_key_stats[KEY_C as usize];
 
-
     // KEY_A Press (1)
     assert_eq!(key_a_stats.press.total_processed, 3, "KEY_A Press total");
     assert_eq!(key_a_stats.press.passed_count, 2, "KEY_A Press passed"); // ev_a1, ev_a3
     assert_eq!(key_a_stats.press.dropped_count, 1, "KEY_A Press dropped"); // ev_a2
-    // Drop rate: 1 / 3 = 33.33...%
+                                                                           // Drop rate: 1 / 3 = 33.33...%
 
     // KEY_A Release (0)
-    assert_eq!(key_a_stats.release.total_processed, 3, "KEY_A Release total");
+    assert_eq!(
+        key_a_stats.release.total_processed, 3,
+        "KEY_A Release total"
+    );
     assert_eq!(key_a_stats.release.passed_count, 1, "KEY_A Release passed"); // ev_a4
-    assert_eq!(key_a_stats.release.dropped_count, 2, "KEY_A Release dropped"); // ev_a5, ev_a6
-    // Drop rate: 2 / 3 = 66.66...%
+    assert_eq!(
+        key_a_stats.release.dropped_count, 2,
+        "KEY_A Release dropped"
+    ); // ev_a5, ev_a6
+       // Drop rate: 2 / 3 = 66.66...%
 
     // KEY_B Press (1)
     assert_eq!(key_b_stats.press.total_processed, 1, "KEY_B Press total");
@@ -570,7 +680,10 @@ fn stats_collector_aggregate_histograms() {
     let ev_b1 = key_ev(10000, KEY_B, 0); // Pass
     let ev_b2 = key_ev(13000, KEY_B, 0); // Drop (diff 3000)
     stats.record_event_info_with_config(&passed_event_info(ev_b1, 10000, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_b2, 13000, 3000, Some(10000)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev_b2, 13000, 3000, Some(10000)),
+        &config,
+    );
 
     // Add near misses for KEY_A Press (diffs: 21000, 25000 us) - Corrected diff for ev_a4
     let ev_a4 = key_ev(21000, KEY_A, 1); // Pass (diff 21000 relative to ev_a1 @ 0) -> Near miss
@@ -583,7 +696,6 @@ fn stats_collector_aggregate_histograms() {
     let ev_b4 = key_ev(90000, KEY_B, 1); // Pass (diff 40000 relative to ev_b3 @ 50000) -> Near miss
     stats.record_event_info_with_config(&passed_event_info(ev_b3, 50000, None), &config);
     stats.record_event_info_with_config(&passed_event_info(ev_b4, 90000, Some(50000)), &config);
-
 
     // Aggregate the histograms
     stats.aggregate_histograms();
@@ -601,7 +713,7 @@ fn stats_collector_aggregate_histograms() {
     assert_eq!(overall_bounce_hist.buckets[1], 1);
     assert_eq!(overall_bounce_hist.buckets[2], 1);
     assert_eq!(overall_bounce_hist.buckets[3], 0); // 4-8ms
-    // ... other buckets should be 0
+                                                   // ... other buckets should be 0
 
     // Check overall near-miss histogram
     let overall_near_miss_hist = &stats.overall_near_miss_histogram;
@@ -615,7 +727,7 @@ fn stats_collector_aggregate_histograms() {
     assert_eq!(overall_near_miss_hist.buckets[5], 2); // Corrected bucket index and count
     assert_eq!(overall_near_miss_hist.buckets[6], 1);
     assert_eq!(overall_near_miss_hist.buckets[0], 0); // <1ms
-    // ... other buckets should be 0
+                                                      // ... other buckets should be 0
 }
 
 #[test]
@@ -656,14 +768,20 @@ fn stats_only_passed() {
     assert_eq!(key_c_stats.repeat.passed_count, 0);
     assert_eq!(key_c_stats.repeat.dropped_count, 0);
 
-
     // Check near miss stats for KEY_C press (value 1).
     let near_miss_idx = KEY_C as usize * 3 + 1;
     let near_misses_stats = &stats.per_key_near_miss_stats[near_miss_idx];
     // ev3's diff relative to ev1 is 110000us, which is >= near_miss_threshold (100000us).
     // Therefore, ev3 is NOT a near miss.
-    assert_eq!(near_misses_stats.timings_us.len(), 0, "Expected 0 near misses");
-    assert_eq!(near_misses_stats.histogram.count, 0, "Expected 0 near miss histogram counts");
+    assert_eq!(
+        near_misses_stats.timings_us.len(),
+        0,
+        "Expected 0 near misses"
+    );
+    assert_eq!(
+        near_misses_stats.histogram.count, 0,
+        "Expected 0 near miss histogram counts"
+    );
 }
 
 #[test]
@@ -728,7 +846,10 @@ fn stats_drop_rate_edge_cases() {
     let ev_b1 = key_ev(10000, KEY_B, 1); // Pass
     let ev_b2 = key_ev(10000 + debounce_us / 2, KEY_B, 1); // Drop
     stats.record_event_info_with_config(&passed_event_info(ev_b1, 10000, None), &config);
-    stats.record_event_info_with_config(&bounced_event_info(ev_b2, 10000 + debounce_us / 2, debounce_us / 2, Some(10000)), &config);
+    stats.record_event_info_with_config(
+        &bounced_event_info(ev_b2, 10000 + debounce_us / 2, debounce_us / 2, Some(10000)),
+        &config,
+    );
 
     // Key C Press: 0 Pass, 1 Drop (shouldn't happen with current filter logic, but test stats calc)
     // Simulate this state directly for testing the calculation
@@ -741,7 +862,9 @@ fn stats_drop_rate_edge_cases() {
     // Default state is already 0 processed, 0 dropped
 
     let mut writer = Cursor::new(Vec::new());
-    stats.format_stats_human_readable(&config, "Cumulative", &mut writer).expect("Formatting failed");
+    stats
+        .format_stats_human_readable(&config, "Cumulative", &mut writer)
+        .expect("Formatting failed");
     let output_string = String::from_utf8(writer.into_inner()).expect("Output not UTF-8");
     println!("Human Readable Output (Edge Cases):\n{output_string}"); // Print for debugging
 
@@ -766,30 +889,50 @@ fn stats_drop_rate_edge_cases() {
     let s = String::from_utf8(buf).unwrap();
     let json_value: Value = serde_json::from_str(&s).expect("Failed to parse JSON output");
 
-    let per_key_stats = json_value["per_key_stats"].as_array().expect("per_key_stats is not an array");
+    let per_key_stats = json_value["per_key_stats"]
+        .as_array()
+        .expect("per_key_stats is not an array");
 
     // Find and check KEY_A
-    let key_a_json = per_key_stats.iter().find(|entry| entry["key_code"] == KEY_A).expect("KEY_A not found");
+    let key_a_json = per_key_stats
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_A)
+        .expect("KEY_A not found");
     assert_eq!(key_a_json["stats"]["press"]["total_processed"], 1);
     assert_eq!(key_a_json["stats"]["press"]["passed_count"], 1);
     assert_eq!(key_a_json["stats"]["press"]["dropped_count"], 0);
-    assert!((key_a_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
+    assert!(
+        (key_a_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON
+    );
 
     // Find and check KEY_B
-    let key_b_json = per_key_stats.iter().find(|entry| entry["key_code"] == KEY_B).expect("KEY_B not found");
+    let key_b_json = per_key_stats
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_B)
+        .expect("KEY_B not found");
     assert_eq!(key_b_json["stats"]["press"]["total_processed"], 2);
     assert_eq!(key_b_json["stats"]["press"]["passed_count"], 1);
     assert_eq!(key_b_json["stats"]["press"]["dropped_count"], 1);
-    assert!((key_b_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON);
+    assert!(
+        (key_b_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON
+    );
 
     // Find and check KEY_C (simulated)
-    let key_c_json = per_key_stats.iter().find(|entry| entry["key_code"] == KEY_C).expect("KEY_C not found");
+    let key_c_json = per_key_stats
+        .iter()
+        .find(|entry| entry["key_code"] == KEY_C)
+        .expect("KEY_C not found");
     assert_eq!(key_c_json["stats"]["press"]["total_processed"], 1);
     assert_eq!(key_c_json["stats"]["press"]["passed_count"], 0);
     assert_eq!(key_c_json["stats"]["press"]["dropped_count"], 1);
-    assert!((key_c_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 100.0).abs() < f64::EPSILON);
+    assert!(
+        (key_c_json["stats"]["press"]["drop_rate"].as_f64().unwrap() - 100.0).abs() < f64::EPSILON
+    );
 
     // Ensure KEY_D is not present
-    let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D as u16);
-    assert!(!key_d_present, "KEY_D should not be in JSON stats because it had no activity");
+    let key_d_present = per_key_stats.iter().any(|entry| entry["key_code"] == KEY_D);
+    assert!(
+        !key_d_present,
+        "KEY_D should not be in JSON stats because it had no activity"
+    );
 }

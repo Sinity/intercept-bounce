@@ -1,6 +1,4 @@
-use input_linux_sys::{
-    EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN,
-};
+use input_linux_sys::{EV_ABS, EV_KEY, EV_LED, EV_MAX, EV_MSC, EV_REL, EV_REP, EV_SYN};
 // Re-export input_event publicly
 pub use input_linux_sys::input_event;
 

@@ -2,8 +2,8 @@
 
 use input_linux_sys::{EV_KEY, EV_REL, EV_SYN, KEY_MAX};
 use intercept_bounce::event;
-use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::filter::stats::StatsCollector; // Import StatsCollector
+use intercept_bounce::filter::BounceFilter;
 use intercept_bounce::logger::EventInfo;
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -264,7 +264,7 @@ proptest! {
 
             // Check that near_miss count matches the number of timings recorded for near misses
             let near_miss_press_idx = key_code_idx * intercept_bounce::filter::NUM_KEY_STATES + 1;
-            let near_miss_release_idx = key_code_idx * intercept_bounce::filter::NUM_KEY_STATES + 0;
+            let near_miss_release_idx = key_code_idx * intercept_bounce::filter::NUM_KEY_STATES;
             let near_miss_repeat_idx = key_code_idx * intercept_bounce::filter::NUM_KEY_STATES + 2;
 
             prop_assert_eq!(

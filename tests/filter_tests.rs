@@ -35,7 +35,7 @@ fn drops_press_bounce() {
     assert!(!results[0].is_bounce);
     assert_eq!(results[0].diff_us, None);
     assert_eq!(results[0].last_passed_us, None); // First event
-                                                  // Check e2 (bounced)
+                                                 // Check e2 (bounced)
     assert!(results[1].is_bounce);
     assert_eq!(
         results[1].diff_us,

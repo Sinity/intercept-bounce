@@ -36,7 +36,10 @@ fuzz_target!(|data: &[u8]| {
 
     // Create a dummy input_event using the generated arb_data
     let dummy_event = input_event {
-        time: input_linux_sys::timeval { tv_sec: 0, tv_usec: 0 }, // Time not used by EventInfo directly
+        time: input_linux_sys::timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        }, // Time not used by EventInfo directly
         type_: arb_data.event_type,
         code: arb_data.event_code,
         value: arb_data.event_value,

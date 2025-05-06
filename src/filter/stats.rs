@@ -35,8 +35,6 @@ impl Default for TimingHistogram {
             buckets: [0; NUM_HISTOGRAM_BUCKETS],
             count: 0,
             sum_us: 0,
-            // min_us: u64::MAX,
-            // max_us: 0,
         }
     }
 }
@@ -404,8 +402,7 @@ impl StatsCollector {
             let bar = "#".repeat(bar_width);
 
             output.push_str(&format!(
-                "  {:<10}: {:<5} ({:>5.1}%) [{}]\n",
-                label, bucket_count, percentage, bar
+                "  {label:<10}: {bucket_count:<5} ({percentage:>5.1}%) [{bar}]\n"
             ));
         }
 
@@ -553,7 +550,7 @@ impl StatsCollector {
                                 util::format_us(max)
                             )?;
                         } else {
-                            writeln!(writer, "")?; // Newline if no timing data
+                            writeln!(writer)?; // Newline if no timing data
                         }
                     }
                     Ok(()) // Return Ok from the closure

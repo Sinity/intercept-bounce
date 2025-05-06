@@ -129,7 +129,6 @@
             # Version control & GitHub CLI
             git
             gh
-
           ];
 
           # Commands run when entering the shell
