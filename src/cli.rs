@@ -15,16 +15,16 @@ Statistics are printed to stderr on exit.\n\
 \n\
 EXAMPLES:\n\
   # Basic filtering (15ms window):\n\
-  sudo sh -c 'intercept -g /dev/input/by-id/your-keyboard-event-device | intercept-bounce --debounce-time 15 | uinput -d /dev/input/by-id/your-keyboard-event-device'\n\
+  sudo sh -c 'intercept -g /dev/input/by-id/your-keyboard-event-device | intercept-bounce --debounce-time 15ms | uinput -d /dev/input/by-id/your-keyboard-event-device'\n\
 \n\
   # Filtering with bounce logging:\n\
-  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20 --log-bounces | uinput -d ...'\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 20ms --log-bounces | uinput -d ...'\n\
 \n\
   # Debugging - log all events (no filtering):\n\
-  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 0 --log-all-events | uinput -d ...'\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --debounce-time 0ms --log-all-events | uinput -d ...'\n\
 \n\
   # Periodic stats dump:\n\
-  sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60 | uinput -d ...'\n\
+  sudo sh -c 'intercept -g ... | intercept-bounce --log-interval 60s | uinput -d ...'\n\
 \n\
   # udevmon integration (YAML):\n\
   - JOB: \"intercept -g $DEVNODE | intercept-bounce | uinput -d $DEVNODE\"\n\
