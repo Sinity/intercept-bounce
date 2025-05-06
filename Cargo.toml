@@ -41,7 +41,7 @@ tracing-opentelemetry = "0.24"
 
 [features]
 default = []
-debug_ring_buffer = [] # Optional feature for debugging
+# Removed debug_ring_buffer feature
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }

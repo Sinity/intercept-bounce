@@ -51,10 +51,10 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 > * `--stats-json`:
 >   * Output statistics (on exit and periodic dumps) in JSON format to stderr instead of the default human-readable format.
 > * `--verbose`:
->   * Enable verbose logging, including internal state, thread startup/shutdown messages, and detailed debug information.
+>   * Enable verbose logging (internal state, thread startup/shutdown messages, and detailed debug information).
 > * `--ring-buffer-size <SIZE>`:
->   * Size of the ring buffer for storing recently passed events (for debugging). Set to 0 to disable. (Default: 0).
->   * Note: The buffer has a fixed internal capacity (currently 64); this flag controls how much of it is actively used.
+>   * Size of the ring buffer for storing recently passed events (for debugging).
+>   * Set to 0 to disable the buffer and its overhead. (Default: 0).
 > * `-h, --help`: Print help information.
 > * `-V, --version`: Print version information.
 
@@ -108,7 +108,7 @@ This is particularly useful for mechanical keyboards which can sometimes registe
         LINK: "/dev/input/by-id/usb-Your_Keyboard_Name-event-kbd" # Replace this!
 
     # --- Example 2: Filtering with Periodic Stats ---
-    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15ms --log-interval 300s | uinput -d $DEVNODE"
+    - JOB: "intercept -g $DEVNODE | intercept-bounce --debounce-time 15ms --log-interval 300s | uinput -d ... # Replace ... with your device link"
       DEVICE:
         LINK: "/dev/input/by-id/usb-Logitech_G915_WIRELESS_RGB_MECHANICAL_GAMING_KEYBOARD_*-event-kbd" # Replace/adjust this!
 
@@ -127,9 +127,9 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 The project includes various testing methods to ensure correctness and robustness.
 
 *   **Unit Tests:** Located in `tests/unit_*.rs`, these test individual modules and logic components in isolation. Run with `cargo test`.
-*   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. This includes tests for basic filtering, edge cases, complex sequences, and a high-throughput simulation (`test_high_throughput`). Run with `cargo test`.
+*   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. This includes tests for basic filtering, edge cases, complex sequences, and a high-throughput simulation. Run with `cargo test`.
 *   **Property Tests:** Located in `tests/property_tests.rs`, these use `proptest` to generate a wide range of inputs and verify that the filter behaves according to defined properties (e.g., output events are a subset of input, timestamps are non-decreasing for passed events). Run with `cargo test`.
-*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Fuzz targets include testing the core filter logic (`fuzz_target_1`), the statistics accumulation (`fuzz_target_stats`), and the statistics printing/formatting (`fuzz_target_stats_print`). Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
+*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Fuzz targets include testing the core filter logic (`fuzz_core_filter`) and the statistics accumulation (`fuzz_target_stats`). Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
 
 To run all tests (excluding fuzzing, which requires a separate setup):
 

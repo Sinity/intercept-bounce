@@ -131,7 +131,8 @@ fn main() -> io::Result<()> {
 
     set_high_priority();
 
-    let bounce_filter = Arc::new(Mutex::new(BounceFilter::new()));
+    // Create BounceFilter with the configured ring buffer size
+    let bounce_filter = Arc::new(Mutex::new(BounceFilter::new(cfg.ring_buffer_size)));
     let final_stats_printed = Arc::new(AtomicBool::new(false));
     let main_running = Arc::new(AtomicBool::new(true));
     let logger_running = Arc::new(AtomicBool::new(true));

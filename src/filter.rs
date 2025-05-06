@@ -26,10 +26,10 @@ pub struct BounceFilter {
     // Initialized with u64::MAX to indicate no event has passed yet.
     last_event_us: [[u64; NUM_KEY_STATES]; FILTER_MAP_SIZE],
     // Ring buffer to store the last N *passed* events for debugging purposes.
-    #[cfg(feature = "debug_ring_buffer")]
-    recent_passed_events: [Option<input_event>; 64],
-    #[cfg(feature = "debug_ring_buffer")]
+    // Only allocated if ring_buffer_size > 0.
+    recent_passed_events: Vec<Option<input_event>>,
     recent_event_idx: usize,
+    ring_buffer_size: usize,
     // Timestamp of the very first event processed, used for calculating total runtime.
     overall_first_event_us: Option<u64>,
     // Timestamp of the very last event processed, used for calculating total runtime.
@@ -38,20 +38,29 @@ pub struct BounceFilter {
 
 impl Default for BounceFilter {
     fn default() -> Self {
-        Self::new()
+        // Default to a filter with no ring buffer
+        Self::new(0)
     }
 }
 
 impl BounceFilter {
-    /// Creates a new, stateless `BounceFilter`.
+    /// Creates a new `BounceFilter` with a specified ring buffer size.
+    ///
+    /// The ring buffer stores the last `ring_buffer_size` passed events for debugging.
+    /// If `ring_buffer_size` is 0, the buffer is not allocated and has no overhead.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(ring_buffer_size: usize) -> Self {
+        let recent_passed_events = if ring_buffer_size > 0 {
+            vec![None; ring_buffer_size]
+        } else {
+            Vec::new() // Don't allocate if size is 0
+        };
+
         BounceFilter {
             last_event_us: [[u64::MAX; NUM_KEY_STATES]; FILTER_MAP_SIZE],
-            #[cfg(feature = "debug_ring_buffer")]
-            recent_passed_events: [(); 64].map(|_| None),
-            #[cfg(feature = "debug_ring_buffer")]
+            recent_passed_events,
             recent_event_idx: 0,
+            ring_buffer_size,
             overall_first_event_us: None,
             overall_last_event_us: None,
         }
@@ -82,6 +91,11 @@ impl BounceFilter {
         // --- Early returns for non-debounced events ---
         // Pass non-key events or key repeats immediately
         if !is_key_event(event) || event.value == 2 {
+            // Record passed event in ring buffer if enabled
+            if self.ring_buffer_size > 0 {
+                self.recent_passed_events[self.recent_event_idx] = Some(*event);
+                self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;
+            }
             return EventInfo {
                 event: *event,
                 event_us,
@@ -96,6 +110,11 @@ impl BounceFilter {
         let key_value_idx = event.value as usize;
         if !(key_code_idx < FILTER_MAP_SIZE && key_value_idx < NUM_KEY_STATES) {
             // Out of bounds - treat as passed, no relevant history
+            // Record passed event in ring buffer if enabled
+            if self.ring_buffer_size > 0 {
+                self.recent_passed_events[self.recent_event_idx] = Some(*event);
+                self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;
+            }
             return EventInfo {
                 event: *event,
                 event_us,
@@ -111,11 +130,10 @@ impl BounceFilter {
         // If no previous event passed for this key/value, it cannot be a bounce. Record and pass.
         if last_passed_us == u64::MAX {
             self.last_event_us[key_code_idx][key_value_idx] = event_us;
-            // Record passed event in ring buffer
-            #[cfg(feature = "debug_ring_buffer")]
-            {
+            // Record passed event in ring buffer if enabled
+            if self.ring_buffer_size > 0 {
                 self.recent_passed_events[self.recent_event_idx] = Some(*event);
-                self.recent_event_idx = (self.recent_event_idx + 1) % 64;
+                self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;
             }
             return EventInfo {
                 event: *event, // Copy event
@@ -147,11 +165,10 @@ impl BounceFilter {
         // --- Event Passed ---
         // If we reach here, the event is NOT a bounce. Record as passed.
         self.last_event_us[key_code_idx][key_value_idx] = event_us;
-        // Record passed event in ring buffer
-        #[cfg(feature = "debug_ring_buffer")]
-        {
+        // Record passed event in ring buffer if enabled
+        if self.ring_buffer_size > 0 {
             self.recent_passed_events[self.recent_event_idx] = Some(*event);
-            self.recent_event_idx = (self.recent_event_idx + 1) % 64;
+            self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;
         }
 
         // Return non-bounce info, providing the timestamp of the previously passed event.

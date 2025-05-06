@@ -73,6 +73,11 @@ pub struct Args {
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub verbose: bool,
 
+    /// Size of the ring buffer for storing recently passed events (for debugging).
+    /// Set to 0 to disable. (Default: 0).
+    #[arg(long, default_value = "0")]
+    pub ring_buffer_size: usize,
+
     // --- OpenTelemetry Export ---
     /// OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317").
     #[arg(long)]

@@ -13,6 +13,8 @@ pub struct Config {
     pub log_filter: String,
     // OTLP endpoint
     pub otel_endpoint: Option<String>,
+    // Ring buffer size for debugging
+    pub ring_buffer_size: usize,
 }
 
 impl Config {
@@ -28,6 +30,7 @@ impl Config {
         verbose: bool,
         log_filter: String,
         otel_endpoint: Option<String>,
+        ring_buffer_size: usize,
     ) -> Self {
         Self {
             debounce_time,
@@ -39,6 +42,7 @@ impl Config {
             verbose,
             log_filter,
             otel_endpoint,
+            ring_buffer_size,
         }
     }
 
@@ -93,6 +97,7 @@ impl From<&crate::cli::Args> for Config {
             verbose: a.verbose,
             log_filter,
             otel_endpoint: a.otel_endpoint.clone(),
+            ring_buffer_size: a.ring_buffer_size,
         }
     }
 }
