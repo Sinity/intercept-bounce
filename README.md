@@ -6,17 +6,25 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 ## Features
 
-* Filters keyboard chatter based on a configurable time threshold (`--debounce-time`).
-* Tracks and reports "near-miss" events that occur just outside the debounce window (`--near-miss-threshold-time`).
-* Integrates seamlessly with the Interception Tools ecosystem (reads from stdin, writes to stdout).
-* Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal).
-* Statistics include overall counts, per-key drop counts, bounce timings (min/avg/max), and near-miss timings.
-* Optional periodic statistics dumping based on a time interval (`--log-interval`).
-* Optional per-event logging for debugging (`--log-all-events`, `--log-bounces`).
-* Optional verbose logging for internal state and thread activity (`--verbose`).
-* Handles termination signals (`SIGINT`, `SIGTERM`, `SIGQUIT`) gracefully to ensure final statistics are reported.
-* Includes unit tests, integration tests (including high-throughput simulation), property tests, and fuzzing for robustness.
-* Supports benchmarking different internal queue implementations via Cargo features.
+*   Filters keyboard chatter based on a configurable time threshold (`--debounce-time`).
+*   Tracks and reports "near-miss" events that occur just outside the debounce window (`--near-miss-threshold`).
+*   Integrates seamlessly with the Interception Tools ecosystem (reads binary `input_event` structs from stdin, writes filtered events to stdout).
+*   Automatically collects and prints detailed statistics to stderr on exit (cleanly or via signal).
+*   Statistics include:
+    *   Overall event counts (processed, passed, dropped).
+    *   Per-key drop counts and percentages.
+    *   Detailed bounce timing statistics (min/avg/max) per key state (press/release).
+    *   Detailed near-miss timing statistics (min/avg/max) per key state.
+    *   Histograms showing the distribution of bounce and near-miss timings across configurable buckets.
+*   Optional periodic statistics dumping based on a time interval (`--log-interval`).
+*   Optional statistics output in JSON format (`--stats-json`) for easier parsing.
+*   Optional per-event logging for debugging (`--log-all-events`, `--log-bounces`).
+*   Optional verbose logging for internal state and thread activity (`--verbose`).
+*   Optional ring buffer (`--ring-buffer-size`) to store recently passed events for debugging complex issues.
+*   Lists available input devices and capabilities (`--list-devices`).
+*   Handles termination signals (`SIGINT`, `SIGTERM`, `SIGQUIT`) gracefully to ensure final statistics are reported.
+*   Includes unit tests, integration tests (including high-throughput simulation), property tests (`proptest`), and fuzzing (`libfuzzer-sys`) for robustness.
+*   Supports benchmarking core filter performance (`cargo bench`).
 
 ## Prerequisites
 
@@ -126,10 +134,10 @@ This is particularly useful for mechanical keyboards which can sometimes registe
 
 The project includes various testing methods to ensure correctness and robustness.
 
-*   **Unit Tests:** Located in `tests/unit_*.rs`, these test individual modules and logic components in isolation. Run with `cargo test`.
+*   **Unit Tests:** Located within individual modules (`src/**/*.rs`) and `tests/` directory, these test specific functions and logic components in isolation. Run with `cargo test`.
 *   **Integration Tests:** Located in `tests/sanity.rs`, these test the main binary pipeline by piping simulated input events and checking the output. This includes tests for basic filtering, edge cases, complex sequences, and a high-throughput simulation. Run with `cargo test`.
-*   **Property Tests:** Located in `tests/property_tests.rs`, these use `proptest` to generate a wide range of inputs and verify that the filter behaves according to defined properties (e.g., output events are a subset of input, timestamps are non-decreasing for passed events). Run with `cargo test`.
-*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes or panics caused by invalid inputs. Fuzz targets include testing the core filter logic (`fuzz_core_filter`) and the statistics accumulation (`fuzz_target_stats`). Requires a nightly Rust toolchain and specific build commands. See the fuzzing documentation for details on building and running fuzz targets.
+*   **Property Tests:** Located in `tests/property_tests.rs`, these use the `proptest` crate to generate a wide range of randomized event sequences and verify that the filter behaves according to defined properties (e.g., output events are a subset of input, timestamps are non-decreasing for passed events, state consistency). Run with `cargo test`.
+*   **Fuzzing:** Located in `fuzz/fuzz_targets/`, this uses `cargo-fuzz` and `libfuzzer-sys` to test the filter with malformed or unexpected raw input event data. This helps discover crashes, panics, or unexpected behavior caused by invalid inputs. Fuzz targets currently include `fuzz_target_stats` (testing statistics accumulation with arbitrary event data). Requires installing `cargo-fuzz` (`cargo install cargo-fuzz`) and running specific commands (e.g., `cargo fuzz run fuzz_target_stats`).
 
 To run all tests (excluding fuzzing, which requires a separate setup):
 
@@ -143,17 +151,7 @@ To run benchmarks:
 cargo bench
 ```
 
-### Benchmarking Channel Implementations
-
-By default, `intercept-bounce` uses `crossbeam-channel::bounded` for communication between the main processing thread and the logger thread. You can benchmark an alternative lock-free queue implementation, `crossbeam-queue::ArrayQueue`, using a Cargo feature.
-
-To run benchmarks using `crossbeam-queue::ArrayQueue`:
-
-```bash
-cargo bench --features use_lockfree_queue
-```
-
-Compare the results, particularly for the `logger::channel_send_burst` benchmark, to see the performance characteristics of each implementation under load.
+The benchmarks primarily focus on the core `BounceFilter::check_event` logic and the overhead of the inter-thread communication channel used for logging and statistics under different load conditions.
 
 ### Generating Shell Completions and Man Pages
 
@@ -162,8 +160,8 @@ You can generate shell completion scripts (Bash, Zsh, Fish, etc.) and a man page
 ```sh
 cargo xtask generate-docs
 ```
-The generated files will be placed in the `docs/man` and `docs/completions` directories within the project root. You can then install them to the appropriate locations on your system (e.g., `/usr/local/share/man/man1/` for the man page, `/usr/share/bash-completion/completions/` for Bash completions). The Nix flake automatically installs these if you build using Nix.
----
+
+The generated files will be placed in the `docs/man` (man page) and `docs/completions` (shell completion scripts for Bash, Zsh, Fish, etc.) directories within the project root. You can then install them to the appropriate locations on your system (e.g., `/usr/local/share/man/man1/` for the man page, `/usr/share/bash-completion/completions/` for Bash completions). The Nix flake automatically installs these if you build using Nix.
 
 ## Additional Ideas
 
