@@ -66,6 +66,107 @@ nix build github:sinity/intercept-bounce
 nix profile install github:sinity/intercept-bounce
 ```
 
+#### NixOS System (Declarative, using flake)
+
+Since `intercept-bounce` is not yet packaged in the official `nixpkgs` repository, the recommended way to install it declaratively on NixOS is by adding this repository as a flake input to your system or Home Manager configuration.
+
+1.  **Add the flake input:**
+    Modify your top-level `flake.nix` (e.g., `/etc/nixos/flake.nix` or `~/.config/home-manager/flake.nix`) to include `intercept-bounce`:
+
+    ```nix
+    # In your flake.nix
+    {
+      description = "Your system configuration";
+
+      inputs = {
+        nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; # Or your preferred channel
+
+        # Add intercept-bounce flake input
+        intercept-bounce.url = "github:sinity/intercept-bounce";
+        # Optional: Pin to a specific commit or tag for stability
+        # intercept-bounce.inputs.nixpkgs.follows = "nixpkgs"; # Ensure it uses your nixpkgs
+        # intercept-bounce.rev = "YOUR_COMMIT_HASH_HERE";
+      };
+
+      outputs = { self, nixpkgs, intercept-bounce, ... }@inputs:
+        let
+          system = "x86_64-linux"; # Or your system architecture
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          # Example for configuration.nix:
+          nixosConfigurations.your-hostname = nixpkgs.lib.nixosSystem {
+            inherit system;
+            specialArgs = { inherit inputs; }; # Pass inputs to your config module
+            modules = [
+              ./configuration.nix # Your main configuration file
+              # ... other modules
+            ];
+          };
+
+          # Example for Home Manager (within a Home Manager flake):
+          # homeConfigurations."your-username" = home-manager.lib.homeManagerConfiguration {
+          #   inherit pkgs;
+          #   extraSpecialArgs = { inherit inputs; }; # Pass inputs to your config module
+          #   modules = [
+          #     ./home.nix # Your main Home Manager config file
+          #     # ... other modules
+          #   ];
+          # };
+        };
+    }
+    ```
+
+2.  **Add the package to your configuration:**
+    In the NixOS or Home Manager module file referenced above (e.g., `configuration.nix` or `home.nix`), add the package to your desired list, referencing it via the `inputs`:
+
+    ```nix
+    # In /etc/nixos/configuration.nix or ~/.config/home-manager/home.nix
+    { pkgs, inputs, ... }: # Ensure 'inputs' is available here
+
+    {
+      # Example for NixOS system packages:
+      environment.systemPackages = with pkgs; [
+        # ... other packages
+
+        # Reference the default package from the intercept-bounce flake input
+        inputs.intercept-bounce.packages.${pkgs.system}.default
+      ];
+
+      # Example for Home Manager packages:
+      # home.packages = with pkgs; [
+      #   inputs.intercept-bounce.packages.${pkgs.system}.default
+      # ];
+
+      # ... rest of your configuration
+    }
+    ```
+
+3.  **Rebuild your configuration:**
+    Apply the changes using `sudo nixos-rebuild switch` (for NixOS) or `home-manager switch` (for Home Manager).
+
+#### User Profile (Non-NixOS or User-Local)
+
+If you are not using NixOS or prefer to install the tool only for your user, you can install it directly into your Nix profile from the flake URL:
+
+```bash
+nix profile install github:sinity/intercept-bounce
+```
+
+This command is declarative for your user profile but does not integrate the package into the NixOS system configuration.
+
+#### Building and Running Directly
+
+You can also build or run the package directly without installing it permanently:
+
+```bash
+# Build the package (output in ./result)
+nix build github:sinity/intercept-bounce
+
+# Run directly without installing
+nix run github:sinity/intercept-bounce -- --help
+```
+
 The Nix flake also provides a development shell (`nix develop`) with necessary tools (see [Development](#development)).
 
 ## Usage
@@ -84,6 +185,7 @@ The most common usage involves capturing events from a physical keyboard, filter
 sudo sh -c 'intercept -g /dev/input/by-id/usb-My_Awesome_Keyboard-event-kbd \
            | intercept-bounce --debounce-time 15ms \
            | uinput -d /dev/input/by-id/usb-My_Awesome_Keyboard-event-kbd'
+# Note: Using the virtual device created by uinput requires configuration. See the "Integration" section below.
 ```
 
 **Important:**
@@ -266,17 +368,22 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 ### xtasks
 
-Common development tasks are available via `cargo xtask`:
+Common development tasks are available via a separate `xtask` crate. Run them using `cargo run --package xtask -- <command>`:
 
 ```bash
-# Generate man page and shell completions (in docs/)
-cargo xtask generate-docs
+# Generate man page and shell completions (outputs to docs/)
+cargo run --package xtask -- generate-docs
 
-# Run checks
-cargo xtask check
-cargo xtask test
-cargo xtask clippy
-cargo xtask fmt-check
+# Run checks (equivalent to cargo check)
+cargo run --package xtask -- check
+# Run tests (equivalent to cargo test)
+cargo run --package xtask -- test
+
+# Run clippy (equivalent to cargo clippy -- -D warnings)
+cargo run --package xtask -- clippy
+
+# Check formatting (equivalent to cargo fmt --check)
+cargo run --package xtask -- fmt-check
 ```
 
 ### Nix Development Shell
