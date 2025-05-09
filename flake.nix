@@ -41,21 +41,44 @@
           buildInputs = [pkgs.openssl];
 
           preBuild = ''
+            echo "Generating documentation with xtask..."
             cargo run --package xtask -- generate-docs
+            echo "Documentation generation complete. Listing generated files:"
+            ls -l docs/man || echo "docs/man not found or ls failed"
+            ls -l docs/completions || echo "docs/completions not found or ls failed"
           '';
 
           postInstall = ''
-            # installManPage docs/man/intercept-bounce.1
-            # installShellCompletion --bash        docs/completions/intercept-bounce.bash
-            # installShellCompletion --zsh         docs/completions/intercept-bounce.zsh
-            # installShellCompletion --fish        docs/completions/intercept-bounce.fish
-            # installShellCompletion --powershell  docs/completions/intercept-bounce.ps1
-            # installShellCompletion --nu          docs/completions/intercept-bounce.nu
+            echo "Starting postInstall phase..."
+
+            echo "Installing man page..."
+            installManPage docs/man/intercept-bounce.1
+
+            echo "Installing Bash completion..."
+            installShellCompletion --bash docs/completions/intercept-bounce.bash
+            echo "Installing Zsh completion..."
+            installShellCompletion --zsh docs/completions/intercept-bounce.zsh
+            echo "Installing Fish completion..."
+            installShellCompletion --fish docs/completions/intercept-bounce.fish
+
+            echo "Installing PowerShell completion manually..."
+            mkdir -p $out/share/powershell/completions
+            cp docs/completions/intercept-bounce.ps1 $out/share/powershell/completions/
+
+            echo "Installing Nushell completion manually..."
+            mkdir -p $out/share/nushell/completions
+            cp docs/completions/intercept-bounce.nu $out/share/nushell/completions/
+
+            echo "Installing Elvish completion manually..."
+            mkdir -p $out/share/elvish/completions
+            cp docs/completions/intercept-bounce.elv $out/share/elvish/completions/
+
+            echo "postInstall phase complete."
           '';
 
           meta = with pkgs.lib; {
             description = "Interception-Tools bounce filter with statistics";
-            license = licenses.mit;
+            license = [licenses.mit licenses.asl20];
             maintainers = [maintainers.sinity];
           };
         };
@@ -63,7 +86,6 @@
         default = self.packages.${system}.${pname};
       };
 
-      # ────────────────── dev shell (devshell.mkShell) ──────────────────
       devShells.default = devshell.legacyPackages.${system}.mkShell {
         name = "intercept-bounce-dev";
 
@@ -72,13 +94,14 @@
             extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
           })
           nixpkgs-fmt
+          alejandra
           cargo-nextest
           cargo-fuzz
           cargo-audit
           cargo-udeps
           gdb
-          gitleaks # For secrets scanning
-          pre-commit # The pre-commit framework
+          gitleaks
+          pre-commit
           interception-tools
           openssl
           man-db
@@ -138,7 +161,6 @@
         '';
       };
 
-      # Add a check for pre-commit hooks
       checks.pre-commit-check = self.devShells.${system}.default.inputDerivation {
         name = "pre-commit-check";
         command = "pre-commit run --all-files --show-diff-on-failure";

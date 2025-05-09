@@ -5,13 +5,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v16
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Cachix
-        uses: cachix/cachix-action@v14
+        uses: cachix/cachix-action@v15
         with:
           name: sinity
         env:
@@ -19,32 +22,21 @@ jobs:
 
       - name: Build, Lint, and Test
         run: |
-          # Optional: Update flake inputs. Consider if this should be a separate job
-          # or run less frequently, as it can affect build times and determinism.
-          nix flake update
-
           # Build the primary package. This also runs `xtask generate-docs`
           # due to the preBuild hook in flake.nix.
           echo "::group::Building Package (nix build)"
-          nix build .#intercept-bounce
+          nix build .#intercept-bounce -L
           echo "::endgroup::"
 
-          # Run checks and tests using the dev shell aliases
+          # Run all pre-commit checks (includes formatting, clippy, gitleaks, etc.)
+          echo "::group::Running Pre-commit Checks (nix flake check)"
+          nix flake check .#pre-commit-check -L
+          echo "::endgroup::"
+
+          # Run remaining checks and tests using the dev shell aliases
           echo "Running additional checks and tests within nix develop environment..."
           nix develop . --command bash -c "
             set -ex
-
-            echo '::group::Formatting Check (cf --check)'
-            cf --check
-            echo '::endgroup::'
-
-            echo '::group::Clippy Lints (cl)'
-            cl
-            echo '::endgroup::'
-
-            echo '::group::Cargo Check (cch)'
-            cch
-            echo '::endgroup::'
 
             echo '::group::Dependency Audit (ca)'
             ca
@@ -55,6 +47,6 @@ jobs:
             echo '::endgroup::'
 
             echo '::group::Running Tests with Nextest (nt --all)'
-            nt --all
+            nt
             echo '::endgroup::'
           "
