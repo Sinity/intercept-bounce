@@ -89,37 +89,37 @@
           }
           {
             name = "cl";
-            command = "cargo clippy --workspace --all-targets";
+            command = "cargo clippy --workspace --all-targets \"$@\"";
             help = "Clippy lints";
           }
           {
             name = "cf";
-            command = "cargo fmt --all";
+            command = "cargo fmt --all \"$@\"";
             help = "Format code";
           }
           {
             name = "ct";
-            command = "cargo test --workspace";
+            command = "cargo test --workspace \"$@\"";
             help = "Run tests";
           }
           {
             name = "nt";
-            command = "cargo nextest run --workspace";
+            command = "cargo nextest run --workspace \"$@\"";
             help = "Parallel tests";
           }
           {
             name = "ca";
-            command = "cargo audit";
+            command = "cargo audit \"$@\"";
             help = "Audit dependencies";
           }
           {
             name = "cu";
-            command = "cargo udeps --workspace --all-targets";
+            command = "cargo udeps --workspace --all-targets \"$@\"";
             help = "Detect unused deps";
           }
           {
             name = "fuzz";
-            command = "cargo fuzz run";
+            command = "cargo fuzz run \"$@\"";
             help = "Run fuzz targets";
           }
         ];
