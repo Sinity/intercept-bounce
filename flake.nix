@@ -17,12 +17,9 @@
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
       pname = "intercept-bounce";
-
-      # ───── DON'T shadow pkgs.cargo ─────
       cargoToml = pkgs.lib.importTOML ./Cargo.toml;
       version = cargoToml.package.version;
     in {
-      # ────────────────── build package ──────────────────
       packages = {
         ${pname} = pkgs.rustPlatform.buildRustPackage {
           inherit pname version;
@@ -51,7 +48,7 @@
             maintainers = [maintainers.sinity];
           };
         };
-        
+
         default = self.packages.${system}.${pname};
       };
 
@@ -59,7 +56,6 @@
       devShells.default = devshell.legacyPackages.${system}.mkShell {
         name = "intercept-bounce-dev";
 
-        ## tools on $PATH inside the shell
         packages = with pkgs; [
           rustc
           cargo
@@ -67,20 +63,18 @@
           rustfmt
           rust-analyzer
           nixpkgs-fmt
-          pre-commit
           cargo-nextest
           cargo-fuzz
           cargo-audit
           cargo-udeps
           gdb
           interception-tools
-          openssl.dev
+          openssl
           man-db
           git
           gh
         ];
 
-        ## little helper aliases visible via "menu"
         commands = [
           {
             name = "xt";
@@ -124,39 +118,11 @@
           }
         ];
 
-        ## banner printed once per interactive session
         motd = ''
           🛠  intercept-bounce dev shell
           Build:  cargo build [--release]    Tests: cargo nextest run (alias: nt)
-          Pre-commit hooks: rustfmt · clippy · nixpkgs-fmt
           CI workflow: .github/workflows/ci.yml
         '';
-
-        ## hook scripts
-        devshell = {
-          startup.pre-commit-hooks = {
-            text = ''
-              if [ -d .git ] && ! git config core.hooksPath &>/dev/null; then
-                pre-commit install --install-hooks
-              fi
-            '';
-          };
-          
-          # Display logs info at shell startup
-          startup.logs = {
-            text = ''
-              echo "Logs: RUST_LOG=$RUST_LOG"
-            '';
-          };
-        };
-
-        # Environment variables
-        env = [
-          {
-            name = "RUST_LOG";
-            value = "\${RUST_LOG:-intercept_bounce=debug,warn}";
-          }
-        ];
       };
     });
 }
