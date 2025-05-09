@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     devshell.url = "github:numtide/devshell";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs = {
@@ -12,10 +13,15 @@
     nixpkgs,
     flake-utils,
     devshell,
+    rust-overlay,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = import nixpkgs {inherit system;};
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [rust-overlay.overlays.default];
+      };
+      rust-bin = pkgs.rust-bin;
       pname = "intercept-bounce";
       cargoToml = pkgs.lib.importTOML ./Cargo.toml;
       version = cargoToml.package.version;
@@ -57,11 +63,9 @@
         name = "intercept-bounce-dev";
 
         packages = with pkgs; [
-          rustc
-          cargo
-          clippy
-          rustfmt
-          rust-analyzer
+          (rust-bin.nightly.latest.default.override {
+            extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
+          })
           nixpkgs-fmt
           cargo-nextest
           cargo-fuzz
