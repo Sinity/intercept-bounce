@@ -871,7 +871,6 @@ dependencies = [
 name = "intercept-bounce"
 version = "0.9.0"
 dependencies = [
- "arbitrary",
  "assert_cmd",
  "chrono",
  "clap",
@@ -881,7 +880,6 @@ dependencies = [
  "humantime",
  "input-linux-sys",
  "libc",
- "libfuzzer-sys",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
