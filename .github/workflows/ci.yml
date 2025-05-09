@@ -6,6 +6,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for vergen
 
       - name: Install Nix
         uses: cachix/install-nix-action@v27
@@ -29,6 +31,7 @@ jobs:
           echo "::endgroup::"
 
           # Run all pre-commit checks (includes formatting, clippy, gitleaks, etc.)
+          # The flake reference .#pre-commit-check will resolve to the system-specific check
           echo "::group::Running Pre-commit Checks (nix flake check)"
           nix flake check .#pre-commit-check -L
           echo "::endgroup::"
@@ -46,7 +49,8 @@ jobs:
             cu
             echo '::endgroup::'
 
-            echo '::group::Running Tests with Nextest (nt --all)'
+            # cargo nextest run --workspace runs all tests by default
+            echo '::group::Running Tests with Nextest (nt)'
             nt
             echo '::endgroup::'
           "
