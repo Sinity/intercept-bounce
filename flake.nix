@@ -73,7 +73,6 @@
           man-db
           git
           gh
-          # Add C compiler and related build tools
           gcc
           pkg-config
         ];

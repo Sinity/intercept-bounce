@@ -14,7 +14,7 @@ readme = "README.md"
 features = ["default"]
 
 [dependencies]
-input-linux-sys = "0.1"
+input-linux-sys = "0.9"
 signal-hook = "0.3"
 phf = { version = "0.11", features = ["macros"] }
 libc = "0.2"
@@ -41,7 +41,6 @@ tracing-opentelemetry = "0.24"
 
 [features]
 default = []
-# Removed debug_ring_buffer feature
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }

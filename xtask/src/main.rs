@@ -579,9 +579,9 @@ fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
         ("NEAR-MISS", MAN_NEAR_MISS),   // How near-miss works, interpretation
         ("EXAMPLES", MAN_EXAMPLES),
         ("INTEGRATION", MAN_INTEGRATION), // Interception Tools, udevmon, Wayland/Xorg
-        ("STATISTICS", MAN_STATISTICS), // Human-readable, JSON, Histograms
-        ("LOGGING", MAN_LOGGING),       // Flags, RUST_LOG, tracing
-        ("SIGNALS", MAN_SIGNALS),       // Graceful shutdown
+        ("STATISTICS", MAN_STATISTICS),   // Human-readable, JSON, Histograms
+        ("LOGGING", MAN_LOGGING),         // Flags, RUST_LOG, tracing
+        ("SIGNALS", MAN_SIGNALS),         // Graceful shutdown
         ("THEORY OF OPERATION", MAN_THEORY_OF_OPERATION), // Internal architecture
         ("PERFORMANCE", MAN_PERFORMANCE), // Latency, logger channel dropping
         ("TROUBLESHOOTING", MAN_TROUBLESHOOTING),
