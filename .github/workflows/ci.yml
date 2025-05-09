@@ -17,9 +17,44 @@ jobs:
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build & test
+      - name: Build, Lint, and Test
         run: |
-          nix build .#intercept-bounce
-          nix flake update   # optional
-          nix develop . --command cargo nextest run --all
+          # Optional: Update flake inputs. Consider if this should be a separate job
+          # or run less frequently, as it can affect build times and determinism.
+          nix flake update
 
+          # Build the primary package. This also runs `xtask generate-docs`
+          # due to the preBuild hook in flake.nix.
+          echo "::group::Building Package (nix build)"
+          nix build .#intercept-bounce
+          echo "::endgroup::"
+
+          # Run checks and tests using the dev shell aliases
+          echo "Running additional checks and tests within nix develop environment..."
+          nix develop . --command bash -c "
+            set -ex
+
+            echo '::group::Formatting Check (cf --check)'
+            cf --check
+            echo '::endgroup::'
+
+            echo '::group::Clippy Lints (cl)'
+            cl
+            echo '::endgroup::'
+
+            echo '::group::Cargo Check (cch)'
+            cch
+            echo '::endgroup::'
+
+            echo '::group::Dependency Audit (ca)'
+            ca
+            echo '::endgroup::'
+
+            echo '::group::Unused Dependencies Check (cu)'
+            cu
+            echo '::endgroup::'
+
+            echo '::group::Running Tests with Nextest (nt --all)'
+            nt --all
+            echo '::endgroup::'
+          "
