@@ -84,7 +84,7 @@
         commands = [
           {
             name = "xt";
-            command = "cargo xtask";
+            command = "cargo run --package xtask";
             help = "Run xtask helper";
           }
           {
