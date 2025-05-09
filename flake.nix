@@ -45,12 +45,12 @@
           '';
 
           postInstall = ''
-            installManPage docs/man/intercept-bounce.1
-            installShellCompletion --bash        docs/completions/intercept-bounce.bash
-            installShellCompletion --zsh         docs/completions/_intercept-bounce
-            installShellCompletion --fish        docs/completions/intercept-bounce.fish
-            installShellCompletion --powershell  docs/completions/intercept-bounce.ps1
-            installShellCompletion --nu          docs/completions/intercept-bounce.nu
+            # installManPage docs/man/intercept-bounce.1
+            # installShellCompletion --bash        docs/completions/intercept-bounce.bash
+            # installShellCompletion --zsh         docs/completions/intercept-bounce.zsh
+            # installShellCompletion --fish        docs/completions/intercept-bounce.fish
+            # installShellCompletion --powershell  docs/completions/intercept-bounce.ps1
+            # installShellCompletion --nu          docs/completions/intercept-bounce.nu
           '';
 
           meta = with pkgs.lib; {
