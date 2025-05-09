@@ -84,27 +84,27 @@
         commands = [
           {
             name = "xt";
-            command = "cargo run --package xtask";
+            command = "cargo run --package xtask -- \"$@\"";
             help = "Run xtask helper";
           }
           {
             name = "cl";
-            command = "cargo clippy";
+            command = "cargo clippy --workspace --all-targets";
             help = "Clippy lints";
           }
           {
             name = "cf";
-            command = "cargo fmt";
+            command = "cargo fmt --all";
             help = "Format code";
           }
           {
             name = "ct";
-            command = "cargo test";
+            command = "cargo test --workspace";
             help = "Run tests";
           }
           {
             name = "nt";
-            command = "cargo nextest run";
+            command = "cargo nextest run --workspace";
             help = "Parallel tests";
           }
           {
@@ -114,7 +114,7 @@
           }
           {
             name = "cu";
-            command = "cargo udeps";
+            command = "cargo udeps --workspace --all-targets";
             help = "Detect unused deps";
           }
           {
