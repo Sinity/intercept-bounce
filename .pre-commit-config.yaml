@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0 # Use the latest stable version
+    rev: v5.0.0 # Use the latest stable version
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
@@ -23,7 +23,7 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4 # Use the latest stable version
+    rev: v8.25.1 # Use the latest stable version
     hooks:
       - id: gitleaks
         name: Detect hardcoded secrets (gitleaks)
@@ -44,19 +44,11 @@ repos:
         types: [rust]
         pass_filenames: false # cargo clippy operates on the whole project
 
-      - id: nixpkgs-fmt
-        name: Format Nix files (nixpkgs-fmt)
-        entry: nixpkgs-fmt
+      - id: alejandra
+        name: Format Nix files (alejandra)
+        entry: alejandra
         language: system
         types: [nix]
-        # pass_filenames: true # nixpkgs-fmt can take filenames
-
-      # If you want to check specific files with nixpkgs-fmt, you can do this:
-      # - id: nixpkgs-fmt-specific
-      #   name: Format specific Nix files (nixpkgs-fmt)
-      #   entry: nixpkgs-fmt
-      #   language: system
-      #   files: ^(flake\.nix|shell\.nix|\.envrc)$ # Adjust regex as needed
 
 # Optional: Configure default stages if you want hooks to run on e.g. pre-push
-# default_stages: [commit, push]
+default_stages: [pre-commit, pre-push]

@@ -8,26 +8,24 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , flake-utils
-    , devshell
-    , rust-overlay
-    , ...
-    }:
-    flake-utils.lib.eachDefaultSystem (system:
-    let
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    devshell,
+    rust-overlay,
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [ rust-overlay.overlays.default ];
+        overlays = [rust-overlay.overlays.default];
       };
       rust-bin = pkgs.rust-bin;
       pname = "intercept-bounce";
       cargoToml = pkgs.lib.importTOML ./Cargo.toml;
       version = cargoToml.package.version;
-    in
-    {
+    in {
       packages = {
         ${pname} = pkgs.rustPlatform.buildRustPackage {
           inherit pname version;
@@ -40,7 +38,7 @@
             pkgs.installShellFiles
             pkgs.makeWrapper
           ];
-          buildInputs = [ pkgs.openssl ];
+          buildInputs = [pkgs.openssl];
 
           preBuild = ''
             cargo run --package xtask -- generate-docs
@@ -58,7 +56,7 @@
           meta = with pkgs.lib; {
             description = "Interception-Tools bounce filter with statistics";
             license = licenses.mit;
-            maintainers = [ maintainers.sinity ];
+            maintainers = [maintainers.sinity];
           };
         };
 
@@ -71,7 +69,7 @@
 
         packages = with pkgs; [
           (rust-bin.nightly.latest.default.override {
-            extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
+            extensions = ["rust-src" "rust-analyzer" "clippy" "rustfmt"];
           })
           nixpkgs-fmt
           cargo-nextest
