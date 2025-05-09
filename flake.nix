@@ -37,7 +37,7 @@
             pkgs.openssl.dev
             pkgs.installShellFiles
             pkgs.makeWrapper
-            pkgs.git # Added for vergen to find git
+            pkgs.git
           ];
           buildInputs = [pkgs.openssl];
 
@@ -162,7 +162,6 @@
         '';
       };
 
-      # Corrected structure for checks: nested under a 'checks' attribute set
       checks = {
         pre-commit-check = self.devShells.${system}.default.inputDerivation {
           name = "pre-commit-check";
