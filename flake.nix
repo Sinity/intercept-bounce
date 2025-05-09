@@ -119,8 +119,8 @@
           }
           {
             name = "fuzz";
-            command = "cargo fuzz run \"$@\"";
-            help = "Run fuzz targets";
+            command = "cargo fuzz \"$@\"";
+            help = "Run cargo-fuzz commands (e.g., list, run <target>, add <target>)";
           }
         ];
 
