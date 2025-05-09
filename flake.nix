@@ -163,9 +163,22 @@
       };
 
       checks = {
-        pre-commit-check = self.devShells.${system}.default.inputDerivation {
+        pre-commit-check = pkgs.stdenv.mkDerivation {
+          # <--- Changed to pkgs.stdenv.mkDerivation
           name = "pre-commit-check";
-          command = "pre-commit run --all-files --show-diff-on-failure";
+          src = self; # Use the entire flake source
+          buildInputs = [self.devShells.${system}.default]; # Provides tools like pre-commit, git
+          phases = ["unpackPhase" "runPhase"];
+          runPhase = ''
+            echo "Running pre-commit checks in $PWD"
+            ls -la
+            if [ ! -f .pre-commit-config.yaml ]; then
+              echo "ERROR: .pre-commit-config.yaml not found in $PWD"
+              exit 1
+            fi
+            pre-commit run --all-files --show-diff-on-failure
+            touch $out # Signal success
+          '';
         };
       };
     });
