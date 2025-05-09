@@ -1,0 +1,62 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0 # Use the latest stable version
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      # - id: check-symlinks # Enable if you use symlinks in your repo
+      - id: check-toml
+      - id: check-vcs-permalinks
+      - id: check-xml
+      - id: check-yaml
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4 # Use the latest stable version
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets (gitleaks)
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: Format Rust code (cargo fmt)
+        entry: bash -c 'cargo fmt --all -- --check' # Uses the 'cf --check' alias logic
+        language: system
+        types: [rust]
+        pass_filenames: false # cargo fmt operates on the whole project
+
+      - id: cargo-clippy
+        name: Lint Rust code (cargo clippy)
+        entry: bash -c 'cargo clippy --workspace --all-targets -- -D warnings' # Uses 'cl' alias logic, fails on warnings
+        language: system
+        types: [rust]
+        pass_filenames: false # cargo clippy operates on the whole project
+
+      - id: nixpkgs-fmt
+        name: Format Nix files (nixpkgs-fmt)
+        entry: nixpkgs-fmt
+        language: system
+        types: [nix]
+        # pass_filenames: true # nixpkgs-fmt can take filenames
+
+      # If you want to check specific files with nixpkgs-fmt, you can do this:
+      # - id: nixpkgs-fmt-specific
+      #   name: Format specific Nix files (nixpkgs-fmt)
+      #   entry: nixpkgs-fmt
+      #   language: system
+      #   files: ^(flake\.nix|shell\.nix|\.envrc)$ # Adjust regex as needed
+
+# Optional: Configure default stages if you want hooks to run on e.g. pre-push
+# default_stages: [commit, push]
