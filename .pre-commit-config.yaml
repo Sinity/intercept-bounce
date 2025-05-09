@@ -1,16 +1,16 @@
 repos:
-  - repo: https://github.com/nix-community/pre-commit-hooks
+  - repo: https://${NIX_GITHUB_TOKEN}@github.com/nix-community/pre-commit-hooks
     rev: v1.3.0
     hooks:
       - id: nixpkgs-fmt
 
-  - repo: https://github.com/doublify/pre-commit-rust
+  - repo: https://${NIX_GITHUB_TOKEN}@github.com/doublify/pre-commit-rust
     rev: v0.17.0
     hooks:
       - id: rustfmt
       - id: clippy
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://${NIX_GITHUB_TOKEN}@github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
