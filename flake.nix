@@ -32,7 +32,12 @@
           src = self;
           cargoLock.lockFile = ./Cargo.lock;
 
-          nativeBuildInputs = [pkgs.pkg-config pkgs.openssl.dev];
+          nativeBuildInputs = [
+            pkgs.pkg-config
+            pkgs.openssl.dev
+            pkgs.installShellFiles
+            pkgs.makeWrapper
+          ];
           buildInputs = [pkgs.openssl];
 
           preBuild = ''
