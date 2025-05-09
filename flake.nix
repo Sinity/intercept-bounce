@@ -170,13 +170,41 @@
           buildInputs = [self.devShells.${system}.default]; # Provides tools like pre-commit, git
           phases = ["unpackPhase" "runPhase"];
           runPhase = ''
+            set -x # Enable command tracing for easier debugging in CI
+
             echo "Running pre-commit checks in $PWD"
             ls -la
+
+            # pre-commit often needs to run within a git repository.
+            # If .git doesn't exist (e.g., when src is from a tarball), initialize one.
+            if [ ! -d ".git" ]; then
+              echo "Initializing a temporary Git repository for pre-commit..."
+              # Try to avoid "detached HEAD" state issues if possible, though for pre-commit it might not matter.
+              # Using a common default branch name.
+              git init -b main
+              # Configure git user, required for 'git add' if no global config exists
+              # Using dummy values as the actual user doesn't matter for local pre-commit runs.
+              git config user.email "ci@example.com"
+              git config user.name "CI Bot"
+              # Add all files to the index so pre-commit knows about them
+              # This is important for 'pre-commit run --all-files'
+              git add .
+              # A commit isn't strictly necessary for 'pre-commit run --all-files'
+              # and can be problematic if there's nothing to commit or other git issues.
+            fi
+
             if [ ! -f .pre-commit-config.yaml ]; then
               echo "ERROR: .pre-commit-config.yaml not found in $PWD"
               exit 1
             fi
-            pre-commit run --all-files --show-diff-on-failure
+
+            # Set PRE_COMMIT_HOME to a writable directory within the sandbox
+            # $TMPDIR is a standard environment variable for temporary directories in Nix builds.
+            export PRE_COMMIT_HOME="$TMPDIR/pre-commit-cache"
+            mkdir -p "$PRE_COMMIT_HOME" # Ensure the directory exists
+            echo "PRE_COMMIT_HOME set to $PRE_COMMIT_HOME"
+
+            pre-commit run --all-files --show-diff-on-failure --verbose
             touch $out # Signal success
           '';
         };
