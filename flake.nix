@@ -1,162 +1,162 @@
 {
-  description = "Debounce plugin for Interception Tools";
+  description = "Interception-bounce (debounce filter for Interception-Tools)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    devshell.url = "github:numtide/devshell";
   };
 
   outputs = {
+    self,
     nixpkgs,
     flake-utils,
+    devshell,
     ...
   }:
-    flake-utils.lib.eachDefaultSystem
-    (
-      system: let
-        pkgs = import nixpkgs {inherit system;};
-        cargoToml = pkgs.lib.importTOML ./Cargo.toml;
-        version = cargoToml.package.version;
-      in {
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "intercept-bounce";
-          inherit version;
-          src = ./.;
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
+    flake-utils.lib.eachDefaultSystem (system: let
+      pkgs = import nixpkgs {inherit system;};
+      pname = "intercept-bounce";
 
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            git # Needed by vergen build script if building outside git repo
-            # Shells needed by clap_complete::generate_to in generate-cli-files
-            bash
-            elvish
-            fish
-            powershell
-            zsh
-            nushell
-          ];
-          buildInputs = [pkgs.openssl]; # Runtime dependency
+      # ───── DON'T shadow pkgs.cargo ─────
+      cargoToml = pkgs.lib.importTOML ./Cargo.toml;
+      version = cargoToml.package.version;
+    in {
+      # ────────────────── build package ──────────────────
+      packages = {
+        ${pname} = pkgs.rustPlatform.buildRustPackage {
+          inherit pname version;
+          src = self;
+          cargoLock.lockFile = ./Cargo.lock;
+
+          nativeBuildInputs = [pkgs.pkg-config pkgs.openssl.dev];
+          buildInputs = [pkgs.openssl];
 
           preBuild = ''
-            echo "Generating docs using xtask..."
             cargo run --package xtask -- generate-docs
-            echo "Finished generating docs."
           '';
 
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out/bin
-            cp target/${pkgs.stdenv.hostPlatform.config}/release/intercept-bounce $out/bin/
-            runHook postInstall
-            echo "Installing man page..."
-            mkdir -p $out/share/man/man1
-            cp docs/man/intercept-bounce.1 $out/share/man/man1/
+          postInstall = ''
+            installManPage docs/man/intercept-bounce.1
+            installShellCompletion --bash        docs/completions/intercept-bounce.bash
+            installShellCompletion --zsh         docs/completions/_intercept-bounce
+            installShellCompletion --fish        docs/completions/intercept-bounce.fish
+            installShellCompletion --powershell  docs/completions/intercept-bounce.ps1
+            installShellCompletion --nu          docs/completions/intercept-bounce.nu
+          '';
 
-            echo "Installing completions..."
-            install_completion() {
-              local shell=$1
-              local ext=$2
-              local dest_dir=$out/share/$shell/completions
-              mkdir -p $dest_dir
-              # Install completion file, renaming based on shell conventions.
-              if [ "$shell" = "bash" ]; then
-                cp docs/completions/intercept-bounce.$ext $dest_dir/intercept-bounce
-              elif [ "$shell" = "zsh" ]; then
-                cp docs/completions/intercept-bounce.$ext $dest_dir/_intercept-bounce
-              else
-                # Fish, Elvish, PowerShell use the filename as is.
-                cp docs/completions/intercept-bounce.$ext $dest_dir/intercept-bounce.$ext
+          meta = with pkgs.lib; {
+            description = "Interception-Tools bounce filter with statistics";
+            license = licenses.mit;
+            maintainers = [maintainers.sinity];
+          };
+        };
+        
+        default = self.packages.${system}.${pname};
+      };
+
+      # ────────────────── dev shell (devshell.mkShell) ──────────────────
+      devShells.default = devshell.legacyPackages.${system}.mkShell {
+        name = "intercept-bounce-dev";
+
+        ## tools on $PATH inside the shell
+        packages = with pkgs; [
+          rustc
+          cargo
+          clippy
+          rustfmt
+          rust-analyzer
+          nixpkgs-fmt
+          pre-commit
+          cargo-nextest
+          cargo-fuzz
+          cargo-audit
+          cargo-udeps
+          gdb
+          interception-tools
+          openssl.dev
+          man-db
+          git
+          gh
+        ];
+
+        ## little helper aliases visible via "menu"
+        commands = [
+          {
+            name = "xt";
+            command = "cargo xtask";
+            help = "Run xtask helper";
+          }
+          {
+            name = "cl";
+            command = "cargo clippy";
+            help = "Clippy lints";
+          }
+          {
+            name = "cf";
+            command = "cargo fmt";
+            help = "Format code";
+          }
+          {
+            name = "ct";
+            command = "cargo test";
+            help = "Run tests";
+          }
+          {
+            name = "nt";
+            command = "cargo nextest run";
+            help = "Parallel tests";
+          }
+          {
+            name = "ca";
+            command = "cargo audit";
+            help = "Audit dependencies";
+          }
+          {
+            name = "cu";
+            command = "cargo udeps";
+            help = "Detect unused deps";
+          }
+          {
+            name = "fuzz";
+            command = "cargo fuzz run";
+            help = "Run fuzz targets";
+          }
+        ];
+
+        ## banner printed once per interactive session
+        motd = ''
+          🛠  intercept-bounce dev shell
+          Build:  cargo build [--release]    Tests: cargo nextest run (alias: nt)
+          Pre-commit hooks: rustfmt · clippy · nixpkgs-fmt
+          CI workflow: .github/workflows/ci.yml
+        '';
+
+        ## hook scripts
+        devshell = {
+          startup.pre-commit-hooks = {
+            text = ''
+              if [ -d .git ] && ! git config core.hooksPath &>/dev/null; then
+                pre-commit install --install-hooks
               fi
-              echo "Installed $shell completion to $dest_dir"
-            }
-
-            install_completion bash bash
-            install_completion elvish elv
-            install_completion fish fish
-            install_completion powershell ps1
-            install_completion zsh zsh
-            install_completion nu nu
-
-            # Ensure all completions are installed
-            echo "Verifying completion files were installed..."
-            find $out/share -type f -name "*intercept-bounce*" | sort
-
-            echo "Finished installing docs."
-          '';
-
-          meta = {
-            description = "Interception Tools bounce filter with statistics";
-            license = pkgs.lib.licenses.mit;
-            maintainers = with pkgs.lib.maintainers; [sinity];
+            '';
+          };
+          
+          # Display logs info at shell startup
+          startup.logs = {
+            text = ''
+              echo "Logs: RUST_LOG=$RUST_LOG"
+            '';
           };
         };
 
-        devShells.default = pkgs.mkShell {
-          name = "intercept-bounce-dev";
-          buildInputs = with pkgs; [
-            pkg-config
-            openssl
-            nixpkgs-fmt
-
-            # Core Rust tooling
-            rustc
-            cargo
-            clippy
-            rustfmt
-            rust-analyzer
-
-            # Nix formatting
-            nixpkgs-fmt
-
-            # Fuzzing
-            cargo-fuzz
-
-            # Debugging
-            gdb
-
-            # Code analysis & quality
-            cargo-audit
-            cargo-udeps
-
-            # Runtime dependencies for testing
-            interception-tools
-
-            # Documentation viewing
-            man-db # Provides the 'man' command
-
-            # Version control & GitHub CLI
-            git
-            gh
-          ];
-
-          # Commands run when entering the shell
-          shellHook = ''
-            # Set default log level for development
-            export RUST_LOG="intercept_bounce=debug,warn"
-
-            # Useful aliases
-            alias xt="cargo run --package xtask --"
-            alias cl="cargo clippy --all-targets --all-features -- -D warnings"
-            alias cf="cargo fmt --all"
-            alias ct="cargo test --all-targets --all-features"
-            alias ca="cargo audit"
-            alias cu="cargo udeps"
-            alias fuzz="cargo fuzz"
-
-            # Welcome message (compact)
-            echo "Welcome to the intercept-bounce dev shell!"
-            echo "Aliases: xt (xtask), cl (clippy), cf (fmt), ct (test), ca (audit), cu (udeps), fuzz"
-            echo "Build:   cargo build [--release]"
-            echo "Test:    ct | cargo bench | fuzz list | fuzz run <target>"
-            echo "Xtasks:  xt generate-docs | check | test | clippy | fmt | lint"
-            echo "Tools:   cargo, rustc, gdb, cargo-fuzz, cargo-audit, cargo-udeps, interception-tools, man, gh, etc."
-            echo "Docs:    man ./docs/man/intercept-bounce.1"
-            echo "Logs:    RUST_LOG=\"intercept_bounce=debug,warn\" (current: $RUST_LOG)"
-            echo ""
-          '';
-        };
-      }
-    );
+        # Environment variables
+        env = [
+          {
+            name = "RUST_LOG";
+            value = "\${RUST_LOG:-intercept_bounce=debug,warn}";
+          }
+        ];
+      };
+    });
 }
