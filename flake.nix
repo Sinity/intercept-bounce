@@ -25,6 +25,14 @@
       pname = "intercept-bounce";
       cargoToml = pkgs.lib.importTOML ./Cargo.toml;
       version = cargoToml.package.version;
+
+      # Fetch pre-commit-hooks repository source
+      preCommitHooksSrc = pkgs.fetchFromGitHub {
+        owner = "pre-commit";
+        repo = "pre-commit-hooks";
+        rev = "v5.0.0";
+        sha256 = "sha256-BYNi/xtdichqsn55hqr1MSFwWpH+7cCbLfqmpn9cxto=";
+      };
     in {
       packages = {
         ${pname} = pkgs.rustPlatform.buildRustPackage {
@@ -101,7 +109,7 @@
           cargo-audit
           cargo-udeps
           gdb
-          gitleaks
+          gitleaks # gitleaks binary for local hook
           pre-commit
           interception-tools
           openssl
@@ -110,6 +118,7 @@
           gh
           gcc
           pkg-config
+          yq-go # For modifying YAML in CI
         ];
 
         commands = [
@@ -164,33 +173,23 @@
 
       checks = {
         pre-commit-check = pkgs.stdenv.mkDerivation {
-          # <--- Changed to pkgs.stdenv.mkDerivation
           name = "pre-commit-check";
-          src = self; # Use the entire flake source
-          buildInputs = [self.devShells.${system}.default]; # Provides tools like pre-commit, git
+          src = self;
+          # buildInputs includes tools from the devShell: pre-commit, git, yq-go, gitleaks
+          buildInputs = [self.devShells.${system}.default];
           phases = ["unpackPhase" "runPhase"];
           runPhase = ''
-            set -x # Enable command tracing for easier debugging in CI
+            set -x # Enable command tracing
 
             echo "Running pre-commit checks in $PWD"
             ls -la
 
-            # pre-commit often needs to run within a git repository.
-            # If .git doesn't exist (e.g., when src is from a tarball), initialize one.
             if [ ! -d ".git" ]; then
               echo "Initializing a temporary Git repository for pre-commit..."
-              # Try to avoid "detached HEAD" state issues if possible, though for pre-commit it might not matter.
-              # Using a common default branch name.
               git init -b main
-              # Configure git user, required for 'git add' if no global config exists
-              # Using dummy values as the actual user doesn't matter for local pre-commit runs.
               git config user.email "ci@example.com"
               git config user.name "CI Bot"
-              # Add all files to the index so pre-commit knows about them
-              # This is important for 'pre-commit run --all-files'
               git add .
-              # A commit isn't strictly necessary for 'pre-commit run --all-files'
-              # and can be problematic if there's nothing to commit or other git issues.
             fi
 
             if [ ! -f .pre-commit-config.yaml ]; then
@@ -198,13 +197,42 @@
               exit 1
             fi
 
-            # Set PRE_COMMIT_HOME to a writable directory within the sandbox
-            # $TMPDIR is a standard environment variable for temporary directories in Nix builds.
             export PRE_COMMIT_HOME="$TMPDIR/pre-commit-cache"
-            mkdir -p "$PRE_COMMIT_HOME" # Ensure the directory exists
+            mkdir -p "$PRE_COMMIT_HOME"
             echo "PRE_COMMIT_HOME set to $PRE_COMMIT_HOME"
 
-            pre-commit run --all-files --show-diff-on-failure --verbose
+            # Create a CI-specific pre-commit config
+            cp .pre-commit-config.yaml ci-pre-commit-config.yaml
+
+            # Make the fetched pre-commit-hooks source path available to yq
+            export PRE_COMMIT_HOOKS_SRC="${preCommitHooksSrc}"
+
+            # Modify pre-commit-hooks repo to use the local Nix-fetched source
+            yq -i '.repos[] |= (if .repo == "https://github.com/pre-commit/pre-commit-hooks" then .repo = strenv(PRE_COMMIT_HOOKS_SRC) else . end)' ci-pre-commit-config.yaml
+
+            # Modify gitleaks hook to be a local system hook
+            # 1. Delete the remote gitleaks repo entry
+            yq -i 'del(.repos[] | select(.repo == "https://github.com/gitleaks/gitleaks"))' ci-pre-commit-config.yaml
+            # 2. Add a new local gitleaks entry that uses the gitleaks binary from PATH
+            yq -i '.repos += {
+              "repo": "local",
+              "hooks": [
+                {
+                  "id": "gitleaks",
+                  "name": "Detect hardcoded secrets (gitleaks - system)",
+                  "entry": "gitleaks protect --verbose --redact --source=.",
+                  "language": "system",
+                  "pass_filenames": false,
+                  "types": ["text"]
+                }
+              ]
+            }' ci-pre-commit-config.yaml
+
+            echo "--- Using CI pre-commit config: ---"
+            cat ci-pre-commit-config.yaml
+            echo "---------------------------------"
+
+            pre-commit run --config ci-pre-commit-config.yaml --all-files --show-diff-on-failure --verbose
             touch $out # Signal success
           '';
         };
