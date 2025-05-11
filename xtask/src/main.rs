@@ -5,9 +5,10 @@ use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 use intercept_bounce::cli::Args;
 
-use std::io::Write;
 use std::{
-    env, fs,
+    env,
+    fs,
+    io::Write, // Moved into the grouped std import
     path::{Path, PathBuf},
     process::Command,
 };

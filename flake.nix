@@ -87,8 +87,13 @@
 
           meta = with pkgs.lib; {
             description = "Interception-Tools bounce filter with statistics";
-            license = [licenses.mit licenses.asl20];
-            maintainers = [maintainers.sinity];
+            license = [
+              licenses.mit
+              licenses.asl20
+            ];
+            maintainers = [
+              maintainers.sinity
+            ];
           };
         };
 
@@ -189,9 +194,49 @@
           ];
           phases = ["unpackPhase" "checkPhase"];
           checkPhase = ''
-            # set -e # Temporarily disable to manually check exit codes for better error messages
-            set +e # Allow checking exit codes manually
-            cd $src
+            echo "DEBUG: checkPhase starting now. SHELL is $SHELL"
+            set -x # Trace all commands
+
+            echo "DEBUG: Initial PATH is: $PATH"
+
+            echo "DEBUG: Current environment variables:"
+            env
+
+            echo "DEBUG: Current directory before cd:"
+            pwd
+
+            echo "DEBUG: Listing source directory ($src):"
+            ls -lah "$src"
+
+            echo "DEBUG: Changing to source directory: cd $src"
+            cd "$src"
+            if [ $? -ne 0 ]; then
+              echo "DEBUG: ERROR cd $src FAILED"
+              exit 1 # Fail early if cd fails
+            fi
+
+            echo "DEBUG: Current directory after cd:"
+            pwd
+
+            echo "DEBUG: Listing current directory contents:"
+            ls -lah .
+
+            echo "DEBUG: Attempting to locate cargo:"
+            which cargo
+            if [ $? -ne 0 ]; then
+              echo "DEBUG: ERROR 'which cargo' FAILED. cargo not in PATH?"
+              exit 1
+            fi
+
+            echo "DEBUG: Attempting to get cargo version:"
+            cargo --version
+            if [ $? -ne 0 ]; then
+              echo "DEBUG: ERROR 'cargo --version' FAILED."
+              exit 1
+            fi
+
+            # Restore original script logic, but keep set -x for now
+            set +e # Allow checking exit codes manually for the actual checks
 
             echo "Running rustfmt check..."
             cargo fmt --all -- --check
@@ -222,7 +267,7 @@
             fi
 
             set -e # Re-enable failing on error for the final touch command
-            # All checks passed, create output marker
+            echo "DEBUG: All checks passed, creating output marker."
             touch $out
           '';
         };
