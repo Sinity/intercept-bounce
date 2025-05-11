@@ -12,8 +12,9 @@ use std::{
     process::Command,
 };
 
+/// Simple task runner to help with development tasks
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about)]
 struct XtaskArgs {
     #[command(subcommand)]
     command: Commands,
@@ -21,29 +22,56 @@ struct XtaskArgs {
 
 #[derive(clap::Subcommand, Debug)]
 enum Commands {
-    /// Generate man page and shell completions.
-    GenerateDocs,
-    /// Run cargo check.
+    /// Generate man page and shell completions
+    GenerateDocs {
+        /// Directory where documentation will be output
+        #[arg(long, default_value = "docs")]
+        output_dir: String,
+    },
+
+    /// Run development tasks (shorthand for common operations)
+    Dev {
+        /// Which development task to run
+        #[arg(default_value = "all")]
+        #[arg(value_enum)]
+        task: DevTask,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum DevTask {
+    /// Run all checks (clippy, fmt, test)
+    All,
+    /// Run cargo check
     Check,
-    /// Run cargo test.
-    Test,
-    /// Run cargo clippy.
+    /// Run cargo clippy
     Clippy,
-    /// Run cargo fmt --check.
-    FmtCheck,
+    /// Run cargo fmt
+    Fmt,
+    /// Run tests
+    Test,
 }
 
 fn main() -> Result<()> {
     let args = XtaskArgs::parse();
 
     match args.command {
-        Commands::GenerateDocs => generate_docs().context("Failed to generate docs"),
-        Commands::Check => run_cargo("check", &[]).context("cargo check failed"),
-        Commands::Test => run_cargo("test", &[]).context("cargo test failed"),
-        Commands::Clippy => {
-            run_cargo("clippy", &["--", "-D", "warnings"]).context("cargo clippy failed")
+        Commands::GenerateDocs { output_dir } => {
+            generate_docs(&output_dir).context("Failed to generate docs")
         }
-        Commands::FmtCheck => run_cargo("fmt", &["--", "--check"]).context("cargo fmt failed"),
+        Commands::Dev { task } => match task {
+            DevTask::All => {
+                run_cargo("fmt", &["--all"]).context("cargo fmt failed")?;
+                run_cargo("clippy", &["--all-targets", "--", "-D", "warnings"])
+                    .context("cargo clippy failed")?;
+                run_cargo("test", &["--all"]).context("cargo test failed")
+            }
+            DevTask::Check => run_cargo("check", &["--all"]).context("cargo check failed"),
+            DevTask::Clippy => run_cargo("clippy", &["--all-targets", "--", "-D", "warnings"])
+                .context("cargo clippy failed"),
+            DevTask::Fmt => run_cargo("fmt", &["--all"]).context("cargo fmt failed"),
+            DevTask::Test => run_cargo("test", &["--all"]).context("cargo test failed"),
+        },
     }
 }
 
@@ -52,8 +80,9 @@ fn run_cargo(command: &str, args: &[&str]) -> Result<()> {
     let mut cmd = Command::new(cargo);
     cmd.arg(command);
     cmd.args(args);
-    // Run in the workspace root
     cmd.current_dir(project_root());
+
+    println!("Running: cargo {command} {}", args.join(" "));
 
     let status = cmd
         .status()
@@ -73,9 +102,15 @@ fn project_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn generate_docs() -> Result<()> {
+/// Generate documentation files (man page and shell completions)
+fn generate_docs(output_dir: &str) -> Result<()> {
     let root_dir = project_root();
-    let docs_dir = root_dir.join("docs");
+    let docs_dir = if Path::new(output_dir).is_absolute() {
+        PathBuf::from(output_dir)
+    } else {
+        root_dir.join(output_dir)
+    };
+
     let man_dir = docs_dir.join("man");
     let completions_dir = docs_dir.join("completions");
 
@@ -93,10 +128,7 @@ fn generate_docs() -> Result<()> {
     // --- Generate Shell Completions ---
     generate_completions(&cmd, &completions_dir)?;
 
-    println!(
-        "Successfully generated man page and completions in: {}", // Keep display
-        docs_dir.display()
-    );
+    println!("✓ Documentation generated in: {}", docs_dir.display());
     Ok(())
 }
 

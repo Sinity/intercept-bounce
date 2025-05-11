@@ -37,7 +37,8 @@ opentelemetry-otlp = { version = "0.16", features = ["grpc-tonic", "metrics"] }
 tracing-opentelemetry = "0.24"
 
 [features]
-default = []
+default = ["clap"]
+clap = []
 
 [build-dependencies]
 vergen = { version = "8", features = ["build", "git", "gitcl"] }

@@ -44,39 +44,45 @@
           buildInputs = [pkgs.openssl];
 
           preBuild = ''
-            echo "Generating documentation with xtask..."
-            cargo run --package xtask -- generate-docs
-            echo "Documentation generation complete. Listing generated files:"
-            ls -l docs/man || echo "docs/man not found or ls failed"
-            ls -l docs/completions || echo "docs/completions not found or ls failed"
+            echo "Explicitly generating documentation..."
+            cargo run --package xtask --bin xtask -- generate-docs
+            echo "Documentation generation complete."
           '';
 
           postInstall = ''
-            echo "Starting postInstall phase..."
+            # Find and install the man page
+            if [ -f "$out/share/doc/intercept-bounce/man/intercept-bounce.1" ]; then
+              installManPage "$out/share/doc/intercept-bounce/man/intercept-bounce.1"
+            elif [ -f "docs/man/intercept-bounce.1" ]; then
+              installManPage "docs/man/intercept-bounce.1"
+            fi
 
-            echo "Installing man page..."
-            installManPage docs/man/intercept-bounce.1
+            # Install shell completions
+            for shell in bash zsh fish; do
+              file_name="intercept-bounce.$shell"
+              if [ -f "$out/share/doc/intercept-bounce/completions/$file_name" ]; then
+                installShellCompletion --$shell "$out/share/doc/intercept-bounce/completions/$file_name"
+              elif [ -f "docs/completions/$file_name" ]; then
+                installShellCompletion --$shell "docs/completions/$file_name"
+              fi
+            done
 
-            echo "Installing Bash completion..."
-            installShellCompletion --bash docs/completions/intercept-bounce.bash
-            echo "Installing Zsh completion..."
-            installShellCompletion --zsh docs/completions/intercept-bounce.zsh
-            echo "Installing Fish completion..."
-            installShellCompletion --fish docs/completions/intercept-bounce.fish
+            # Install additional shell completions manually
+            for shell in powershell nushell elvish; do
+              ext=$([ "$shell" = "powershell" ] && echo "ps1" || [ "$shell" = "nushell" ] && echo "nu" || echo "elv")
+              file_name="intercept-bounce.$ext"
+              target_dir="$out/share/$shell/completions"
 
-            echo "Installing PowerShell completion manually..."
-            mkdir -p $out/share/powershell/completions
-            cp docs/completions/intercept-bounce.ps1 $out/share/powershell/completions/
+              if [ -f "$out/share/doc/intercept-bounce/completions/$file_name" ] || [ -f "docs/completions/$file_name" ]; then
+                mkdir -p "$target_dir"
 
-            echo "Installing Nushell completion manually..."
-            mkdir -p $out/share/nushell/completions
-            cp docs/completions/intercept-bounce.nu $out/share/nushell/completions/
-
-            echo "Installing Elvish completion manually..."
-            mkdir -p $out/share/elvish/completions
-            cp docs/completions/intercept-bounce.elv $out/share/elvish/completions/
-
-            echo "postInstall phase complete."
+                if [ -f "$out/share/doc/intercept-bounce/completions/$file_name" ]; then
+                  cp "$out/share/doc/intercept-bounce/completions/$file_name" "$target_dir/"
+                elif [ -f "docs/completions/$file_name" ]; then
+                  cp "docs/completions/$file_name" "$target_dir/"
+                fi
+              fi
+            done
           '';
 
           meta = with pkgs.lib; {
@@ -118,7 +124,7 @@
         commands = [
           {
             name = "xt";
-            command = "cargo run --package xtask -- \"$@\"";
+            command = "cargo run --package xtask --bin xtask -- \"$@\"";
             help = "Run xtask helper";
           }
           {
@@ -160,8 +166,12 @@
 
         motd = ''
           🛠  intercept-bounce dev shell
-          Build:  cargo build [--release]    Tests: cargo nextest run (alias: nt)
-          CI workflow: .github/workflows/ci.yml
+
+          Build:          cargo build [--release]
+          Tests:          cargo nextest run (alias: nt)
+          Documentation:  cargo xtask docs
+          Development:    ./dev.sh [command]
+          CI workflow:    .github/workflows/ci.yml
         '';
       };
 
