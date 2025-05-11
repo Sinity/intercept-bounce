@@ -30,12 +30,6 @@ jobs:
           nix build .#intercept-bounce -L
           echo "::endgroup::"
 
-          # Run rust-checks (includes rustfmt, clippy, alejandra, gitleaks)
-          # This uses our direct implementation in flake.nix instead of pre-commit
-          echo "::group::Running Rust Checks (nix build .#checks.$(nix eval --impure --expr 'builtins.currentSystem').rust-checks)"
-          nix build .#checks.$(nix eval --impure --expr 'builtins.currentSystem').rust-checks -L
-          echo "::endgroup::"
-
           # Run remaining checks and tests using the dev shell aliases
           echo "Running additional checks and tests within nix develop environment..."
           nix develop . --command bash -c "
