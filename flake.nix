@@ -189,21 +189,39 @@
           ];
           phases = ["unpackPhase" "checkPhase"];
           checkPhase = ''
-            set -e
+            # set -e # Temporarily disable to manually check exit codes for better error messages
+            set +e # Allow checking exit codes manually
             cd $src
 
             echo "Running rustfmt check..."
             cargo fmt --all -- --check
+            if [ $? -ne 0 ]; then
+              echo "ERROR: cargo fmt check failed"
+              exit 1
+            fi
 
             echo "Running clippy check..."
             cargo clippy --workspace --all-targets -- -D warnings
+            if [ $? -ne 0 ]; then
+              echo "ERROR: cargo clippy check failed"
+              exit 1
+            fi
 
             echo "Running Nix formatting check with alejandra..."
             alejandra --check .
+            if [ $? -ne 0 ]; then
+              echo "ERROR: alejandra check failed"
+              exit 1
+            fi
 
             echo "Running secrets scan with gitleaks..."
             gitleaks protect --verbose --redact --source=.
+            if [ $? -ne 0 ]; then
+              echo "ERROR: gitleaks protect failed"
+              exit 1
+            fi
 
+            set -e # Re-enable failing on error for the final touch command
             # All checks passed, create output marker
             touch $out
           '';
