@@ -25,14 +25,8 @@
       pname = "intercept-bounce";
       cargoToml = pkgs.lib.importTOML ./Cargo.toml;
       version = cargoToml.package.version;
-
-      # Fetch pre-commit-hooks repository source
-      preCommitHooksSrc = pkgs.fetchFromGitHub {
-        owner = "pre-commit";
-        repo = "pre-commit-hooks";
-        rev = "v5.0.0";
-        sha256 = "sha256-BYNi/xtdichqsn55hqr1MSFwWpH+7cCbLfqmpn9cxto=";
-      };
+      # This section was for the previous pre-commit setup
+      # Keeping just the package name definition
     in {
       packages = {
         ${pname} = pkgs.rustPlatform.buildRustPackage {
@@ -172,64 +166,36 @@
       };
 
       checks = {
-        pre-commit-check = pkgs.stdenv.mkDerivation {
-          name = "pre-commit-check";
+        # Simple direct check that doesn't rely on pre-commit
+        rust-checks = pkgs.stdenv.mkDerivation {
+          name = "rust-code-checks";
           src = self;
-          buildInputs = [self.devShells.${system}.default];
-          phases = ["unpackPhase" "runPhase"];
-          runPhase = ''
-            set -x # Enable command tracing
+          nativeBuildInputs = with pkgs; [
+            (rust-bin.nightly.latest.default.override {
+              extensions = ["rust-src" "clippy" "rustfmt"];
+            })
+            alejandra
+            gitleaks
+          ];
+          phases = ["unpackPhase" "checkPhase"];
+          checkPhase = ''
+            set -e
+            cd $src
 
-            echo "Running pre-commit checks in $PWD"
-            ls -la
+            echo "Running rustfmt check..."
+            cargo fmt --all -- --check
 
-            if [ ! -d ".git" ]; then
-              echo "Initializing a temporary Git repository for pre-commit..."
-              git init -b main
-              git config user.email "ci@example.com"
-              git config user.name "CI Bot"
-              git add .
-            fi
+            echo "Running clippy check..."
+            cargo clippy --workspace --all-targets -- -D warnings
 
-            if [ ! -f .pre-commit-config.yaml ]; then
-              echo "ERROR: .pre-commit-config.yaml not found in $PWD"
-              exit 1
-            fi
+            echo "Running Nix formatting check with alejandra..."
+            alejandra --check .
 
-            export PRE_COMMIT_HOME="$TMPDIR/pre-commit-cache"
-            mkdir -p "$PRE_COMMIT_HOME"
-            echo "PRE_COMMIT_HOME set to $PRE_COMMIT_HOME"
+            echo "Running secrets scan with gitleaks..."
+            gitleaks protect --verbose --redact --source=.
 
-            # Create a CI-specific pre-commit config
-            cp .pre-commit-config.yaml ci-pre-commit-config.yaml
-
-            # Make the fetched pre-commit-hooks source path available to yq
-            export PRE_COMMIT_HOOKS_SRC="${preCommitHooksSrc}"
-
-            # Modify pre-commit-hooks repo to use the local Nix-fetched source
-            yq -i '.repos[] |= select(.repo == "https://github.com/pre-commit/pre-commit-hooks").repo = env(PRE_COMMIT_HOOKS_SRC)' ci-pre-commit-config.yaml
-
-            # Modify gitleaks hook to be a local system hook
-            # 1. Delete the remote gitleaks repo entry
-            yq -i 'del(.repos[] | select(.repo == "https://github.com/gitleaks/gitleaks"))' ci-pre-commit-config.yaml
-            # 2. Add a new local gitleaks entry that uses the gitleaks binary from PATH
-            cat >> ci-pre-commit-config.yaml << EOF
-            - repo: local
-              hooks:
-                - id: gitleaks
-                  name: Detect hardcoded secrets (gitleaks - system)
-                  entry: gitleaks protect --verbose --redact --source=.
-                  language: system
-                  pass_filenames: false
-                  types: [text]
-            EOF
-
-            echo "--- Using CI pre-commit config: ---"
-            cat ci-pre-commit-config.yaml
-            echo "---------------------------------"
-
-            pre-commit run --config ci-pre-commit-config.yaml --all-files --show-diff-on-failure --verbose
-            touch $out # Signal success
+            # All checks passed, create output marker
+            touch $out
           '';
         };
       };

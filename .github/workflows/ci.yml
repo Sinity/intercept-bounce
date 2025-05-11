@@ -30,10 +30,10 @@ jobs:
           nix build .#intercept-bounce -L
           echo "::endgroup::"
 
-          # Run all pre-commit checks (includes formatting, clippy, gitleaks, etc.)
-          # The flake reference .#pre-commit-check will resolve to the system-specific check
-          echo "::group::Running Pre-commit Checks (nix flake check)"
-          nix flake check . -L # Run all checks for the current system
+          # Run rust-checks (includes rustfmt, clippy, alejandra, gitleaks)
+          # This uses our direct implementation in flake.nix instead of pre-commit
+          echo "::group::Running Rust Checks (nix build .#checks.$(nix eval --impure --expr 'builtins.currentSystem').rust-checks)"
+          nix build .#checks.$(nix eval --impure --expr 'builtins.currentSystem').rust-checks -L
           echo "::endgroup::"
 
           # Run remaining checks and tests using the dev shell aliases
