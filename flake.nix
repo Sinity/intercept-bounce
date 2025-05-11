@@ -175,7 +175,6 @@
         pre-commit-check = pkgs.stdenv.mkDerivation {
           name = "pre-commit-check";
           src = self;
-          # buildInputs includes tools from the devShell: pre-commit, git, yq-go, gitleaks
           buildInputs = [self.devShells.${system}.default];
           phases = ["unpackPhase" "runPhase"];
           runPhase = ''
@@ -208,25 +207,22 @@
             export PRE_COMMIT_HOOKS_SRC="${preCommitHooksSrc}"
 
             # Modify pre-commit-hooks repo to use the local Nix-fetched source
-            yq -i '.repos[] |= (if .repo == "https://github.com/pre-commit/pre-commit-hooks" then .repo = strenv(PRE_COMMIT_HOOKS_SRC) else . end)' ci-pre-commit-config.yaml
+            yq -i '.repos[] |= select(.repo == "https://github.com/pre-commit/pre-commit-hooks").repo = env(PRE_COMMIT_HOOKS_SRC)' ci-pre-commit-config.yaml
 
             # Modify gitleaks hook to be a local system hook
             # 1. Delete the remote gitleaks repo entry
             yq -i 'del(.repos[] | select(.repo == "https://github.com/gitleaks/gitleaks"))' ci-pre-commit-config.yaml
             # 2. Add a new local gitleaks entry that uses the gitleaks binary from PATH
-            yq -i '.repos += {
-              "repo": "local",
-              "hooks": [
-                {
-                  "id": "gitleaks",
-                  "name": "Detect hardcoded secrets (gitleaks - system)",
-                  "entry": "gitleaks protect --verbose --redact --source=.",
-                  "language": "system",
-                  "pass_filenames": false,
-                  "types": ["text"]
-                }
-              ]
-            }' ci-pre-commit-config.yaml
+            cat >> ci-pre-commit-config.yaml << EOF
+            - repo: local
+              hooks:
+                - id: gitleaks
+                  name: Detect hardcoded secrets (gitleaks - system)
+                  entry: gitleaks protect --verbose --redact --source=.
+                  language: system
+                  pass_filenames: false
+                  types: [text]
+            EOF
 
             echo "--- Using CI pre-commit config: ---"
             cat ci-pre-commit-config.yaml
