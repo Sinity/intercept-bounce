@@ -30,10 +30,27 @@ jobs:
           nix build .#intercept-bounce -L
           echo "::endgroup::"
 
-          # Run remaining checks and tests using the dev shell aliases
-          echo "Running additional checks and tests within nix develop environment..."
+          # Run all checks and tests using the dev shell aliases and direct commands
+          echo "Running all checks and tests within nix develop environment..."
           nix develop . --command bash -c "
             set -ex
+
+            echo '::group::Formatting Check (cargo fmt)'
+            cargo fmt --all -- --check
+            echo '::endgroup::'
+
+            echo '::group::Linting (cargo clippy)'
+            cargo clippy --workspace --all-targets -- -D warnings
+            echo '::endgroup::'
+
+            echo '::group::Nix Formatting Check (alejandra)'
+            alejandra --check .
+            echo '::endgroup::'
+
+            echo '::group::Secrets Scan (gitleaks)'
+            # Using the command previously in the flake's checkPhase
+            gitleaks protect --verbose --redact --source=.
+            echo '::endgroup::'
 
             echo '::group::Dependency Audit (ca)'
             ca
