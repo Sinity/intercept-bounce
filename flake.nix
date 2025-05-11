@@ -192,7 +192,7 @@
             alejandra
             gitleaks
           ];
-          phases = ["unpackPhase" "checkPhase"];
+          phases = ["unpackPhase" "checkPhase"]; # Explicitly listing phases
           checkPhase = ''
             echo "DEBUG: checkPhase starting now. SHELL is $SHELL"
             set -x # Trace all commands
@@ -202,24 +202,19 @@
             echo "DEBUG: Current environment variables:"
             env
 
-            echo "DEBUG: Current directory before cd:"
+            echo "DEBUG: Current directory at start of checkPhase:"
             pwd
 
-            echo "DEBUG: Listing source directory ($src):"
-            ls -lah "$src"
-
-            echo "DEBUG: Changing to source directory: cd $src"
-            cd "$src"
-            if [ $? -ne 0 ]; then
-              echo "DEBUG: ERROR cd $src FAILED"
-              exit 1 # Fail early if cd fails
-            fi
-
-            echo "DEBUG: Current directory after cd:"
-            pwd
-
-            echo "DEBUG: Listing current directory contents:"
+            echo "DEBUG: Listing current directory contents (should be unpacked source):"
             ls -lah .
+
+            # Check if Cargo.toml exists in the current directory
+            if [ ! -f ./Cargo.toml ]; then
+              echo "DEBUG: ERROR: Cargo.toml not found in current directory!"
+              echo "DEBUG: Listing $src (original source) for comparison:"
+              ls -lah "$src"
+              exit 1
+            fi
 
             echo "DEBUG: Attempting to locate cargo:"
             which cargo
