@@ -19,7 +19,7 @@ fn check_sequence(
 ) -> Vec<EventInfo> {
     events
         .iter()
-        .map(|ev| filter.check_event(ev, debounce_time))
+        .map(|ev| filter.check_event(ev, debounce_time, false))
         .collect()
 }
 
@@ -274,6 +274,23 @@ fn window_zero_passes_all_key_events() {
     // e4 passes
     assert!(!results[3].is_bounce);
     assert_eq!(results[3].last_passed_us, Some(2));
+}
+
+#[test]
+fn ignores_configured_keys() {
+    let mut filter = BounceFilter::new(0);
+    let debounce = DEBOUNCE_TIME;
+    let event_press = key_ev(0, KEY_A, 1);
+    let event_bounce = key_ev(1, KEY_A, 1);
+
+    let first = filter.check_event(&event_press, debounce, true);
+    assert!(!first.is_bounce, "ignored key should pass initial event");
+
+    let second = filter.check_event(&event_bounce, debounce, true);
+    assert!(
+        !second.is_bounce,
+        "ignored key should not be considered a bounce even inside window"
+    );
 }
 
 #[test]

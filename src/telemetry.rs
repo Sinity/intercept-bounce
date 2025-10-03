@@ -89,6 +89,7 @@ pub fn init_tracing(cfg: &Config) -> Option<Meter> {
         verbose = cfg.verbose,
         log_filter = %cfg.log_filter,
         otel_endpoint = %cfg.otel_endpoint.as_deref().unwrap_or("<None>"),
+        ignored_keys = ?cfg.ignored_keys(),
         "Configuration loaded");
 
     otel_meter

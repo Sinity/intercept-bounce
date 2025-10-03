@@ -80,12 +80,14 @@ fn stats_basic_counts() {
     assert_eq!(key_a_stats.press.total_processed, 2); // ev1, ev2
     assert_eq!(key_a_stats.press.passed_count, 1); // ev1
     assert_eq!(key_a_stats.press.dropped_count, 1); // ev2 dropped
-    assert_eq!(key_a_stats.press.timings_us, vec![1000]);
+    assert_eq!(key_a_stats.press.bounce_summary.count(), 1);
+    assert_eq!(key_a_stats.press.bounce_samples.to_vec(), vec![1000]);
 
     assert_eq!(key_a_stats.release.total_processed, 2); // ev3, ev4
     assert_eq!(key_a_stats.release.passed_count, 1); // ev3
     assert_eq!(key_a_stats.release.dropped_count, 1); // ev4 dropped
-    assert_eq!(key_a_stats.release.timings_us, vec![1000]);
+    assert_eq!(key_a_stats.release.bounce_summary.count(), 1);
+    assert_eq!(key_a_stats.release.bounce_samples.to_vec(), vec![1000]);
 
     assert_eq!(key_a_stats.repeat.total_processed, 0);
     assert_eq!(key_a_stats.repeat.passed_count, 0);
@@ -154,17 +156,19 @@ fn stats_near_miss_default_threshold() {
     // Only ev2 should be a near miss (diff 10500us <= 100000us threshold).
     // ev3's diff (110000us) is >= 100000us threshold.
     assert_eq!(
-        near_misses_stats.timings_us.len(),
+        near_misses_stats.summary.count(),
         1,
         "Expected exactly 1 near miss"
     );
     assert_eq!(
-        near_misses_stats.timings_us[0], near_miss_diff1,
+        near_misses_stats.samples.to_vec(),
+        vec![near_miss_diff1],
         "Expected near miss timing for ev2"
     ); // ev4 is not a near miss relative to ev3.
 
     // Check bounce stats.
-    assert_eq!(key_a_stats.press.timings_us, vec![bounce_diff]);
+    assert_eq!(key_a_stats.press.bounce_summary.count(), 1);
+    assert_eq!(key_a_stats.press.bounce_samples.to_vec(), vec![bounce_diff]);
 }
 
 #[test]
@@ -208,18 +212,15 @@ fn stats_near_miss_custom_threshold() {
     // ev2 (diff 11000us) and ev3 (diff 40000us) are within the 50000us threshold.
     // ev4 (diff 60000us) is outside.
     assert_eq!(
-        near_misses_stats.timings_us.len(),
+        near_misses_stats.summary.count(),
         2,
         "Expected 2 near misses"
     );
     assert_eq!(
-        near_misses_stats.timings_us[0], diff1,
-        "Expected near miss timing for ev2"
-    ); // Diff between ev2 and ev1
-    assert_eq!(
-        near_misses_stats.timings_us[1], diff2,
-        "Expected near miss timing for ev3"
-    ); // Diff between ev3 and ev2
+        near_misses_stats.samples.to_vec(),
+        vec![diff1, diff2],
+        "Expected near miss timings for ev2 and ev3"
+    ); // Diff between ev2 and ev1, and ev3 and ev2
 }
 
 #[test]
@@ -273,6 +274,7 @@ fn stats_json_output_structure() {
         "info".to_string(),         // log_filter
         None,                       // otel_endpoint
         0,
+        Vec::new(),
     );
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);
@@ -336,6 +338,9 @@ fn stats_json_output_structure() {
             < f64::EPSILON
     );
     assert_eq!(detailed_stats["press"]["timings_us"], json!([500])); // Bounce timing
+    assert_eq!(detailed_stats["press"]["min_us"], 500);
+    assert_eq!(detailed_stats["press"]["max_us"], 500);
+    assert_eq!(detailed_stats["press"]["avg_us"], 500);
 
     // Check bounce histogram for KEY_A Press
     let bounce_hist = &detailed_stats["press"]["bounce_histogram"];
@@ -359,6 +364,9 @@ fn stats_json_output_structure() {
     assert_eq!(detailed_stats["release"]["dropped_count"], 0);
     assert!((detailed_stats["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
+    assert!(detailed_stats["release"]["min_us"].is_null());
+    assert!(detailed_stats["release"]["max_us"].is_null());
+    assert!(detailed_stats["release"]["avg_us"].is_null());
     assert_eq!(detailed_stats["release"]["bounce_histogram"]["count"], 0);
 
     assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
@@ -366,6 +374,9 @@ fn stats_json_output_structure() {
     assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
     assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
+    assert!(detailed_stats["repeat"]["min_us"].is_null());
+    assert!(detailed_stats["repeat"]["max_us"].is_null());
+    assert!(detailed_stats["repeat"]["avg_us"].is_null());
     assert_eq!(detailed_stats["repeat"]["bounce_histogram"]["count"], 0);
 
     // Check per_key_near_miss_stats array
@@ -384,6 +395,9 @@ fn stats_json_output_structure() {
         key_a_near_miss["timings_us"],
         json!([expected_near_miss_diff])
     );
+    assert_eq!(key_a_near_miss["min_us"], expected_near_miss_diff);
+    assert_eq!(key_a_near_miss["max_us"], expected_near_miss_diff);
+    assert_eq!(key_a_near_miss["avg_us"], expected_near_miss_diff);
 
     // Check near miss histogram for KEY_A Press
     let near_miss_hist = &key_a_near_miss["near_miss_histogram"];
@@ -775,7 +789,7 @@ fn stats_only_passed() {
     // ev3's diff relative to ev1 is 110000us, which is >= near_miss_threshold (100000us).
     // Therefore, ev3 is NOT a near miss.
     assert_eq!(
-        near_misses_stats.timings_us.len(),
+        near_misses_stats.summary.count(),
         0,
         "Expected 0 near misses"
     );
@@ -826,7 +840,11 @@ fn stats_only_dropped() {
     assert_eq!(key_b_stats.repeat.passed_count, 0);
     assert_eq!(key_b_stats.repeat.dropped_count, 0);
 
-    assert_eq!(key_b_stats.press.timings_us, vec![diff2, diff3]);
+    assert_eq!(key_b_stats.press.bounce_summary.count(), 2);
+    assert_eq!(
+        key_b_stats.press.bounce_samples.to_vec(),
+        vec![diff2, diff3]
+    );
     assert_eq!(key_b_stats.press.bounce_histogram.count, 2);
     // 100 us = 0.1 ms -> <1ms bucket (0)
     // 200 us = 0.2 ms -> <1ms bucket (0)
@@ -857,7 +875,7 @@ fn stats_drop_rate_edge_cases() {
     let key_c_stats = &mut stats.per_key_stats[KEY_C as usize].press;
     key_c_stats.total_processed = 1;
     key_c_stats.dropped_count = 1;
-    // No passed_count, no timings_us, no histogram entry for this simulated case
+    // No passed_count, no bounce samples, no histogram entry for this simulated case
 
     // Key D Press: 0 Processed -> 0% drop rate
     // Default state is already 0 processed, 0 dropped

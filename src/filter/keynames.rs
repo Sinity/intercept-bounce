@@ -113,6 +113,29 @@ pub fn get_key_name(code: u16) -> &'static str {
     KEY_NAMES.get(&code).copied().unwrap_or("UNKNOWN")
 }
 
+/// Resolve a key identifier (numeric code or symbolic name) to a key code.
+/// The lookup is case-insensitive for symbolic names.
+#[inline]
+pub fn resolve_key_code(identifier: &str) -> Option<u16> {
+    let trimmed = identifier.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(code) = trimmed.parse::<u16>() {
+        return Some(code);
+    }
+
+    let normalized = trimmed.to_ascii_uppercase();
+    KEY_NAMES.entries().find_map(|(code, name)| {
+        if name == &normalized {
+            Some(*code)
+        } else {
+            None
+        }
+    })
+}
+
 #[inline]
 pub fn get_event_type_name(type_: u16) -> &'static str {
     match i32::from(type_) {

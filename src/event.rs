@@ -5,7 +5,7 @@ pub use input_linux_sys::input_event;
 use libc::{self, c_ulong, ioctl};
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind};
-use std::mem::size_of;
+use std::mem::{size_of, MaybeUninit};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
 use tracing::warn;
@@ -17,18 +17,14 @@ use tracing::warn;
 /// Returns `Err(ErrorKind::Interrupted)` if the read is interrupted by a signal.
 /// Returns `Err` on other I/O errors or if EOF is hit *during* the read of an event.
 pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
-    let mut buf = vec![0u8; size_of::<input_event>()];
+    let mut event = MaybeUninit::<input_event>::uninit();
     let mut bytes_read = 0;
-    let total_bytes = buf.len();
+    let total_bytes = size_of::<input_event>();
 
     while bytes_read < total_bytes {
-        let result = unsafe {
-            libc::read(
-                fd,
-                buf.as_mut_ptr().add(bytes_read) as *mut libc::c_void,
-                total_bytes - bytes_read,
-            )
-        };
+        let remaining = total_bytes - bytes_read;
+        let dest = unsafe { (event.as_mut_ptr() as *mut u8).add(bytes_read) };
+        let result = unsafe { libc::read(fd, dest as *mut libc::c_void, remaining) };
 
         match result {
             -1 => {
@@ -54,8 +50,7 @@ pub fn read_event_raw(fd: RawFd) -> io::Result<Option<input_event>> {
         }
     }
 
-    let ptr = buf.as_ptr();
-    let event: input_event = unsafe { std::ptr::read_unaligned(ptr as *const _) };
+    let event = unsafe { event.assume_init() };
     Ok(Some(event))
 }
 

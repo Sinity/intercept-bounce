@@ -1,6 +1,4 @@
 // fuzz/fuzz_targets/fuzz_core_filter.rs
-#![no_main]
-
 use input_linux_sys::input_event;
 use intercept_bounce::filter::BounceFilter;
 use libfuzzer_sys::fuzz_target;
@@ -43,7 +41,7 @@ fuzz_target!(|data: &[u8]| {
             // is to find panics, crashes, hangs, or memory issues within check_event
             // when processing potentially malformed or unexpected event data.
             // The function now returns an EventInfo struct.
-            let _event_info = filter.check_event(&event, debounce_time);
+            let _event_info = filter.check_event(&event, debounce_time, false);
 
             // Optional: Add basic assertions if specific invariants should hold even with garbage input.
             // For example, ensure runtime calculation doesn't panic.
@@ -55,3 +53,7 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 });
+
+fn main() {
+    panic!("fuzz target should be executed with `cargo fuzz run fuzz_core_filter`.");
+}

@@ -1,5 +1,3 @@
-#![no_main]
-
 use arbitrary::{Arbitrary, Unstructured};
 use input_linux_sys::input_event;
 use intercept_bounce::{config::Config, filter::stats::StatsCollector, logger::EventInfo};
@@ -74,6 +72,7 @@ fuzz_target!(|data: &[u8]| {
         "info".to_string(),
         None, // otel_endpoint is not used by StatsCollector, provide None
         0,
+        Vec::new(),
     );
 
     // Create a StatsCollector
@@ -87,3 +86,7 @@ fuzz_target!(|data: &[u8]| {
     // For example, check counts are non-negative, timings are within reasonable bounds, etc.
     // This requires more complex assertions and might be added later.
 });
+
+fn main() {
+    panic!("fuzz target should be executed with `cargo fuzz run fuzz_target_stats`.");
+}

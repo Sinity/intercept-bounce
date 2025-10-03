@@ -1,147 +1,84 @@
-use anyhow::{Context, Result};
-use clap::{CommandFactory, Parser};
-use clap_complete::{generate, Shell};
-use clap_complete_nushell::Nushell;
-use clap_mangen::Man;
-use intercept_bounce::cli::Args;
+.TH "INTERCEPT-BOUNCE" 1 "October 03, 2025" "0.1.0" "User Commands"
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH intercept-bounce 1  "intercept-bounce 0.9.0"
+.SH NAME
+intercept\-bounce \- An Interception Tools filter to eliminate keyboard chatter (switch bounce).
+.SH SYNOPSIS
+\fBintercept\-bounce\fR [\fB\-t\fR|\fB\-\-debounce\-time\fR] [\fB\-\-near\-miss\-threshold\-time\fR] [\fB\-\-log\-interval\fR] [\fB\-\-log\-all\-events\fR] [\fB\-\-log\-bounces\fR] [\fB\-\-list\-devices\fR] [\fB\-\-stats\-json\fR] [\fB\-\-verbose\fR] [\fB\-\-ring\-buffer\-size\fR] [\fB\-\-ignore\-key\fR] [\fB\-\-otel\-endpoint\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
+.SH DESCRIPTION
+An Interception Tools filter to eliminate keyboard chatter (switch bounce).
+Reads Linux input events from stdin, filters rapid duplicate key events, and writes the filtered events to stdout.
+Statistics are printed to stderr on exit.
+.PP
+EXAMPLES:
+# Basic filtering (15ms window):
+sudo sh \-c \*(Aqintercept \-g /dev/input/by\-id/your\-keyboard\-event\-device | intercept\-bounce \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-keyboard\-event\-device\*(Aq
+.PP
+# Filtering with bounce logging:
+sudo sh \-c \*(Aqintercept \-g ... | intercept\-bounce \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...\*(Aq
+.PP
+# Debugging \- log all events (no filtering):
+sudo sh \-c \*(Aqintercept \-g ... | intercept\-bounce \-\-debounce\-time 0ms \-\-log\-all\-events | uinput \-d ...\*(Aq
+.PP
+# Periodic stats dump:
+sudo sh \-c \*(Aqintercept \-g ... | intercept\-bounce \-\-log\-interval 60s | uinput \-d ...\*(Aq
+.PP
+# udevmon integration (YAML):
+\- JOB: "intercept \-g $DEVNODE | intercept\-bounce | uinput \-d $DEVNODE"
+DEVICE:
+LINK: "/dev/input/by\-id/usb\-Your_Keyboard_Name\-event\-kbd" # Replace this!
+.PP
+See README for more details and advanced usage.
+.SH OPTIONS
+.TP
+\fB\-t\fR, \fB\-\-debounce\-time\fR \fI<DEBOUNCE_TIME>\fR [default: 25ms]
+Debounce time threshold (milliseconds). Duplicate key events (same keycode and value) occurring faster than this threshold are discarded. (Default: 25ms). The "value" refers to the state of the key: `1` for press, `0` for release, `2` for repeat. Only press and release events are debounced. Accepts values like "10ms", "0.5s"
+.TP
+\fB\-\-near\-miss\-threshold\-time\fR \fI<NEAR_MISS_THRESHOLD_TIME>\fR [default: 100ms]
+Threshold for logging "near\-miss" events. Passed key events occurring within this time of the previous passed event are logged/counted. (Default: 100ms) Accepts values like "100ms", "0.1s"
+.TP
+\fB\-\-log\-interval\fR \fI<LOG_INTERVAL>\fR [default: 15m]
+Periodically dump statistics to stderr. (Default: 15m). Set to "0" to disable periodic dumps. Accepts values like "60s", "15m", "1h"
+.TP
+\fB\-\-log\-all\-events\fR
+Log details of *every* incoming event to stderr ([PASS] or [DROP])
+.TP
+\fB\-\-log\-bounces\fR
+Log details of *only dropped* (bounced) key events to stderr
+.TP
+\fB\-\-list\-devices\fR
+List available input devices and their capabilities (requires root)
+.TP
+\fB\-\-stats\-json\fR
+Output statistics as JSON format to stderr on exit and periodic dump
+.TP
+\fB\-\-verbose\fR
+Enable verbose logging (internal state, thread startup, etc)
+.TP
+\fB\-\-ring\-buffer\-size\fR \fI<RING_BUFFER_SIZE>\fR [default: 0]
+Size of the ring buffer for storing recently passed events (for debugging). Set to 0 to disable. (Default: 0)
+.TP
+\fB\-\-ignore\-key\fR \fI<KEY>\fR
+Key codes or names to ignore (never debounce). Example: `\-\-ignore\-key 114` or `\-\-ignore\-key KEY_VOLUMEDOWN`
+.TP
+\fB\-\-otel\-endpoint\fR \fI<OTEL_ENDPOINT>\fR
+OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317")
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH VERSION
+v0.9.0
+.SH AUTHORS
+sinity <ezo.dev@gmail.com>
+.SH DEBOUNCING
 
-use std::{
-    env,
-    fs,
-    io::Write, // Moved into the grouped std import
-    path::{Path, PathBuf},
-    process::Command,
-};
-
-/// Simple task runner to help with development tasks
-#[derive(Parser, Debug)]
-#[command(author, version, about)]
-struct XtaskArgs {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(clap::Subcommand, Debug)]
-enum Commands {
-    /// Generate man page and shell completions
-    GenerateDocs {
-        /// Directory where documentation will be output
-        #[arg(long, default_value = "docs")]
-        output_dir: String,
-    },
-
-    /// Run development tasks (shorthand for common operations)
-    Dev {
-        /// Which development task to run
-        #[arg(default_value = "all")]
-        #[arg(value_enum)]
-        task: DevTask,
-    },
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum DevTask {
-    /// Run all checks (clippy, fmt, test)
-    All,
-    /// Run cargo check
-    Check,
-    /// Run cargo clippy
-    Clippy,
-    /// Run cargo fmt
-    Fmt,
-    /// Run tests
-    Test,
-}
-
-fn main() -> Result<()> {
-    let args = XtaskArgs::parse();
-
-    match args.command {
-        Commands::GenerateDocs { output_dir } => {
-            generate_docs(&output_dir).context("Failed to generate docs")
-        }
-        Commands::Dev { task } => match task {
-            DevTask::All => {
-                run_cargo("fmt", &["--all"]).context("cargo fmt failed")?;
-                run_cargo("clippy", &["--all-targets", "--", "-D", "warnings"])
-                    .context("cargo clippy failed")?;
-                run_cargo("test", &["--all"]).context("cargo test failed")
-            }
-            DevTask::Check => run_cargo("check", &["--all"]).context("cargo check failed"),
-            DevTask::Clippy => run_cargo("clippy", &["--all-targets", "--", "-D", "warnings"])
-                .context("cargo clippy failed"),
-            DevTask::Fmt => run_cargo("fmt", &["--all"]).context("cargo fmt failed"),
-            DevTask::Test => run_cargo("test", &["--all"]).context("cargo test failed"),
-        },
-    }
-}
-
-fn run_cargo(command: &str, args: &[&str]) -> Result<()> {
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let mut cmd = Command::new(cargo);
-    cmd.arg(command);
-    cmd.args(args);
-    cmd.current_dir(project_root());
-
-    println!("Running: cargo {command} {}", args.join(" "));
-
-    let status = cmd
-        .status()
-        .context(format!("Failed to execute cargo {command}"))?;
-
-    if !status.success() {
-        anyhow::bail!("cargo {command} command failed");
-    }
-    Ok(())
-}
-
-fn project_root() -> PathBuf {
-    Path::new(&env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(1)
-        .unwrap()
-        .to_path_buf()
-}
-
-/// Generate documentation files (man page and shell completions)
-fn generate_docs(output_dir: &str) -> Result<()> {
-    let root_dir = project_root();
-    let docs_dir = if Path::new(output_dir).is_absolute() {
-        PathBuf::from(output_dir)
-    } else {
-        root_dir.join(output_dir)
-    };
-
-    let man_dir = docs_dir.join("man");
-    let completions_dir = docs_dir.join("completions");
-
-    fs::create_dir_all(&man_dir).context("Failed to create man directory")?;
-    fs::create_dir_all(&completions_dir).context("Failed to create completions directory")?;
-
-    let cmd = Args::command();
-    let bin_name = cmd.get_name().to_string();
-
-    // --- Generate Man Page ---
-    let man_path = man_dir.join(format!("{bin_name}.1"));
-    println!("Generating man page: {man_path:?}");
-    generate_man_page(&cmd, &man_path)?;
-
-    // --- Generate Shell Completions ---
-    generate_completions(&cmd, &completions_dir)?;
-
-    println!("✓ Documentation generated in: {}", docs_dir.display());
-    Ok(())
-}
-
-// --- Man Page Content Constants ---
-// Note: Using roff formatting. \fB...\fR = bold, \fI...\fR = italic, \- = hyphen, \(bu = bullet
-
-// clap_mangen generates the DESCRIPTION section from the command's about/long_about.
-
-const MAN_DEBOUNCING: &str = r#"
 .B Mechanism
 .PP
-\fB{bin_name}\fR works by remembering the timestamp of the last \fIpassed\fR event for each unique combination of key code (e.g., KEY_A) and key state (press=1, release=0).
+\fBintercept-bounce\fR works by remembering the timestamp of the last \fIpassed\fR event for each unique combination of key code (e.g., KEY_A) and key state (press=1, release=0).
 When a new key event arrives, it checks if it's identical to the last passed event for that key/state combination.
 If it is identical and the time difference since the last passed event is \fIless than\fR the configured \fB\-\-debounce\-time\fR, the new event is considered a bounce and is dropped (not written to standard output).
 If the time difference is greater than or equal to the debounce time, or if the event is different (different key code or different state), the event is passed through and its timestamp is recorded as the new "last passed" time for that specific key/state.
@@ -161,16 +98,16 @@ To diagnose chatter on specific keys, run with \fB\-\-log\-bounces\fR and a low 
 Typical values range from 5ms to 30ms. Mechanical switches might require slightly higher values than membrane switches.
 .IP \(bu 4
 Setting \fB\-\-debounce\-time 0ms\fR effectively disables filtering, passing all events through. This is useful with \fB\-\-log\-all\-events\fR or \fB\-\-log\-bounces\fR to observe raw event timings and diagnose chatter.
-"#;
 
-const MAN_NEAR_MISS: &str = r#"
+.SH NEAR-MISS
+
 .B Purpose
 .PP
 The near-miss feature is a diagnostic tool to identify key presses or releases that occur just slightly \fIafter\fR the debounce window closes. It helps understand key timing consistency and identify keys that might be close to chattering.
 .PP
 .B Mechanism
 .PP
-When a key event \fIpasses\fR the debounce filter (i.e., it's not a bounce), \fB{bin_name}\fR calculates the time difference since the \fIprevious passed event\fR for the same key code and state. If this difference is less than or equal to the \fB\-\-near\-miss\-threshold\-time\fR (and greater than or equal to the \fB\-\-debounce\-time\fR, which is implicit for passed events), it's recorded as a near-miss in the statistics.
+When a key event \fIpasses\fR the debounce filter (i.e., it's not a bounce), \fBintercept-bounce\fR calculates the time difference since the \fIprevious passed event\fR for the same key code and state. If this difference is less than or equal to the \fB\-\-near\-miss\-threshold\-time\fR (and greater than or equal to the \fB\-\-debounce\-time\fR, which is implicit for passed events), it's recorded as a near-miss in the statistics.
 .PP
 .B Interpretation
 .IP \(bu 4
@@ -185,15 +122,15 @@ Near-miss statistics are primarily useful for fine-tuning the debounce time or i
 The \fB\-\-near\-miss\-threshold\-time\fR should generally be set higher than the \fB\-\-debounce\-time\fR (e.g., 100ms threshold vs 20ms debounce) to capture relevant events without being overly noisy.
 .IP \(bu 4
 Setting the threshold to the same value as the debounce time (or 0ms) effectively disables near-miss tracking.
-"#;
 
-const MAN_EXAMPLES: &str = r#"
-Here are some common examples demonstrating how to use \fB{bin_name}\fR.
+.SH EXAMPLES
+
+Here are some common examples demonstrating how to use \fBintercept-bounce\fR.
 .PP
 .B Basic Filtering (15ms window):
 .IP
 .nf
-sudo sh \-c 'intercept \-g /dev/input/by\-id/your\-kbd\-event\-kbd | {bin_name} \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-kbd\-event\-kbd'
+sudo sh \-c 'intercept \-g /dev/input/by\-id/your\-kbd\-event\-kbd | intercept-bounce \-\-debounce\-time 15ms | uinput \-d /dev/input/by\-id/your\-kbd\-event\-kbd'
 .fi
 .PP
 Intercept events from your keyboard (replace placeholder path), filter them with a 15ms debounce window, and create a new virtual keyboard device with the filtered output. Applications should use the new virtual device created by \fBuinput\fR.
@@ -201,7 +138,7 @@ Intercept events from your keyboard (replace placeholder path), filter them with
 .B Filtering with Bounce Logging:
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | intercept-bounce \-\-debounce\-time 20ms \-\-log\-bounces | uinput \-d ...'
 .fi
 .PP
 Filter with a 20ms threshold and log only the key events that are dropped (considered bounces) to standard error. Useful for identifying which keys are chattering without logging every event.
@@ -209,7 +146,7 @@ Filter with a 20ms threshold and log only the key events that are dropped (consi
 .B Diagnosing Chatter Timing (using logs):
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 5ms \-\-log\-bounces | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | intercept-bounce \-\-debounce\-time 5ms \-\-log\-bounces | uinput \-d ...'
 .fi
 .PP
 Run with a low debounce time (5ms) and log bounces. Observe the reported `Bounce Time` for dropped events to determine an appropriate debounce time for your keyboard (set it slightly higher than the observed bounce times).
@@ -217,7 +154,7 @@ Run with a low debounce time (5ms) and log bounces. Observe the reported `Bounce
 .B Diagnosing Chatter Timing (using stats):
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {bin_name} \-\-debounce\-time 5ms | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | intercept-bounce \-\-debounce\-time 5ms | uinput \-d ...'
 .fi
 .PP
 Run with a low debounce time (5ms) and examine the statistics printed on exit (Ctrl+C). Look at the `Bounce Time (Min/Avg/Max)` and the `Bounce Timing Histogram` for problematic keys to determine an appropriate debounce time.
@@ -225,7 +162,7 @@ Run with a low debounce time (5ms) and examine the statistics printed on exit (C
 .B Periodic Stats Dump (every 5 minutes):
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {bin_name} \-\-log\-interval 5m | uinput \-d ...'
+sudo sh \-c 'intercept \-g ... | intercept-bounce \-\-log\-interval 5m | uinput \-d ...'
 .fi
 .PP
 Run with default filtering and print detailed statistics to standard error every 5 minutes, in addition to the final report on exit.
@@ -233,7 +170,7 @@ Run with default filtering and print detailed statistics to standard error every
 .B JSON Statistics Output:
 .IP
 .nf
-sudo sh \-c 'intercept \-g ... | {bin_name} \-\-stats\-json | uinput \-d ...' > /dev/null 2> stats.json
+sudo sh \-c 'intercept \-g ... | intercept-bounce \-\-stats\-json | uinput \-d ...' > /dev/null 2> stats.json
 .fi
 .PP
 Output statistics in JSON format to standard error, redirecting it to a file. Standard output (the filtered events) is redirected to /dev/null in this example, useful if only collecting stats.
@@ -241,7 +178,7 @@ Output statistics in JSON format to standard error, redirecting it to a file. St
 .B List Input Devices:
 .IP
 .nf
-sudo {bin_name} \-\-list\-devices
+sudo intercept-bounce \-\-list\-devices
 .fi
 .PP
 List available input devices with keyboard capabilities. Useful for finding the correct device path for \fBintercept \-g\fR. Requires read access to /dev/input/event*.
@@ -249,18 +186,18 @@ List available input devices with keyboard capabilities. Useful for finding the 
 .B Finding Your Keyboard Device Manually:
 .IP Use \fBintercept \-L\fR or look in \fI/dev/input/by-id/\fR for device names ending in \fI-event-kbd\fR.
 .fi
-"#;
 
-const MAN_INTEGRATION: &str = r#"
-\fB{bin_name}\fR is designed to work with Interception Tools. It can be used in pipelines or within a \fBudevmon\fR(1) configuration file (\fIudevmon.yaml\fR).
+.SH INTEGRATION
+
+\fBintercept-bounce\fR is designed to work with Interception Tools. It can be used in pipelines or within a \fBudevmon\fR(1) configuration file (\fIudevmon.yaml\fR).
 .PP
 .B Pipeline Usage
 .PP
-The standard usage involves a pipeline: \fBintercept\fR -> \fB{bin_name}\fR -> \fBuinput\fR.
+The standard usage involves a pipeline: \fBintercept\fR -> \fBintercept-bounce\fR -> \fBuinput\fR.
 .IP \(bu 4
 \fBintercept \-g <device>\fR: Captures raw input events from the specified hardware device.
 .IP \(bu 4
-\fB{bin_name} [OPTIONS]\fR: Reads events from stdin, filters them, and writes filtered events to stdout.
+\fBintercept-bounce [OPTIONS]\fR: Reads events from stdin, filters them, and writes filtered events to stdout.
 .IP \(bu 4
 \fBuinput \-d <device>\fR: Reads filtered events from stdin and creates a new virtual input device mirroring the original device's capabilities but emitting only the filtered events.
 .PP
@@ -274,7 +211,7 @@ Using \fBudevmon\fR is often the most robust way to manage the pipeline, automat
 .IP
 .nf
 # Example /etc/interception/udevmon.yaml entry
-\- JOB: intercept \-g $DEVNODE | {bin_name} \-\-debounce\-time 15ms | uinput \-d $DEVNODE
+\- JOB: intercept \-g $DEVNODE | intercept-bounce \-\-debounce\-time 15ms | uinput \-d $DEVNODE
   DEVICE:
     LINK: /dev/input/by\-id/usb\-Your_Keyboard_Name\-event\-kbd
 .fi
@@ -283,11 +220,11 @@ Replace the \fILINK\fR value with the appropriate path for your keyboard found i
 .PP
 .B Wayland/Xorg Considerations
 .PP
-Interception Tools, especially global input capture, generally work most reliably under Xorg. Wayland compositors often restrict global input grabbing for security reasons. Using \fB{bin_name}\fR under Wayland might require specific compositor support or might only work for applications that directly use the virtual device created by `uinput`. Check your Wayland compositor's documentation regarding input device management and potential compatibility with virtual input devices. Some compositors might require specific configuration to recognize and use the `uinput` device.
-"#;
+Interception Tools, especially global input capture, generally work most reliably under Xorg. Wayland compositors often restrict global input grabbing for security reasons. Using \fBintercept-bounce\fR under Wayland might require specific compositor support or might only work for applications that directly use the virtual device created by `uinput`. Check your Wayland compositor's documentation regarding input device management and potential compatibility with virtual input devices. Some compositors might require specific configuration to recognize and use the `uinput` device.
 
-const MAN_STATISTICS: &str = r#"
-\fB{bin_name}\fR collects and reports detailed statistics about the events it processes. These statistics provide insights into keyboard chatter patterns and filter effectiveness.
+.SH STATISTICS
+
+\fBintercept-bounce\fR collects and reports detailed statistics about the events it processes. These statistics provide insights into keyboard chatter patterns and filter effectiveness.
 .PP
 .B Metrics Reported (Human-Readable):
 .IP "\fBOverall Statistics\fR" 4
@@ -347,10 +284,10 @@ Provides a machine-readable format containing all the same information, plus raw
 .IP "\fBper_key_stats\fR": Array of objects, each containing `key_code`, `key_name`, overall counts/percentage, and detailed `stats` (press/release/repeat) including counts, rates, sampled `timings_us`, summary fields, and a `bounce_histogram` object.
 .IP "\fBper_key_near_miss_stats\fR": Array of objects, each containing `key_code`, `key_value`, `key_name`, `value_name`, `count`, sampled `timings_us`, summary fields, and a `near_miss_histogram` object.
 .RE
-"#;
 
-const MAN_LOGGING: &str = r#"
-\fB{bin_name}\fR provides several logging options for debugging and monitoring, written to standard error:
+.SH LOGGING
+
+\fBintercept-bounce\fR provides several logging options for debugging and monitoring, written to standard error:
 .PP
 .B Log Flags:
 .IP "\fB\-\-log\-all\-events\fR" 4
@@ -400,10 +337,10 @@ See the \fBtracing_subscriber\fR documentation for the full filter syntax.
 .PP
 .B Performance Note:
 Enabling \fB\-\-log\-all\-events\fR or high verbosity levels (trace) can significantly impact performance due to the volume of log messages generated and potential contention writing to stderr. The logger thread may drop log messages if it cannot keep up (a warning will be printed). Use verbose logging primarily for debugging specific issues.
-"#;
 
-const MAN_SIGNALS: &str = r#"
-\fB{bin_name}\fR handles the following signals gracefully to ensure clean shutdown and reporting of final statistics:
+.SH SIGNALS
+
+\fBintercept-bounce\fR handles the following signals gracefully to ensure clean shutdown and reporting of final statistics:
 .IP \(bu 4
 SIGINT (Interrupt, typically Ctrl+C)
 .IP \(bu 4
@@ -424,116 +361,10 @@ Print the final cumulative statistics to standard error (unless `--stats-json` i
 Exit cleanly (typically with status 0).
 .PP
 This ensures that valuable statistics are not lost even if the filter is terminated externally via these signals.
-"#;
 
-const MAN_EXIT_STATUS: &str = r#"
-.IP 0 4
-Success. The program completed normally or was terminated cleanly by a handled signal (SIGINT, SIGTERM, SIGQUIT). Final statistics were printed.
-.IP 1 4
-Runtime Error. An unexpected error occurred during execution, such as:
-.RS 4
-.IP \(bu 4
-Error reading from standard input or writing to standard output.
-.IP \(bu 4
-Error creating or communicating with the logger thread.
-.IP \(bu 4
-Internal logic errors (panics).
-.IP \(bu 4
-Errors initializing OpenTelemetry (if configured).
-.RE
-.IP 2 4
-Device Listing Error. An error occurred when using the \fB\-\-list\-devices\fR option, likely due to insufficient permissions to access \fI/dev/input/event*\fR devices or other I/O errors during the scan.
-"#;
+.SH THEORY OF OPERATION
 
-const MAN_ENVIRONMENT: &str = r#"
-.TP
-.B RUST_LOG
-Controls the logging verbosity and filtering, overriding defaults set by \fB\-\-verbose\fR. See the LOGGING section for details and examples. Uses the \fBtracing_subscriber::EnvFilter\fR format.
-.TP
-.B RUST_BACKTRACE
-Set to \fB1\fR or \fBfull\fR to enable backtraces on panic, which can be helpful for debugging crashes.
-"#;
-
-const MAN_PERFORMANCE: &str = r#"
-\fB{bin_name}\fR is designed for low-latency input filtering.
-.PP
-.B Architecture:
-.IP \(bu 4
-\fBMain Thread\fR: Reads events from stdin, acquires a `std::sync::Mutex` lock on the `BounceFilter` state, performs the debounce check (array lookup and timestamp comparison), updates state if necessary, releases the lock, constructs an `EventInfo` struct, attempts to send it to the logger thread via a bounded `crossbeam-channel` using `try_send`, and writes passed events to stdout.
-.IP \(bu 4
-\fBLogger Thread\fR: Receives `EventInfo` messages from the channel, updates statistics in a `StatsCollector` struct (using atomics for simple counts and owned `Vec`s for timings/histograms), handles periodic stats dumps, performs logging to stderr using the `tracing` framework, and optionally sends metrics via OpenTelemetry.
-.PP
-.B Latency Considerations:
-.IP \(bu 4
-The primary latency contributor on the main event path is the mutex lock for the `BounceFilter` state (`last_event_us` array). This lock is held only during the check and update for each key event.
-.IP \(bu 4
-Sending data to the logger thread uses a bounded channel (`crossbeam-channel`) with `try_send`. If the logger thread falls behind (e.g., due to slow disk I/O for logging, high CPU load, or slow OTLP endpoint), the channel might fill up. To prevent blocking the main input path, the main thread will drop the `EventInfo` message if the channel is full. A warning is logged ("Logger channel full, dropping log messages"), and the dropped message will not be included in statistics or logs. This prioritizes low input latency over potentially losing some log messages or stats updates under heavy load or slow logging sinks.
-.IP \(bu 4
-Heavy logging (especially `--log-all-events` or TRACE level) significantly increases the work done by the logger thread and the likelihood of the channel filling up. It also increases overall CPU usage. Enabling OpenTelemetry export (`--otel-endpoint`) also adds work to the logger thread.
-.PP
-.B Benchmarking:
-.IP
-Use \fBcargo bench\fR to run microbenchmarks measuring the performance of the core filter logic (`BounceFilter::check_event`) and the inter-thread channel communication under different scenarios.
-"#;
-
-const MAN_BUGS: &str = r#"
-Please report bugs, issues, or feature requests via the GitHub issue tracker:
-https://github.com/sinity/intercept-bounce/issues
-"#;
-
-const MAN_SEE_ALSO: &str = r#"
-\fBintercept\fR(1), \fBuinput\fR(1), \fBudevmon\fR(1), \fBinput_event\fR(5), \fBlibinput\fR(1), \fBeudev\fR(7), \fBsystemd-udevd.service\fR(8)
-.PP
-Interception Tools Project: https://gitlab.com/interception/linux/tools
-.PP
-Project Repository & README: https://github.com/sinity/intercept-bounce
-"#;
-
-const MAN_TROUBLESHOOTING: &str = r#"
-.TP
-.B Permission Denied (reading /dev/input/event* or writing /dev/uinput):
-Running \fBintercept\fR and \fBuinput\fR typically requires root privileges or specific user group memberships. Ensure the user running the pipeline has read access to the target input device (\fI/dev/input/event*\fR) and write access to \fI/dev/uinput\fR. Adding the user to the 'input' group often grants read access, but write access to `/dev/uinput` might require specific udev rules (see Interception Tools documentation). Running the entire pipeline via `sudo sh -c '...'` is a common workaround.
-.TP
-.B Incorrect Device Path:
-Double-check the device path used with \fBintercept \-g\fR or in \fIudevmon.yaml\fR. Use stable paths from \fI/dev/input/by-id/\fR or \fI/dev/input/by-path/\fR instead of potentially unstable \fI/dev/input/eventX\fR paths. Use \fBintercept \-L\fR to list devices.
-.TP
-.B Filter Not Working / No Output from uinput:
-.RS 4
-.IP \(bu 4
-Verify the pipeline order: `intercept | {bin_name} | uinput`.
-.IP \(bu 4
-Check permissions (see above).
-.IP \(bu 4
-Ensure the correct device path is used for both `intercept -g` and `uinput -d`. The path must be identical for `uinput` to correctly clone the device capabilities.
-.IP \(bu 4
-Check if `udevmon` (if used) is running and loaded the correct configuration (`sudo systemctl status interception-udevmon` or similar). Check `udevmon` logs (`journalctl -u interception-udevmon`).
-.IP \(bu 4
-Run `{bin_name}` with `--verbose` or `--log-all-events` to see if events are being processed and passed/dropped as expected. Check for errors logged to stderr.
-.IP \(bu 4
-Ensure your desktop environment is configured to use the virtual device created by `uinput` (see INTEGRATION section). Use tools like `libinput list-devices` to identify the virtual device (often named like "intercept-bounce virtual device").
-.RE
-.TP
-.B Too Much Filtering (Missed Keystrokes):
-The `--debounce-time` might be too high. Try lowering it (e.g., `10ms`, `5ms`). Use logging (`--log-all-events`) or statistics to see if legitimate presses are being dropped.
-.TP
-.B Too Little Filtering (Chatter Still Occurs):
-The `--debounce-time` might be too low. Use `--log-bounces` with a low debounce time (e.g., `5ms`) to measure chatter timing from logs, or examine the bounce timing statistics (Min/Avg/Max and histograms) printed on exit. Set the `--debounce-time` slightly higher than the observed chatter duration.
-.TP
-.B Mixed Output in Terminal:
-If running interactively with logging enabled, log messages (stderr) might mix with terminal echo or shell output. Redirect stderr (\fI2> logfile.txt\fR) or use \fBudevmon\fR for background operation.
-.TP
-.B "Logger channel full, dropping log messages" Warning:
-This means the logger thread cannot keep up with the rate of events from the main thread, likely due to heavy logging (`--log-all-events`, `RUST_LOG=trace`), a slow OTLP endpoint, or high system load. Log messages and stats updates may be lost, but input filtering latency is prioritized. Reduce logging verbosity or disable OTLP if problematic.
-.TP
-.B Errors Reading/Writing Events:
-Check device permissions, physical keyboard connection, and system logs (`dmesg`) for hardware errors related to the input device. Ensure `intercept` and `uinput` are functioning correctly.
-.TP
-.B JSON Stats Errors:
-Ensure the output is valid JSON. If parsing fails, check for non-JSON error messages printed to stderr before the JSON output.
-"#;
-
-const MAN_THEORY_OF_OPERATION: &str = r#"
-\fB{bin_name}\fR employs a multi-threaded architecture to separate the low-latency input filtering path from potentially slower logging and statistics processing.
+\fBintercept-bounce\fR employs a multi-threaded architecture to separate the low-latency input filtering path from potentially slower logging and statistics processing.
 .PP
 .B Main Thread:
 .IP 1. 4
@@ -582,96 +413,109 @@ Statistics are managed entirely by the logger thread in its owned `StatsCollecto
 Inter-thread communication uses a bounded `crossbeam-channel`, chosen for its performance characteristics and non-blocking `try_send` capability.
 .IP \(bu 4
 Signal handling runs in a dedicated thread, setting atomic flags to trigger graceful shutdown in the main and logger threads.
-"#;
 
-/// Generates the man page with custom sections.
-fn generate_man_page(cmd: &clap::Command, path: &Path) -> Result<()> {
-    let version = env!("CARGO_PKG_VERSION");
-    // Format date like 'Month Day, Year' e.g., "July 18, 2024"
-    let date = chrono::Local::now().format("%B %d, %Y").to_string();
-    let app_name_uppercase = cmd.get_name().to_uppercase();
-    let bin_name = cmd.get_name();
+.SH PERFORMANCE
 
-    let mut buffer: Vec<u8> = Vec::new();
+\fBintercept-bounce\fR is designed for low-latency input filtering.
+.PP
+.B Architecture:
+.IP \(bu 4
+\fBMain Thread\fR: Reads events from stdin, acquires a `std::sync::Mutex` lock on the `BounceFilter` state, performs the debounce check (array lookup and timestamp comparison), updates state if necessary, releases the lock, constructs an `EventInfo` struct, attempts to send it to the logger thread via a bounded `crossbeam-channel` using `try_send`, and writes passed events to stdout.
+.IP \(bu 4
+\fBLogger Thread\fR: Receives `EventInfo` messages from the channel, updates statistics in a `StatsCollector` struct (using atomics for simple counts and owned `Vec`s for timings/histograms), handles periodic stats dumps, performs logging to stderr using the `tracing` framework, and optionally sends metrics via OpenTelemetry.
+.PP
+.B Latency Considerations:
+.IP \(bu 4
+The primary latency contributor on the main event path is the mutex lock for the `BounceFilter` state (`last_event_us` array). This lock is held only during the check and update for each key event.
+.IP \(bu 4
+Sending data to the logger thread uses a bounded channel (`crossbeam-channel`) with `try_send`. If the logger thread falls behind (e.g., due to slow disk I/O for logging, high CPU load, or slow OTLP endpoint), the channel might fill up. To prevent blocking the main input path, the main thread will drop the `EventInfo` message if the channel is full. A warning is logged ("Logger channel full, dropping log messages"), and the dropped message will not be included in statistics or logs. This prioritizes low input latency over potentially losing some log messages or stats updates under heavy load or slow logging sinks.
+.IP \(bu 4
+Heavy logging (especially `--log-all-events` or TRACE level) significantly increases the work done by the logger thread and the likelihood of the channel filling up. It also increases overall CPU usage. Enabling OpenTelemetry export (`--otel-endpoint`) also adds work to the logger thread.
+.PP
+.B Benchmarking:
+.IP
+Use \fBcargo bench\fR to run microbenchmarks measuring the performance of the core filter logic (`BounceFilter::check_event`) and the inter-thread channel communication under different scenarios.
 
-    // Render the standard sections (NAME, SYNOPSIS, DESCRIPTION, OPTIONS, AUTHOR) using clap_mangen
-    // Note: clap_mangen uses the command's `about` for NAME and `long_about` (or `about`) for DESCRIPTION.
-    // It doesn't include the .TH header automatically, so we add it manually first.
-    writeln!(
-        // Keep explicit args for .TH format
-        buffer,
-        r#".TH "{app_name_uppercase}" 1 "{date}" "{version}" "User Commands""#
-    )?;
-    Man::new(cmd.clone()).render(&mut buffer)?;
+.SH TROUBLESHOOTING
 
-    // --- Append Custom Sections ---
-    // These will appear *after* the standard sections generated by clap_mangen.
-    // clap_mangen handles: NAME, SYNOPSIS, DESCRIPTION (from command's about/long_about), OPTIONS, VERSION, AUTHOR
-    let custom_sections = [
-        ("DEBOUNCING", MAN_DEBOUNCING), // How debounce works, choosing time
-        ("NEAR-MISS", MAN_NEAR_MISS),   // How near-miss works, interpretation
-        ("EXAMPLES", MAN_EXAMPLES),
-        ("INTEGRATION", MAN_INTEGRATION), // Interception Tools, udevmon, Wayland/Xorg
-        ("STATISTICS", MAN_STATISTICS),   // Human-readable, JSON, Histograms
-        ("LOGGING", MAN_LOGGING),         // Flags, RUST_LOG, tracing
-        ("SIGNALS", MAN_SIGNALS),         // Graceful shutdown
-        ("THEORY OF OPERATION", MAN_THEORY_OF_OPERATION), // Internal architecture
-        ("PERFORMANCE", MAN_PERFORMANCE), // Latency, logger channel dropping
-        ("TROUBLESHOOTING", MAN_TROUBLESHOOTING),
-        ("EXIT STATUS", MAN_EXIT_STATUS),
-        ("ENVIRONMENT", MAN_ENVIRONMENT), // RUST_LOG, RUST_BACKTRACE
-        ("BUGS", MAN_BUGS),
-        ("SEE ALSO", MAN_SEE_ALSO),
-    ];
+.TP
+.B Permission Denied (reading /dev/input/event* or writing /dev/uinput):
+Running \fBintercept\fR and \fBuinput\fR typically requires root privileges or specific user group memberships. Ensure the user running the pipeline has read access to the target input device (\fI/dev/input/event*\fR) and write access to \fI/dev/uinput\fR. Adding the user to the 'input' group often grants read access, but write access to `/dev/uinput` might require specific udev rules (see Interception Tools documentation). Running the entire pipeline via `sudo sh -c '...'` is a common workaround.
+.TP
+.B Incorrect Device Path:
+Double-check the device path used with \fBintercept \-g\fR or in \fIudevmon.yaml\fR. Use stable paths from \fI/dev/input/by-id/\fR or \fI/dev/input/by-path/\fR instead of potentially unstable \fI/dev/input/eventX\fR paths. Use \fBintercept \-L\fR to list devices.
+.TP
+.B Filter Not Working / No Output from uinput:
+.RS 4
+.IP \(bu 4
+Verify the pipeline order: `intercept | intercept-bounce | uinput`.
+.IP \(bu 4
+Check permissions (see above).
+.IP \(bu 4
+Ensure the correct device path is used for both `intercept -g` and `uinput -d`. The path must be identical for `uinput` to correctly clone the device capabilities.
+.IP \(bu 4
+Check if `udevmon` (if used) is running and loaded the correct configuration (`sudo systemctl status interception-udevmon` or similar). Check `udevmon` logs (`journalctl -u interception-udevmon`).
+.IP \(bu 4
+Run `intercept-bounce` with `--verbose` or `--log-all-events` to see if events are being processed and passed/dropped as expected. Check for errors logged to stderr.
+.IP \(bu 4
+Ensure your desktop environment is configured to use the virtual device created by `uinput` (see INTEGRATION section). Use tools like `libinput list-devices` to identify the virtual device (often named like "intercept-bounce virtual device").
+.RE
+.TP
+.B Too Much Filtering (Missed Keystrokes):
+The `--debounce-time` might be too high. Try lowering it (e.g., `10ms`, `5ms`). Use logging (`--log-all-events`) or statistics to see if legitimate presses are being dropped.
+.TP
+.B Too Little Filtering (Chatter Still Occurs):
+The `--debounce-time` might be too low. Use `--log-bounces` with a low debounce time (e.g., `5ms`) to measure chatter timing from logs, or examine the bounce timing statistics (Min/Avg/Max and histograms) printed on exit. Set the `--debounce-time` slightly higher than the observed chatter duration.
+.TP
+.B Mixed Output in Terminal:
+If running interactively with logging enabled, log messages (stderr) might mix with terminal echo or shell output. Redirect stderr (\fI2> logfile.txt\fR) or use \fBudevmon\fR for background operation.
+.TP
+.B "Logger channel full, dropping log messages" Warning:
+This means the logger thread cannot keep up with the rate of events from the main thread, likely due to heavy logging (`--log-all-events`, `RUST_LOG=trace`), a slow OTLP endpoint, or high system load. Log messages and stats updates may be lost, but input filtering latency is prioritized. Reduce logging verbosity or disable OTLP if problematic.
+.TP
+.B Errors Reading/Writing Events:
+Check device permissions, physical keyboard connection, and system logs (`dmesg`) for hardware errors related to the input device. Ensure `intercept` and `uinput` are functioning correctly.
+.TP
+.B JSON Stats Errors:
+Ensure the output is valid JSON. If parsing fails, check for non-JSON error messages printed to stderr before the JSON output.
 
-    for (title, content_template) in custom_sections {
-        writeln!(buffer, ".SH {title}")?;
-        // Format the content, replacing {bin_name} placeholder
-        let formatted_content = content_template.replace("{bin_name}", bin_name);
-        writeln!(buffer, "{formatted_content}")?;
-    }
+.SH EXIT STATUS
 
-    // AUTHOR section is included by clap_mangen's render method.
+.IP 0 4
+Success. The program completed normally or was terminated cleanly by a handled signal (SIGINT, SIGTERM, SIGQUIT). Final statistics were printed.
+.IP 1 4
+Runtime Error. An unexpected error occurred during execution, such as:
+.RS 4
+.IP \(bu 4
+Error reading from standard input or writing to standard output.
+.IP \(bu 4
+Error creating or communicating with the logger thread.
+.IP \(bu 4
+Internal logic errors (panics).
+.IP \(bu 4
+Errors initializing OpenTelemetry (if configured).
+.RE
+.IP 2 4
+Device Listing Error. An error occurred when using the \fB\-\-list\-devices\fR option, likely due to insufficient permissions to access \fI/dev/input/event*\fR devices or other I/O errors during the scan.
 
-    // Write the complete buffer (standard sections + custom sections) to the file
-    fs::write(path, buffer).with_context(|| format!("Failed to write man page to {path:?}"))?;
-    Ok(())
-}
+.SH ENVIRONMENT
 
-/// Generates shell completion files.
-fn generate_completions(cmd: &clap::Command, completions_dir: &Path) -> Result<()> {
-    let bin_name = cmd.get_name();
-    // --- Generate Shell Completions ---
-    let shells = [
-        Shell::Bash,
-        Shell::Elvish,
-        Shell::Fish,
-        Shell::PowerShell,
-        Shell::Zsh,
-    ];
+.TP
+.B RUST_LOG
+Controls the logging verbosity and filtering, overriding defaults set by \fB\-\-verbose\fR. See the LOGGING section for details and examples. Uses the \fBtracing_subscriber::EnvFilter\fR format.
+.TP
+.B RUST_BACKTRACE
+Set to \fB1\fR or \fBfull\fR to enable backtraces on panic, which can be helpful for debugging crashes.
 
-    for shell in shells {
-        let ext = match shell {
-            Shell::Bash => "bash",
-            Shell::Elvish => "elv",
-            Shell::Fish => "fish",
-            Shell::PowerShell => "ps1",
-            Shell::Zsh => "zsh",
-            _ => continue, // Should not happen
-        };
-        let completions_path = completions_dir.join(format!("{bin_name}.{ext}"));
-        println!("Generating completion file: {completions_path:?}");
-        let mut file = fs::File::create(&completions_path)
-            .with_context(|| format!("Failed to create completion file: {completions_path:?}"))?;
-        generate(shell, &mut cmd.clone(), bin_name, &mut file);
-    }
+.SH BUGS
 
-    // Generate Nushell Completion
-    let nu_path = completions_dir.join(format!("{bin_name}.nu"));
-    println!("Generating Nushell completion file: {nu_path:?}");
-    let mut nu_file = fs::File::create(&nu_path)
-        .with_context(|| format!("Failed to create Nushell completion file: {nu_path:?}"))?;
-    generate(Nushell, &mut cmd.clone(), bin_name, &mut nu_file);
+Please report bugs, issues, or feature requests via the GitHub issue tracker:
+https://github.com/sinity/intercept-bounce/issues
 
-    Ok(())
-}
+.SH SEE ALSO
+
+\fBintercept\fR(1), \fBuinput\fR(1), \fBudevmon\fR(1), \fBinput_event\fR(5), \fBlibinput\fR(1), \fBeudev\fR(7), \fBsystemd-udevd.service\fR(8)
+.PP
+Interception Tools Project: https://gitlab.com/interception/linux/tools
+.PP
+Project Repository & README: https://github.com/sinity/intercept-bounce

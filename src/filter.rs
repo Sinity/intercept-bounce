@@ -79,7 +79,12 @@ impl BounceFilter {
     ///
     /// # Returns
     /// An `EventInfo` struct containing the result of the check and relevant timestamps.
-    pub fn check_event(&mut self, event: &input_event, debounce_time: Duration) -> EventInfo {
+    pub fn check_event(
+        &mut self,
+        event: &input_event,
+        debounce_time: Duration,
+        ignore_key: bool,
+    ) -> EventInfo {
         let event_us = event::event_microseconds(event);
 
         // Update overall timestamps
@@ -87,6 +92,20 @@ impl BounceFilter {
             self.overall_first_event_us = Some(event_us);
         }
         self.overall_last_event_us = Some(event_us);
+
+        if ignore_key {
+            if self.ring_buffer_size > 0 {
+                self.recent_passed_events[self.recent_event_idx] = Some(*event);
+                self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;
+            }
+            return EventInfo {
+                event: *event,
+                event_us,
+                is_bounce: false,
+                diff_us: None,
+                last_passed_us: None,
+            };
+        }
 
         // --- Early returns for non-debounced events ---
         // Pass non-key events or key repeats immediately

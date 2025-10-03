@@ -421,6 +421,9 @@ fn stats_output_json() {
     assert_eq!(detailed_stats["press"]["dropped_count"], 1); // e2 dropped
     assert!((detailed_stats["press"]["drop_rate"].as_f64().unwrap() - 50.0).abs() < f64::EPSILON); // 1 drop / 2 processed = 50%
     assert_eq!(detailed_stats["press"]["timings_us"], json!([3000])); // Bounce timing
+    assert_eq!(detailed_stats["press"]["min_us"], 3000);
+    assert_eq!(detailed_stats["press"]["max_us"], 3000);
+    assert_eq!(detailed_stats["press"]["avg_us"], 3000);
     assert!(detailed_stats["press"]["bounce_histogram"].is_object());
 
     assert_eq!(detailed_stats["release"]["total_processed"], 0);
@@ -428,6 +431,9 @@ fn stats_output_json() {
     assert_eq!(detailed_stats["release"]["dropped_count"], 0);
     assert!((detailed_stats["release"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["release"]["timings_us"], json!([]));
+    assert!(detailed_stats["release"]["min_us"].is_null());
+    assert!(detailed_stats["release"]["max_us"].is_null());
+    assert!(detailed_stats["release"]["avg_us"].is_null());
     assert!(detailed_stats["release"]["bounce_histogram"].is_object());
 
     assert_eq!(detailed_stats["repeat"]["total_processed"], 0);
@@ -435,6 +441,9 @@ fn stats_output_json() {
     assert_eq!(detailed_stats["repeat"]["dropped_count"], 0);
     assert!((detailed_stats["repeat"]["drop_rate"].as_f64().unwrap() - 0.0).abs() < f64::EPSILON);
     assert_eq!(detailed_stats["repeat"]["timings_us"], json!([]));
+    assert!(detailed_stats["repeat"]["min_us"].is_null());
+    assert!(detailed_stats["repeat"]["max_us"].is_null());
+    assert!(detailed_stats["repeat"]["avg_us"].is_null());
     assert!(detailed_stats["repeat"]["bounce_histogram"].is_object());
 
     // Ensure KEY_B (48) is not present in the array

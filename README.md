@@ -25,6 +25,7 @@ It reads raw Linux `input_event` structs from standard input, filters out rapid 
   * `--log-bounces`: Log details only for dropped (bounced) key events.
   * `--verbose`: Enable DEBUG level internal logging.
   * `RUST_LOG` environment variable for fine-grained `tracing` filter control (overrides `--verbose`).
+* **Per-Key Exemptions:** Skip debouncing special controls (e.g. volume wheels) with `--ignore-key KEY_VOLUMEDOWN` (accepts names or numeric codes).
 * **Periodic Reporting:** Dump statistics periodically (`--log-interval`, default: 15m).
 * **JSON Output:** Output statistics in JSON format (`--stats-json`) for machine parsing.
 * **Graceful Shutdown:** Handles SIGINT, SIGTERM, SIGQUIT to ensure final statistics are reported.
@@ -282,8 +283,9 @@ Provides a machine-readable JSON object containing all the information from the 
 * Configuration values (`debounce_time_us`, `near_miss_threshold_us`, etc.).
 * Overall counts (`key_events_processed`, `key_events_passed`, `key_events_dropped`).
 * `overall_bounce_histogram`, `overall_near_miss_histogram`: Detailed histogram objects.
-* `per_key_stats`: Array of objects per key, including detailed stats per state (press/release/repeat) with raw `timings_us` and `bounce_histogram`.
-* `per_key_near_miss_stats`: Array of objects per key/state with raw `timings_us` and `near_miss_histogram`.
+* `per_key_stats`: Array of objects per key, including detailed stats per state (press/release/repeat) with sampled `timings_us`, `min_us`/`max_us`/`avg_us`, and a `bounce_histogram`.
+* `per_key_near_miss_stats`: Array of objects per key/state with sampled `timings_us`, summary fields, and a `near_miss_histogram`.
+  Sample arrays retain only the most recent timings to avoid unbounded memory growth.
 
 Refer to the `StatsCollector::print_stats_json` implementation or the man page for the exact structure.
 

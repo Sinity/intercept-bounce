@@ -156,13 +156,11 @@ fn main() -> io::Result<()> {
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
     let main_running_signal = Arc::clone(&main_running);
     let logger_running_signal = Arc::clone(&logger_running);
-    let final_stats_printed_signal = Arc::clone(&final_stats_printed);
     thread::spawn(move || {
         if let Some(sig) = signals.forever().next() {
             // `sig` is used in format string
             let reason = format!("Received signal {sig}");
             // Ensure final stats are printed by the signal handler if it triggers shutdown.
-            final_stats_printed_signal.store(true, Ordering::SeqCst);
             trigger_shutdown(&reason, &main_running_signal, &logger_running_signal);
         }
     });
@@ -306,10 +304,11 @@ fn process_event(
         counter.add(1, &[]);
     }
 
+    let ignore_key = ctx.cfg.is_key_ignored(ev.code);
     let event_info = {
         match ctx.bounce_filter.lock() {
             Ok(mut filter) => {
-                let info = filter.check_event(ev, ctx.cfg.debounce_time());
+                let info = filter.check_event(ev, ctx.cfg.debounce_time(), ignore_key);
                 trace!(is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event returned");
                 info
             }
@@ -317,7 +316,7 @@ fn process_event(
                 // If the mutex is poisoned, log fatal, but try to continue by recovering the lock.
                 error!("FATAL: BounceFilter mutex poisoned in main event loop. Recovering...");
                 let mut filter = poisoned.into_inner();
-                let info = filter.check_event(ev, ctx.cfg.debounce_time());
+                let info = filter.check_event(ev, ctx.cfg.debounce_time(), ignore_key);
                 trace!(is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event (poisoned) returned");
                 info
             }

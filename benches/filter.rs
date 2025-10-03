@@ -25,7 +25,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
         b.iter(|| {
             let mut filter = BounceFilter::new(0);
             // Call check_event and use black_box to prevent optimizing away the call
-            black_box(filter.check_event(&event_pass, debounce_time));
+            black_box(filter.check_event(&event_pass, debounce_time, false));
         })
     });
 
@@ -33,8 +33,8 @@ fn bench_filter_check_event(c: &mut Criterion) {
     c.bench_function("filter::check_event_bounce", |b| {
         b.iter(|| {
             let mut filter = BounceFilter::new(0);
-            black_box(filter.check_event(&event_pass, debounce_time));
-            black_box(filter.check_event(&event_bounce, debounce_time));
+            black_box(filter.check_event(&event_pass, debounce_time, false));
+            black_box(filter.check_event(&event_bounce, debounce_time, false));
         })
     });
 
@@ -42,7 +42,7 @@ fn bench_filter_check_event(c: &mut Criterion) {
     c.bench_function("filter::check_event_non_key", |b| {
         b.iter(|| {
             let mut filter = BounceFilter::new(0);
-            black_box(filter.check_event(&event_non_key, debounce_time));
+            black_box(filter.check_event(&event_non_key, debounce_time, false));
         })
     });
 }

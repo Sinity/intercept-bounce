@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use std::time::Duration;
 
 /// An Interception Tools filter to eliminate keyboard chatter (switch bounce).
@@ -78,6 +78,10 @@ pub struct Args {
     #[arg(long, default_value = "0")]
     pub ring_buffer_size: usize,
 
+    /// Key codes or names to ignore (never debounce). Example: `--ignore-key 114` or `--ignore-key KEY_VOLUMEDOWN`.
+    #[arg(long = "ignore-key", value_name = "KEY", action = ArgAction::Append, value_parser = parse_ignore_key)]
+    pub ignore_keys: Vec<u16>,
+
     // --- OpenTelemetry Export ---
     /// OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317").
     #[arg(long)]
@@ -86,4 +90,12 @@ pub struct Args {
 
 pub fn parse_args() -> Args {
     Args::parse()
+}
+
+fn parse_ignore_key(value: &str) -> Result<u16, String> {
+    crate::filter::keynames::resolve_key_code(value).ok_or_else(|| {
+        format!(
+            "Unknown key identifier '{value}'. Provide either a numeric code or a symbolic name like KEY_VOLUMEDOWN"
+        )
+    })
 }
