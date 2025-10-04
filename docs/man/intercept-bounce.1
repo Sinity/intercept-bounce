@@ -1,11 +1,11 @@
-.TH "INTERCEPT-BOUNCE" 1 "October 03, 2025" "0.1.0" "User Commands"
+.TH "INTERCEPT-BOUNCE" 1 "October 04, 2025" "0.1.0" "User Commands"
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .TH intercept-bounce 1  "intercept-bounce 0.9.0"
 .SH NAME
 intercept\-bounce \- An Interception Tools filter to eliminate keyboard chatter (switch bounce).
 .SH SYNOPSIS
-\fBintercept\-bounce\fR [\fB\-t\fR|\fB\-\-debounce\-time\fR] [\fB\-\-near\-miss\-threshold\-time\fR] [\fB\-\-log\-interval\fR] [\fB\-\-log\-all\-events\fR] [\fB\-\-log\-bounces\fR] [\fB\-\-list\-devices\fR] [\fB\-\-stats\-json\fR] [\fB\-\-verbose\fR] [\fB\-\-ring\-buffer\-size\fR] [\fB\-\-ignore\-key\fR] [\fB\-\-otel\-endpoint\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
+\fBintercept\-bounce\fR [\fB\-t\fR|\fB\-\-debounce\-time\fR] [\fB\-\-near\-miss\-threshold\-time\fR] [\fB\-\-log\-interval\fR] [\fB\-\-log\-all\-events\fR] [\fB\-\-log\-bounces\fR] [\fB\-\-list\-devices\fR] [\fB\-\-stats\-json\fR] [\fB\-\-verbose\fR] [\fB\-\-ring\-buffer\-size\fR] [\fB\-\-debounce\-key\fR] [\fB\-\-ignore\-key\fR] [\fB\-\-otel\-endpoint\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
 .SH DESCRIPTION
 An Interception Tools filter to eliminate keyboard chatter (switch bounce).
 Reads Linux input events from stdin, filters rapid duplicate key events, and writes the filtered events to stdout.
@@ -59,8 +59,11 @@ Enable verbose logging (internal state, thread startup, etc)
 \fB\-\-ring\-buffer\-size\fR \fI<RING_BUFFER_SIZE>\fR [default: 0]
 Size of the ring buffer for storing recently passed events (for debugging). Set to 0 to disable. (Default: 0)
 .TP
+\fB\-\-debounce\-key\fR \fI<KEY>\fR
+Key codes or names to debounce. When present, only these keys are debounced (all others pass through). Takes precedence over `\-\-ignore\-key`. Example: `\-\-debounce\-key KEY_ENTER` (repeat flag for multiple keys)
+.TP
 \fB\-\-ignore\-key\fR \fI<KEY>\fR
-Key codes or names to ignore (never debounce). Example: `\-\-ignore\-key 114` or `\-\-ignore\-key KEY_VOLUMEDOWN`
+Key codes or names to ignore (never debounce) unless they also appear in `\-\-debounce\-key`. Example: `\-\-ignore\-key 114` or `\-\-ignore\-key KEY_VOLUMEDOWN`
 .TP
 \fB\-\-otel\-endpoint\fR \fI<OTEL_ENDPOINT>\fR
 OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317")

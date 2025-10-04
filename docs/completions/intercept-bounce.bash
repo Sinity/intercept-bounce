@@ -23,7 +23,7 @@ _intercept-bounce() {
 
     case "${cmd}" in
         intercept__bounce)
-            opts="-t -h -V --debounce-time --near-miss-threshold-time --log-interval --log-all-events --log-bounces --list-devices --stats-json --verbose --ring-buffer-size --ignore-key --otel-endpoint --help --version"
+            opts="-t -h -V --debounce-time --near-miss-threshold-time --log-interval --log-all-events --log-bounces --list-devices --stats-json --verbose --ring-buffer-size --debounce-key --ignore-key --otel-endpoint --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -46,6 +46,10 @@ _intercept-bounce() {
                     return 0
                     ;;
                 --ring-buffer-size)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --debounce-key)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

@@ -78,8 +78,15 @@ pub struct Args {
     #[arg(long, default_value = "0")]
     pub ring_buffer_size: usize,
 
-    /// Key codes or names to ignore (never debounce). Example: `--ignore-key 114` or `--ignore-key KEY_VOLUMEDOWN`.
-    #[arg(long = "ignore-key", value_name = "KEY", action = ArgAction::Append, value_parser = parse_ignore_key)]
+    /// Key codes or names to debounce. When present, only these keys are debounced
+    /// (all others pass through). Takes precedence over `--ignore-key`. Example:
+    /// `--debounce-key KEY_ENTER` (repeat flag for multiple keys).
+    #[arg(long = "debounce-key", value_name = "KEY", action = ArgAction::Append, value_parser = parse_key_identifier)]
+    pub debounce_keys: Vec<u16>,
+
+    /// Key codes or names to ignore (never debounce) unless they also appear in
+    /// `--debounce-key`. Example: `--ignore-key 114` or `--ignore-key KEY_VOLUMEDOWN`.
+    #[arg(long = "ignore-key", value_name = "KEY", action = ArgAction::Append, value_parser = parse_key_identifier)]
     pub ignore_keys: Vec<u16>,
 
     // --- OpenTelemetry Export ---
@@ -92,7 +99,7 @@ pub fn parse_args() -> Args {
     Args::parse()
 }
 
-fn parse_ignore_key(value: &str) -> Result<u16, String> {
+fn parse_key_identifier(value: &str) -> Result<u16, String> {
     crate::filter::keynames::resolve_key_code(value).ok_or_else(|| {
         format!(
             "Unknown key identifier '{value}'. Provide either a numeric code or a symbolic name like KEY_VOLUMEDOWN"

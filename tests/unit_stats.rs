@@ -275,6 +275,7 @@ fn stats_json_output_structure() {
         None,                       // otel_endpoint
         0,
         Vec::new(),
+        Vec::new(),
     );
 
     stats.record_event_info_with_config(&passed_event_info(ev1, ev1_ts, None), &config);

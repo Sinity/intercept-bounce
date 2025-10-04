@@ -73,6 +73,7 @@ fuzz_target!(|data: &[u8]| {
         None, // otel_endpoint is not used by StatsCollector, provide None
         0,
         Vec::new(),
+        Vec::new(),
     );
 
     // Create a StatsCollector

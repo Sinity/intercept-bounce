@@ -83,7 +83,7 @@ impl BounceFilter {
         &mut self,
         event: &input_event,
         debounce_time: Duration,
-        ignore_key: bool,
+        skip_debounce: bool,
     ) -> EventInfo {
         let event_us = event::event_microseconds(event);
 
@@ -93,7 +93,7 @@ impl BounceFilter {
         }
         self.overall_last_event_us = Some(event_us);
 
-        if ignore_key {
+        if skip_debounce {
             if self.ring_buffer_size > 0 {
                 self.recent_passed_events[self.recent_event_idx] = Some(*event);
                 self.recent_event_idx = (self.recent_event_idx + 1) % self.ring_buffer_size;

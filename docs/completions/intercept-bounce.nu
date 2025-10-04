@@ -11,7 +11,8 @@ module completions {
     --stats-json              # Output statistics as JSON format to stderr on exit and periodic dump
     --verbose                 # Enable verbose logging (internal state, thread startup, etc)
     --ring-buffer-size: string # Size of the ring buffer for storing recently passed events (for debugging). Set to 0 to disable. (Default: 0)
-    --ignore-key: string      # Key codes or names to ignore (never debounce). Example: `--ignore-key 114` or `--ignore-key KEY_VOLUMEDOWN`
+    --debounce-key: string    # Key codes or names to debounce. When present, only these keys are debounced (all others pass through). Takes precedence over `--ignore-key`. Example: `--debounce-key KEY_ENTER` (repeat flag for multiple keys)
+    --ignore-key: string      # Key codes or names to ignore (never debounce) unless they also appear in `--debounce-key`. Example: `--ignore-key 114` or `--ignore-key KEY_VOLUMEDOWN`
     --otel-endpoint: string   # OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317")
     --help(-h)                # Print help (see more with '--help')
     --version(-V)             # Print version

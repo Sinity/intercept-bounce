@@ -304,11 +304,11 @@ fn process_event(
         counter.add(1, &[]);
     }
 
-    let ignore_key = ctx.cfg.is_key_ignored(ev.code);
+    let skip_debounce = !ctx.cfg.should_debounce(ev.code);
     let event_info = {
         match ctx.bounce_filter.lock() {
             Ok(mut filter) => {
-                let info = filter.check_event(ev, ctx.cfg.debounce_time(), ignore_key);
+                let info = filter.check_event(ev, ctx.cfg.debounce_time(), skip_debounce);
                 trace!(is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event returned");
                 info
             }
@@ -316,7 +316,7 @@ fn process_event(
                 // If the mutex is poisoned, log fatal, but try to continue by recovering the lock.
                 error!("FATAL: BounceFilter mutex poisoned in main event loop. Recovering...");
                 let mut filter = poisoned.into_inner();
-                let info = filter.check_event(ev, ctx.cfg.debounce_time(), ignore_key);
+                let info = filter.check_event(ev, ctx.cfg.debounce_time(), skip_debounce);
                 trace!(is_bounce = info.is_bounce, diff_us = ?info.diff_us, last_passed_us = ?info.last_passed_us, "BounceFilter check_event (poisoned) returned");
                 info
             }

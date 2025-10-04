@@ -25,7 +25,7 @@ It reads raw Linux `input_event` structs from standard input, filters out rapid 
   * `--log-bounces`: Log details only for dropped (bounced) key events.
   * `--verbose`: Enable DEBUG level internal logging.
   * `RUST_LOG` environment variable for fine-grained `tracing` filter control (overrides `--verbose`).
-* **Per-Key Exemptions:** Skip debouncing special controls (e.g. volume wheels) with `--ignore-key KEY_VOLUMEDOWN` (accepts names or numeric codes).
+* **Per-Key Controls:** Use `--debounce-key KEY_ENTER` to limit debouncing to specific keys (multiple instances allowed), or `--ignore-key KEY_VOLUMEDOWN` to exempt controls entirely; both accept names or numeric codes. If a key appears in both lists, `--debounce-key` wins so the key is still debounced.
 * **Periodic Reporting:** Dump statistics periodically (`--log-interval`, default: 15m).
 * **JSON Output:** Output statistics in JSON format (`--stats-json`) for machine parsing.
 * **Graceful Shutdown:** Handles SIGINT, SIGTERM, SIGQUIT to ensure final statistics are reported.
@@ -195,6 +195,20 @@ sudo sh -c 'intercept -g /dev/input/by-id/usb-My_Awesome_Keyboard-event-kbd \
 2. The device path provided to `intercept -g` **must** be the same as the one provided to `uinput -d`.
 3. This command creates a **new virtual device**. Your desktop environment (Xorg/Wayland) needs to use this new device instead of the original physical one. See the [Integration](#integration-with-interception-tools) section for details.
 
+#### Filtering Only Certain Keys
+
+Use `--debounce-key` when you only want chatter protection on a handful of controls. Any keys not listed pass straight through.
+
+```bash
+sudo sh -c 'intercept -g $DEVNODE \
+           | intercept-bounce --debounce-time 100ms \
+                               --debounce-key KEY_ENTER \
+                               --debounce-key KEY_SPACE \
+           | uinput -d $DEVNODE'
+```
+
+You can still supply `--ignore-key` for the allowlisted set—`--debounce-key` wins if both flags mention the same code—so it’s safe to keep shared configs that exempt volume wheels without losing an explicit per-key allowlist.
+
 ### udevmon Integration (Recommended)
 
 Using `udevmon` (part of Interception Tools) is the recommended way to manage the pipeline automatically when the device is connected/disconnected. Add a job to your `/etc/interception/udevmon.yaml` (or user-specific config):
@@ -231,6 +245,10 @@ Options:
           Enable verbose logging (DEBUG level).
       --ring-buffer-size <SIZE>
           Size of the ring buffer for storing recently passed events (0 to disable). [default: 0]
+      --debounce-key <KEY>
+          Key codes or names to debounce. When present, only these keys are debounced (all others pass through). Repeat the flag to list multiple keys.
+      --ignore-key <KEY>
+          Key codes or names to never debounce unless they are also provided via `--debounce-key`.
       --otel-endpoint <URL>
           OTLP endpoint URL for exporting traces and metrics (e.g., "http://localhost:4317").
   -h, --help

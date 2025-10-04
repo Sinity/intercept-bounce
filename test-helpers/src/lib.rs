@@ -96,6 +96,7 @@ pub fn dummy_config(
         None,
         0,
         Vec::new(),
+        Vec::new(),
     ))
 }
 
@@ -112,6 +113,7 @@ pub fn dummy_config_no_arc(debounce_time: Duration, near_miss_threshold: Duratio
         "info".to_string(), // log_filter (not relevant)
         None,               // otel_endpoint (not relevant)
         0,
+        Vec::new(),
         Vec::new(),
     )
 }
