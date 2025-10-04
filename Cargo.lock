@@ -869,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "intercept-bounce"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "assert_cmd",
  "chrono",
