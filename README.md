@@ -118,6 +118,27 @@ Since `intercept-bounce` is not yet packaged in the official `nixpkgs` repositor
     }
     ```
 
+#### NixOS module
+
+This repository also ships a reusable NixOS module that renders the CLI invocation, exposes every flag as a typed option, and (optionally) adds the executable to `environment.systemPackages`. After adding the flake input, enable the module and tune the options that matter to your keyboard pipeline:
+
+```nix
+{
+  imports = [ inputs.intercept-bounce.nixosModules.default ];
+
+  services.interceptBounce = {
+    enable = true;
+    debounceTime = "40ms";
+    logInterval = "6h";
+    logBounces = true;
+    statsJson = true;
+    extraArgs = [ "--debounce-key" "KEY_ENTER" ];
+  };
+}
+```
+
+The module exposes the resolved command in both list (`services.interceptBounce.command`) and string (`services.interceptBounce.commandString`) form, making it straightforward to slot into `udevmon` pipelines or higher-level abstractions.
+
 2.  **Add the package to your configuration:**
     In the NixOS or Home Manager module file referenced above (e.g., `configuration.nix` or `home.nix`), add the package to your desired list, referencing it via the `inputs`:
 
