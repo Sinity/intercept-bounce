@@ -8,3 +8,11 @@ result
 .direnv/
 
 **/.claude/settings.local.json
+
+AGENTS.override.md
+
+AGENTS.md
+
+.cargo/
+.cclsp.json
+.mcp.json

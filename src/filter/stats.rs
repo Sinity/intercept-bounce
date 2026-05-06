@@ -151,11 +151,7 @@ impl TimingHistogram {
 
     /// Calculates the average timing in microseconds. Returns 0 if count is 0.
     pub fn average_us(&self) -> u64 {
-        if self.count > 0 {
-            self.sum_us / self.count
-        } else {
-            0
-        }
+        self.sum_us.checked_div(self.count).unwrap_or(0)
     }
 
     // Add methods like get_buckets(), get_count() if needed externally.

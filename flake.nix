@@ -186,8 +186,8 @@
     })
     // {
       nixosModules = {
-        default = import ./nix/modules/intercept-bounce.nix { inherit self; };
-        intercept-bounce = import ./nix/modules/intercept-bounce.nix { inherit self; };
+        default = import ./nix/modules/intercept-bounce.nix {inherit self;};
+        intercept-bounce = import ./nix/modules/intercept-bounce.nix {inherit self;};
       };
     };
 }
