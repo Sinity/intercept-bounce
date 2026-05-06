@@ -1,7 +1,11 @@
-{ self }:
-{ config, lib, pkgs, ... }:
-let
-  inherit (lib)
+{self}: {
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  inherit
+    (lib)
     concatMap
     escapeShellArgs
     mkEnableOption
@@ -11,7 +15,7 @@ let
     types
     ;
 
-  packagesForSystem = lib.attrByPath [ pkgs.system ] (self.packages or { }) { };
+  packagesForSystem = lib.attrByPath [pkgs.system] (self.packages or {}) {};
 
   defaultPackage =
     packagesForSystem.intercept-bounce
@@ -21,37 +25,39 @@ let
   cfg = config.services.interceptBounce;
 
   toStr = value:
-    if builtins.isString value then value else builtins.toString value;
+    if builtins.isString value
+    then value
+    else builtins.toString value;
 
   baseArgs =
     []
-    ++ optionals (cfg.debounceTime != null) [ "--debounce-time" cfg.debounceTime ]
+    ++ optionals (cfg.debounceTime != null) ["--debounce-time" cfg.debounceTime]
     ++ optionals (cfg.nearMissThresholdTime != null) [
       "--near-miss-threshold-time"
       cfg.nearMissThresholdTime
     ]
-    ++ optionals (cfg.logInterval != null) [ "--log-interval" cfg.logInterval ]
-    ++ optionals cfg.logAllEvents [ "--log-all-events" ]
-    ++ optionals cfg.logBounces [ "--log-bounces" ]
-    ++ optionals cfg.listDevices [ "--list-devices" ]
-    ++ optionals cfg.statsJson [ "--stats-json" ]
-    ++ optionals cfg.verbose [ "--verbose" ]
+    ++ optionals (cfg.logInterval != null) ["--log-interval" cfg.logInterval]
+    ++ optionals cfg.logAllEvents ["--log-all-events"]
+    ++ optionals cfg.logBounces ["--log-bounces"]
+    ++ optionals cfg.listDevices ["--list-devices"]
+    ++ optionals cfg.statsJson ["--stats-json"]
+    ++ optionals cfg.verbose ["--verbose"]
     ++ optionals (cfg.ringBufferSize != null) [
       "--ring-buffer-size"
-      toStr cfg.ringBufferSize
+      toStr
+      cfg.ringBufferSize
     ]
-    ++ concatMap (key: [ "--debounce-key" key ]) cfg.debounceKeys
-    ++ concatMap (key: [ "--ignore-key" key ]) cfg.ignoreKeys
+    ++ concatMap (key: ["--debounce-key" key]) cfg.debounceKeys
+    ++ concatMap (key: ["--ignore-key" key]) cfg.ignoreKeys
     ++ optionals (cfg.otelEndpoint != null) [
       "--otel-endpoint"
       cfg.otelEndpoint
     ]
     ++ cfg.extraArgs;
 
-  commandList = [ "${cfg.package}/bin/intercept-bounce" ] ++ baseArgs;
+  commandList = ["${cfg.package}/bin/intercept-bounce"] ++ baseArgs;
   commandString = escapeShellArgs commandList;
-in
-{
+in {
   options.services.interceptBounce = {
     enable = mkEnableOption "intercept-bounce CLI integration";
 
@@ -126,13 +132,13 @@ in
 
     debounceKeys = mkOption {
       type = types.listOf types.str;
-      default = [ ];
+      default = [];
       description = "List of keys passed via repeated --debounce-key flags.";
     };
 
     ignoreKeys = mkOption {
       type = types.listOf types.str;
-      default = [ ];
+      default = [];
       description = "List of keys passed via repeated --ignore-key flags.";
     };
 
@@ -144,13 +150,13 @@ in
 
     extraArgs = mkOption {
       type = types.listOf types.str;
-      default = [ ];
+      default = [];
       description = "Arbitrary arguments appended after generated flags.";
     };
 
     command = mkOption {
       type = types.listOf types.str;
-      default = [ ];
+      default = [];
       description = "Resolved intercept-bounce invocation expressed as a list.";
     };
 
@@ -162,7 +168,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = optionals cfg.installSystemPackage [ cfg.package ];
+    environment.systemPackages = optionals cfg.installSystemPackage [cfg.package];
     services.interceptBounce.command = commandList;
     services.interceptBounce.commandString = commandString;
   };
